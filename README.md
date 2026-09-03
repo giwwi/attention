@@ -2,6 +2,8 @@
 
 **A local-first Chrome extension that estimates whether an article is worth your attention right now.**
 
+[Website](https://giwwi.github.io/attention/) · [Download the extension](https://github.com/giwwi/attention/releases/latest/download/attention-extension-v0.21.12.zip)
+
 ![Attention demo](docs/attention-demo.gif)
 
 Attention combines the article, your current goal, and your available time to produce a 0–100 Utility Score and one of four decisions: **Read, Skim, Save, or Skip**. Unlike a summarizer, it tries to predict personal usefulness before you spend time reading—and learns from whether the material was actually useful afterward.

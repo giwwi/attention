@@ -1,0 +1,166 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta
+      name="description"
+      content="Attention is a local-first Chrome extension that helps you decide what is worth reading before you open it."
+    />
+    <meta name="theme-color" content="#f3f1eb" />
+    <meta property="og:title" content="Attention — Know what’s worth reading" />
+    <meta
+      property="og:description"
+      content="A local-first Chrome extension that estimates whether an article is worth your attention right now."
+    />
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://giwwi.github.io/attention/" />
+    <title>Attention — Know what’s worth reading</title>
+    <link rel="stylesheet" href="./site.css" />
+  </head>
+  <body>
+    <header class="nav shell">
+      <a class="brand" href="#top" aria-label="Attention home">
+        <span class="brand-mark" aria-hidden="true">A</span>
+        <span>Attention</span>
+      </a>
+      <nav aria-label="Main navigation">
+        <a href="#how-it-works">How it works</a>
+        <a href="#privacy">Privacy</a>
+        <a href="https://github.com/giwwi/attention">GitHub</a>
+      </nav>
+    </header>
+
+    <main id="top">
+      <section class="hero shell">
+        <div class="hero-copy">
+          <p class="eyebrow">Your attention, evaluated locally</p>
+          <h1>Know what’s worth reading before you open it.</h1>
+          <p class="lede">
+            Attention is a Chrome extension that estimates how useful an article is
+            for you, right now—then points you to the parts worth your time.
+          </p>
+          <div class="actions">
+            <a
+              class="button primary"
+              href="https://github.com/giwwi/attention/releases/latest/download/attention-extension-v0.21.12.zip"
+            >
+              Download for Chrome
+            </a>
+            <a class="button secondary" href="https://github.com/giwwi/attention">
+              View on GitHub
+            </a>
+          </div>
+          <p class="microcopy">Free and open source · No account · Local evaluation</p>
+        </div>
+
+        <div class="demo-frame">
+          <div class="window-bar" aria-hidden="true">
+            <span></span><span></span><span></span>
+            <small>Attention in action</small>
+          </div>
+          <img
+            src="./attention-demo.gif"
+            alt="Attention evaluates links in a feed, then gives a detailed recommendation on an article"
+          />
+        </div>
+      </section>
+
+      <section class="promise shell" aria-label="Benefits">
+        <article>
+          <span class="number">01</span>
+          <h2>Decide before clicking</h2>
+          <p>Preview whether a link is likely worth reading while you browse a feed.</p>
+        </article>
+        <article>
+          <span class="number">02</span>
+          <h2>Read only what matters</h2>
+          <p>Get an explainable score and jump to the sections most useful to you.</p>
+        </article>
+        <article>
+          <span class="number">03</span>
+          <h2>Keep your context yours</h2>
+          <p>Your profile, feedback, and reading memory stay inside your browser.</p>
+        </article>
+      </section>
+
+      <section class="how shell" id="how-it-works">
+        <div class="section-heading">
+          <p class="eyebrow">How it works</p>
+          <h2>Not another summary.<br />A decision for this moment.</h2>
+        </div>
+        <div class="steps">
+          <article>
+            <span>1</span>
+            <div>
+              <h3>Set your context</h3>
+              <p>Choose what you are doing—working, learning, exploring, or relaxing—and how much time you have.</p>
+            </div>
+          </article>
+          <article>
+            <span>2</span>
+            <div>
+              <h3>See the recommendation</h3>
+              <p>Attention weighs relevance, novelty, actionability, and argument quality to suggest Read, Skim, Save, or Skip.</p>
+            </div>
+          </article>
+          <article>
+            <span>3</span>
+            <div>
+              <h3>Make it personal</h3>
+              <p>Tell Attention whether the material was worth it. Future estimates calibrate locally from your feedback.</p>
+            </div>
+          </article>
+        </div>
+      </section>
+
+      <section class="privacy" id="privacy">
+        <div class="shell privacy-inner">
+          <div>
+            <p class="eyebrow">Local-first by design</p>
+            <h2>Your reading history should not become someone else’s dataset.</h2>
+          </div>
+          <div class="privacy-copy">
+            <p>
+              Attention works without an account, analytics, or an API key. Local
+              evaluation never sends article content anywhere.
+            </p>
+            <p>
+              Optional AI analysis runs only when you request it and uses your own
+              Vercel AI Gateway key. You can erase all Attention data at any time.
+            </p>
+            <a href="https://github.com/giwwi/attention#privacy-model">Read the privacy model →</a>
+          </div>
+        </div>
+      </section>
+
+      <section class="install shell" id="install">
+        <div>
+          <p class="eyebrow">Try the prototype</p>
+          <h2>Install in about a minute.</h2>
+        </div>
+        <ol>
+          <li><span>01</span> Download and unzip the extension.</li>
+          <li><span>02</span> Open <code>chrome://extensions</code> and enable Developer mode.</li>
+          <li><span>03</span> Click Load unpacked and select the unzipped folder.</li>
+          <li><span>04</span> Pin Attention, open an article, and click its icon.</li>
+        </ol>
+        <div class="actions">
+          <a
+            class="button primary"
+            href="https://github.com/giwwi/attention/releases/latest/download/attention-extension-v0.21.12.zip"
+          >
+            Download the ZIP
+          </a>
+          <a class="text-link" href="https://github.com/giwwi/attention/issues">Share feedback →</a>
+        </div>
+      </section>
+    </main>
+
+    <footer class="shell">
+      <a class="brand" href="#top"><span class="brand-mark" aria-hidden="true">A</span><span>Attention</span></a>
+      <p>Own your attention model.</p>
+      <a href="https://github.com/giwwi/attention">GitHub</a>
+    </footer>
+  </body>
+</html>
