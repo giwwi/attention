@@ -1,0 +1,229 @@
+:root {
+  color-scheme: light dark;
+  font-family:
+    Inter,
+    ui-sans-serif,
+    system-ui,
+    -apple-system,
+    BlinkMacSystemFont,
+    'Segoe UI',
+    sans-serif;
+  background: #f2f1ec;
+  color: #1d211e;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  min-height: 100vh;
+  margin: 0;
+  padding: 36px 20px;
+  background:
+    radial-gradient(circle at 12% 10%, #d9efe5 0, transparent 34%), #f2f1ec;
+}
+
+.shell {
+  width: min(680px, 100%);
+  margin: 0 auto;
+}
+
+header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 18px;
+}
+
+.brand {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  font-size: 18px;
+  font-weight: 800;
+}
+
+.brand span {
+  width: 10px;
+  height: 30px;
+  border-radius: 999px;
+  background: #16805d;
+}
+
+.card {
+  padding: 34px;
+  border: 1px solid #d4d3cc;
+  border-radius: 22px;
+  background: rgb(255 255 252 / 92%);
+  box-shadow: 0 18px 60px rgb(25 35 29 / 9%);
+}
+
+.eyebrow {
+  margin: 0 0 7px;
+  color: #167054;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+h1 {
+  margin: 0;
+  font-size: clamp(34px, 8vw, 52px);
+  letter-spacing: -0.04em;
+}
+
+.intro {
+  max-width: 580px;
+  margin: 14px 0 22px;
+  color: #5c625e;
+  font-size: 16px;
+  line-height: 1.55;
+}
+
+.status-card {
+  display: grid;
+  gap: 6px;
+  padding: 16px 18px;
+  border: 1px solid #d7dad6;
+  border-radius: 14px;
+  background: #f7f8f5;
+}
+
+.status-card strong {
+  font-size: 15px;
+}
+
+.status-card span {
+  color: #6b706c;
+  font-size: 13px;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 18px;
+}
+
+.source-mode {
+  display: grid;
+  gap: 7px;
+  margin-top: 18px;
+  color: #5c625e;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.source-mode select {
+  min-height: 42px;
+  padding: 0 12px;
+  border: 1px solid #cfd2ce;
+  border-radius: 11px;
+  background: #f8f9f6;
+  color: inherit;
+  font: inherit;
+}
+
+button {
+  min-height: 42px;
+  padding: 0 17px;
+  border: 1px solid #cfd2ce;
+  border-radius: 11px;
+  background: #f8f9f6;
+  color: inherit;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 750;
+  cursor: pointer;
+}
+
+button:hover:not(:disabled) {
+  border-color: #16805d;
+}
+
+button:disabled {
+  cursor: wait;
+  opacity: 0.55;
+}
+
+button.primary {
+  border-color: #16805d;
+  background: #16805d;
+  color: #fff;
+}
+
+button.danger {
+  color: #a33c38;
+}
+
+button.quiet {
+  min-height: 36px;
+  background: transparent;
+}
+
+.privacy {
+  margin-top: 24px;
+  padding-top: 18px;
+  border-top: 1px solid #e1e2de;
+  color: #707570;
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.privacy p {
+  margin: 5px 0;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    background: #121612;
+    color: #f0f2ed;
+  }
+
+  body {
+    background:
+      radial-gradient(circle at 12% 10%, #12382d 0, transparent 34%), #121612;
+  }
+
+  .card {
+    border-color: #363c37;
+    background: rgb(25 30 26 / 94%);
+  }
+
+  .intro,
+  .status-card span,
+  .privacy {
+    color: #a9afa9;
+  }
+
+  .status-card,
+  button,
+  .source-mode select {
+    border-color: #424944;
+    background: #202621;
+  }
+
+  .source-mode {
+    color: #a9afa9;
+  }
+
+  .privacy {
+    border-color: #363c37;
+  }
+}
+
+@media (max-width: 560px) {
+  body {
+    padding: 18px 12px;
+  }
+
+  .card {
+    padding: 24px 20px;
+  }
+
+  .actions {
+    display: grid;
+  }
+}

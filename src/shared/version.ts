@@ -1,0 +1,1 @@
+export const EXTENSION_RUNTIME_VERSION = '0.21.12';

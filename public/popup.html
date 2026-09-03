@@ -1,0 +1,1173 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="color-scheme" content="light dark" />
+    <title>Attention</title>
+    <link rel="stylesheet" href="popup.css" />
+  </head>
+  <body>
+    <main class="shell">
+      <header class="app-header">
+        <div class="brand">
+          <span class="brand-mark" aria-hidden="true"></span>
+          <div>
+            <p class="eyebrow" data-i18n="brandTagline">
+              Личный фильтр внимания
+            </p>
+            <div class="brand-title-row">
+              <h1>Attention</h1>
+              <span id="runtime-version" class="runtime-version"></span>
+            </div>
+          </div>
+        </div>
+        <div class="header-actions">
+          <label
+            class="interface-language-control"
+            for="interface-language"
+            title="Язык интерфейса"
+          >
+            <span aria-hidden="true">🌐</span>
+            <select id="interface-language" aria-label="Язык интерфейса">
+              <option value="ru">Русский</option>
+              <option value="en">English</option>
+              <option value="de">Deutsch</option>
+              <option value="es">Español</option>
+              <option value="fr">Français</option>
+              <option value="it">Italiano</option>
+              <option value="zh">中文</option>
+              <option value="ar">العربية</option>
+              <option value="hi">हिन्दी</option>
+            </select>
+          </label>
+          <button id="capture" class="refresh-button" type="button" hidden>
+            Обновить
+          </button>
+        </div>
+      </header>
+
+      <section
+        id="first-value-onboarding"
+        class="first-value-onboarding"
+        hidden
+      >
+        <div id="first-value-scenario-step" class="first-value-step">
+          <p class="eyebrow" data-i18n="quickStartEyebrow">Быстрый старт</p>
+          <h2 data-i18n="quickStartScenarioTitle">
+            Для чего вы открываете материалы сейчас?
+          </h2>
+          <p class="first-value-intro" data-i18n="quickStartScenarioCopy">
+            Один выбор — и Attention уже сможет показать первую рекомендацию.
+          </p>
+          <div class="first-value-scenarios">
+            <button type="button" data-first-value-scenario="work">
+              <strong data-i18n="work">Работа</strong>
+              <span data-i18n="quickStartWork">Решить текущую задачу</span>
+            </button>
+            <button type="button" data-first-value-scenario="learn">
+              <strong data-i18n="learn">Учёба</strong>
+              <span data-i18n="quickStartLearn">Разобраться в теме</span>
+            </button>
+            <button type="button" data-first-value-scenario="explore">
+              <strong data-i18n="explore">Исследовать</strong>
+              <span data-i18n="quickStartExplore"
+                >Найти новое и неожиданное</span
+              >
+            </button>
+            <button type="button" data-first-value-scenario="relax">
+              <strong data-i18n="relax">Отдых</strong>
+              <span data-i18n="quickStartRelax">Выбрать приятный материал</span>
+            </button>
+          </div>
+        </div>
+
+        <div id="first-value-interest-step" class="first-value-step" hidden>
+          <button id="first-value-back" class="profile-back" type="button">
+            <span data-i18n="back">← Назад</span>
+          </button>
+          <p class="eyebrow" data-i18n="quickStartOptional">Необязательно</p>
+          <h2 data-i18n="quickStartInterestTitle">
+            Что вас интересует прямо сейчас?
+          </h2>
+          <p class="first-value-intro" data-i18n="quickStartInterestCopy">
+            Одной фразы достаточно. Это уточнит первую рекомендацию, но можно
+            пропустить.
+          </p>
+          <textarea
+            id="first-value-interest"
+            rows="3"
+            maxlength="180"
+            data-i18n-placeholder="quickStartInterestPlaceholder"
+            placeholder="Например: AI-агенты и экономика"
+          ></textarea>
+          <div class="first-value-actions">
+            <button
+              id="skip-first-value-interest"
+              class="profile-secondary"
+              type="button"
+              data-i18n="skip"
+            >
+              Пропустить
+            </button>
+            <button
+              id="complete-first-value"
+              class="profile-primary"
+              type="button"
+              data-i18n="showFirstResult"
+            >
+              Показать первую оценку
+            </button>
+          </div>
+          <p class="profile-privacy-note" data-i18n="quickStartPrivacy">
+            Можно начать без личного профиля. Attention будет учиться позже по
+            вашей явной обратной связи.
+          </p>
+        </div>
+      </section>
+
+      <section id="profile-onboarding" class="profile-onboarding" hidden>
+        <div id="profile-source-step" class="profile-step">
+          <p class="eyebrow">Точнее под вас</p>
+          <h2>Улучшить персонализацию</h2>
+          <p class="profile-intro">
+            Карточки уже работают без профиля. Добавьте контекст, когда захотите
+            сделать рекомендации точнее.
+          </p>
+          <div class="profile-source-list">
+            <button id="open-quick-profile" type="button">
+              <span>
+                <strong>Быстрая настройка</strong>
+                <small>Три ответа · около 30 секунд</small>
+              </span>
+              <span aria-hidden="true">→</span>
+            </button>
+            <button type="button" data-profile-source="chatgpt">
+              <span>
+                <strong>Пусть ChatGPT представит меня</strong>
+                <small>Использовать уже накопленный контекст</small>
+              </span>
+              <span aria-hidden="true">→</span>
+            </button>
+            <button type="button" data-profile-source="claude">
+              <span>
+                <strong>Пусть Claude представит меня</strong>
+                <small>Использовать уже накопленный контекст</small>
+              </span>
+              <span aria-hidden="true">→</span>
+            </button>
+            <p class="profile-source-divider">УЧЕСТЬ МОЮ ИСТОРИЮ</p>
+            <button id="open-browser-history" type="button">
+              <span>
+                <strong>Настроить историю браузера</strong>
+                <small>Открыть настройки этого источника</small>
+              </span>
+              <span aria-hidden="true">→</span>
+            </button>
+            <p class="profile-source-divider">УЧЕСТЬ СОХРАНЁННОЕ</p>
+            <button
+              id="open-readwise-settings"
+              type="button"
+              aria-expanded="false"
+            >
+              <span>
+                <strong>Readwise</strong>
+                <small id="readwise-navigation-description"
+                  >Выделения и заметки для оценки новизны</small
+                >
+              </span>
+              <span id="readwise-home-status" class="profile-source-status"
+                >Не подключён</span
+              >
+            </button>
+            <button id="open-obsidian-settings" type="button">
+              <span>
+                <strong>Obsidian</strong>
+                <small id="obsidian-navigation-description"
+                  >Собственные заметки для оценки новизны</small
+                >
+              </span>
+              <span id="obsidian-home-status" class="profile-source-status"
+                >Не подключён</span
+              >
+            </button>
+            <button id="open-notion-settings" type="button">
+              <span>
+                <strong>Notion</strong>
+                <small id="notion-navigation-description"
+                  >Выбранные страницы для оценки новизны</small
+                >
+              </span>
+              <span id="notion-home-status" class="profile-source-status"
+                >Не подключён</span
+              >
+            </button>
+            <button type="button" data-profile-source="other">
+              Создать профиль с другим AI <span aria-hidden="true">→</span>
+            </button>
+            <button type="button" data-profile-source="manual">
+              Настроить вручную <span aria-hidden="true">→</span>
+            </button>
+          </div>
+          <button id="skip-profile" class="profile-text-button" type="button">
+            Не сейчас
+          </button>
+          <p class="profile-privacy-note">
+            Attention не получает доступ к истории ChatGPT или Claude. Вы
+            передаёте только готовый профиль, который хранится локально.
+          </p>
+        </div>
+
+        <div id="profile-quick-step" class="profile-step" hidden>
+          <button id="profile-quick-back" class="profile-back" type="button">
+            ← Способы настройки
+          </button>
+          <p class="eyebrow">Около 30 секунд</p>
+          <h2>Расскажите о себе обычными словами</h2>
+          <p class="profile-intro">
+            AI превратит ответы в структурированный локальный профиль. JSON вы
+            не увидите.
+          </p>
+          <label class="profile-field" for="quick-profile-internet">
+            <span>Что вы обычно хотите получать от интернета?</span>
+            <textarea
+              id="quick-profile-internet"
+              rows="3"
+              maxlength="1500"
+              placeholder="Например: слежу за AI и экономикой, ищу идеи для работы"
+            ></textarea>
+          </label>
+          <label class="profile-field" for="quick-profile-knowledge">
+            <span>Какие темы вы уже знаете хорошо?</span>
+            <textarea
+              id="quick-profile-knowledge"
+              rows="3"
+              maxlength="1500"
+              placeholder="Например: хорошо знаю экономику, но не являюсь ML-инженером"
+            ></textarea>
+          </label>
+          <label class="profile-field" for="quick-profile-leisure">
+            <span>Что вам нравится вне продуктивных задач?</span>
+            <textarea
+              id="quick-profile-leisure"
+              rows="3"
+              maxlength="1500"
+              placeholder="Например: исторические документалки, фантастика и научные видео"
+            ></textarea>
+          </label>
+          <p id="quick-profile-error" class="profile-inline-error" hidden></p>
+          <button
+            id="generate-quick-profile"
+            class="profile-primary"
+            type="button"
+          >
+            Подготовить профиль
+          </button>
+          <p class="profile-privacy-note">
+            Для этого нужен подключённый AI-анализатор. Ответы отправляются
+            выбранной модели один раз; готовый профиль хранится локально.
+          </p>
+        </div>
+
+        <div id="profile-quick-review-step" class="profile-step" hidden>
+          <button
+            id="profile-quick-review-back"
+            class="profile-back"
+            type="button"
+          >
+            ← Изменить ответы
+          </button>
+          <p class="eyebrow">Проверьте одним взглядом</p>
+          <h2>Вот что понял Attention</h2>
+          <div id="profile-quick-summary" class="profile-quick-summary"></div>
+          <div class="profile-footer-actions">
+            <button
+              id="cancel-quick-profile"
+              class="profile-secondary"
+              type="button"
+            >
+              Не сохранять
+            </button>
+            <button
+              id="save-quick-profile"
+              class="profile-primary"
+              type="button"
+            >
+              Всё верно
+            </button>
+          </div>
+        </div>
+
+        <div id="profile-prompt-step" class="profile-step" hidden>
+          <button id="profile-prompt-back" class="profile-back" type="button">
+            ← Выбрать другой AI
+          </button>
+          <p class="eyebrow">Ожидание ответа AI</p>
+          <h2 id="profile-provider-title">Импорт контекста</h2>
+          <p id="profile-handoff-status" class="profile-handoff-status"></p>
+          <ol id="profile-handoff-instructions" class="profile-instructions">
+            <li>Отправьте запрос выбранному AI.</li>
+            <li>Скопируйте его JSON-ответ.</li>
+            <li>Вернитесь сюда и вставьте ответ ниже.</li>
+          </ol>
+          <button
+            id="reopen-profile-provider"
+            class="profile-secondary profile-provider-action"
+            type="button"
+            hidden
+          >
+            Открыть AI снова
+          </button>
+          <button
+            id="open-claude-web-fallback"
+            class="profile-text-button profile-web-fallback"
+            type="button"
+            hidden
+          >
+            Claude не открылся? Открыть в браузере
+          </button>
+          <button
+            id="show-profile-prompt"
+            class="profile-text-button profile-manual-toggle"
+            type="button"
+          >
+            Показать запрос вручную
+          </button>
+          <div id="profile-manual-prompt" hidden>
+            <label class="profile-field" for="profile-export-prompt">
+              <span>Запрос для экспорта</span>
+              <textarea id="profile-export-prompt" rows="8" readonly></textarea>
+            </label>
+            <button
+              id="copy-profile-prompt"
+              class="profile-primary"
+              type="button"
+            >
+              Скопировать запрос
+            </button>
+          </div>
+          <label class="profile-field" for="profile-import-json">
+            <span>Ответ AI в формате JSON</span>
+            <textarea
+              id="profile-import-json"
+              rows="8"
+              spellcheck="false"
+              placeholder='Вставьте объект с "schema_version": "2.0"'
+            ></textarea>
+          </label>
+          <ul
+            id="profile-validation-errors"
+            class="profile-errors"
+            role="alert"
+            hidden
+          ></ul>
+          <button id="validate-profile" class="profile-primary" type="button">
+            Проверить и просмотреть
+          </button>
+          <p class="profile-privacy-note">
+            Attention не читает переписки и не подключается к аккаунту AI. Ответ
+            вставляете вы сами.
+          </p>
+        </div>
+
+        <div id="profile-review-step" class="profile-step" hidden>
+          <p class="eyebrow">Проверка перед сохранением</p>
+          <h2>Ваш начальный профиль</h2>
+          <p id="profile-review-source" class="profile-intro"></p>
+          <div id="profile-review-content"></div>
+          <div class="profile-add-actions" aria-label="Добавить пункт">
+            <button type="button" data-add-profile-item="interests">
+              + Интерес
+            </button>
+            <button type="button" data-add-profile-item="goals">+ Цель</button>
+            <button type="button" data-add-profile-item="expertise">
+              + Экспертиза
+            </button>
+            <button type="button" data-add-profile-item="demonstratedKnowledge">
+              + Известное
+            </button>
+            <button type="button" data-add-profile-item="learningAreas">
+              + Изучаю
+            </button>
+            <button type="button" data-add-profile-item="uncertainties">
+              + Неопределённость
+            </button>
+            <button type="button" data-add-profile-item="lowValueTopics">
+              + Малоценная тема
+            </button>
+            <button type="button" data-add-profile-item="contentPreferences">
+              + Предпочтения
+            </button>
+            <button type="button" data-add-profile-item="leisurePreferences">
+              + Для отдыха
+            </button>
+          </div>
+          <ul
+            id="profile-review-errors"
+            class="profile-errors"
+            role="alert"
+            hidden
+          ></ul>
+          <div class="profile-footer-actions">
+            <button
+              id="cancel-profile-review"
+              class="profile-secondary"
+              type="button"
+            >
+              Отменить импорт
+            </button>
+            <button id="save-profile" class="profile-primary" type="button">
+              Использовать этот профиль
+            </button>
+          </div>
+        </div>
+
+        <div id="profile-merge-step" class="profile-step" hidden>
+          <p class="eyebrow">Нужен ваш выбор</p>
+          <h2>Разрешите противоречия</h2>
+          <p class="profile-intro">
+            Совпадающие и новые данные уже объединены. Для этих пунктов версии
+            различаются, поэтому Attention не выбирает автоматически.
+          </p>
+          <div id="profile-conflicts"></div>
+          <div class="profile-footer-actions">
+            <button
+              id="cancel-profile-merge"
+              class="profile-secondary"
+              type="button"
+            >
+              Назад к проверке
+            </button>
+            <button
+              id="confirm-profile-merge"
+              class="profile-primary"
+              type="button"
+            >
+              Сохранить выбор
+            </button>
+          </div>
+        </div>
+      </section>
+
+      <section
+        id="browser-history-setup"
+        class="profile-onboarding browser-history-setup"
+        hidden
+      >
+        <button id="close-browser-history" class="profile-back" type="button">
+          ← Назад
+        </button>
+        <p class="eyebrow">Дополнительный источник</p>
+        <h2>Учесть недавнюю историю</h2>
+        <p class="profile-intro">
+          Attention локально найдёт темы и источники, которые вам уже
+          встречались. Посещение страницы не считается чтением, знанием или
+          одобрением.
+        </p>
+        <ul class="history-benefits">
+          <li>точнее замечать уже встречавшиеся страницы;</li>
+          <li>видеть повторяющиеся темы и предпочитаемые источники;</li>
+          <li>осторожнее оценивать релевантность и новизну.</li>
+        </ul>
+        <fieldset class="history-period">
+          <legend>За какой период?</legend>
+          <label
+            ><input type="radio" name="history-period" value="7" />7 дней</label
+          >
+          <label
+            ><input type="radio" name="history-period" value="30" checked />30
+            дней</label
+          >
+          <label
+            ><input type="radio" name="history-period" value="90" />90
+            дней</label
+          >
+        </fieldset>
+        <button
+          id="import-browser-history"
+          class="profile-primary history-primary-action"
+          type="button"
+        >
+          Разрешить и обработать последние 30 дней
+        </button>
+        <p id="browser-history-status" class="history-status" role="status">
+          После нажатия Chrome запросит одно временное разрешение на чтение
+          истории.
+        </p>
+        <div id="browser-history-result" class="history-result" hidden>
+          <strong>История обработана локально</strong>
+          <p id="browser-history-summary"></p>
+        </div>
+        <button
+          id="delete-browser-history"
+          class="profile-secondary history-delete-action"
+          type="button"
+          hidden
+        >
+          Удалить сигналы истории
+        </button>
+        <p class="profile-privacy-note">
+          Страницы не загружаются, AI не вызывается. Сырые URL и заголовки не
+          сохраняются. После обработки разрешение отзывается автоматически.
+        </p>
+      </section>
+
+      <section id="settings-home" class="settings-home" hidden>
+        <section class="settings-card settings-context-card">
+          <label class="settings-row" for="scenario-select">
+            <span>
+              <strong data-i18n="scenario">Сценарий</strong>
+              <small data-i18n="scenarioDescription">Что сейчас важнее</small>
+            </span>
+            <select id="scenario-select" aria-label="Current scenario">
+              <option value="work" data-i18n="work">Работа</option>
+              <option value="learn" data-i18n="learn">Учёба</option>
+              <option value="explore" data-i18n="explore">Исследовать</option>
+              <option value="relax" data-i18n="relax">Отдых</option>
+            </select>
+          </label>
+
+          <label class="settings-field" for="intent">
+            <span id="intent-label-text">Текущая задача — необязательно</span>
+            <input
+              id="intent"
+              type="text"
+              maxlength="180"
+              placeholder="Например: принять решение по проекту"
+            />
+          </label>
+
+          <div id="relax-context" class="relax-context" hidden>
+            <label for="relax-intent">
+              <span data-i18n="relaxMood">Чего хочется сейчас?</span>
+              <select id="relax-intent">
+                <option value="" data-i18n="any">Неважно</option>
+                <option value="chill" data-i18n="calm">Спокойного</option>
+                <option value="funny" data-i18n="funny">Смешного</option>
+                <option value="interesting" data-i18n="interesting">
+                  Интересного
+                </option>
+                <option value="exciting" data-i18n="exciting">
+                  Захватывающего
+                </option>
+                <option value="familiar" data-i18n="familiar">Знакомого</option>
+                <option value="surprise" data-i18n="surprise">
+                  Удивите меня
+                </option>
+              </select>
+            </label>
+            <label for="desired-effort">
+              <span data-i18n="effort">Сколько усилий?</span>
+              <select id="desired-effort">
+                <option value="" data-i18n="any">Неважно</option>
+                <option value="low" data-i18n="easy">Легко</option>
+                <option value="medium" data-i18n="medium">Средне</option>
+                <option value="high" data-i18n="hard">Можно сложное</option>
+              </select>
+            </label>
+          </div>
+        </section>
+
+        <label
+          class="settings-card settings-toggle-card"
+          for="novel-passage-highlights"
+        >
+          <span class="settings-row-copy">
+            <strong data-i18n="potentialNewPassages"
+              >Подсвечивать потенциально новое</strong
+            >
+            <small data-i18n="potentialNewPassagesDescription"
+              >До трёх фрагментов — только по вашему запросу</small
+            >
+          </span>
+          <input id="novel-passage-highlights" type="checkbox" />
+        </label>
+
+        <section
+          id="profile-bar"
+          class="settings-card settings-account-card"
+          hidden
+        >
+          <div class="settings-row-copy profile-bar-copy">
+            <strong data-i18n="personalProfile">Личный профиль</strong>
+            <p id="profile-bar-text"></p>
+            <p id="outcome-stats" class="outcome-stats" hidden></p>
+          </div>
+          <div class="settings-inline-actions">
+            <button id="open-profile-import" type="button" data-i18n="change">
+              Изменить
+            </button>
+            <button id="delete-profile" type="button" data-i18n="delete" hidden>
+              Удалить
+            </button>
+          </div>
+        </section>
+
+        <section class="settings-card settings-account-card">
+          <div class="settings-row-copy">
+            <strong data-i18n="aiAnalyzer">AI-анализатор</strong>
+            <p id="ai-home-status">Локальная оценка без AI</p>
+          </div>
+          <button id="open-ai-settings" class="settings-action" type="button">
+            <span data-i18n="configure">Настроить</span>
+          </button>
+        </section>
+
+        <button
+          id="open-saved-materials"
+          class="settings-card settings-navigation-card"
+          type="button"
+          aria-expanded="false"
+          hidden
+        >
+          <span>
+            <strong data-i18n="savedMaterials">Сохранённые материалы</strong>
+            <small data-i18n="returnLater">Вернуться к отложенному</small>
+          </span>
+          <span id="saved-materials-count" class="settings-count">0</span>
+        </button>
+
+        <button
+          id="open-privacy-settings"
+          class="settings-card settings-navigation-card"
+          type="button"
+          aria-expanded="false"
+        >
+          <span>
+            <strong id="privacy-navigation-title">Приватность и данные</strong>
+            <small id="privacy-navigation-description"
+              >Локальный режим, разрешения и удаление</small
+            >
+          </span>
+          <span aria-hidden="true">›</span>
+        </button>
+
+        <p class="settings-privacy" data-i18n="privacy">
+          Профиль, настройки и история оценок хранятся локально в Chrome.
+        </p>
+      </section>
+
+      <p id="status" class="status" role="status" data-i18n="settingsReady">
+        Настройки готовы.
+      </p>
+      <p id="runtime-diagnostic" class="runtime-diagnostic" hidden></p>
+
+      <section
+        id="saved-materials-view"
+        class="saved-materials-view"
+        aria-labelledby="saved-materials-title"
+        hidden
+      >
+        <div class="saved-materials-header">
+          <div>
+            <p class="eyebrow" data-i18n="later">Вернуться позже</p>
+            <h2 id="saved-materials-title" data-i18n="savedMaterials">
+              Сохранённые материалы
+            </h2>
+          </div>
+          <button id="close-saved-materials" type="button" data-i18n="done">
+            Готово
+          </button>
+        </div>
+        <p
+          id="saved-materials-empty"
+          class="muted"
+          data-i18n="savedEmpty"
+          hidden
+        >
+          Здесь появятся материалы, которые вы решите отложить.
+        </p>
+        <div id="saved-materials-list" class="saved-materials-list"></div>
+      </section>
+
+      <section
+        id="ai-settings"
+        class="ai-settings"
+        aria-labelledby="ai-settings-title"
+        hidden
+      >
+        <div class="ai-settings-header">
+          <div>
+            <p class="eyebrow" data-i18n="analyzerType">Сменный анализатор</p>
+            <h2 id="ai-settings-title" data-i18n="connectAi">Подключить AI</h2>
+          </div>
+          <button id="close-ai-settings" type="button" data-i18n="done">
+            Готово
+          </button>
+        </div>
+        <p id="ai-settings-status" class="ai-settings-status"></p>
+        <label class="ai-key-field" for="ai-gateway-model">
+          <span data-i18n="aiModel">Модель Vercel AI Gateway</span>
+          <input
+            id="ai-gateway-model"
+            type="text"
+            list="ai-gateway-model-options"
+            autocomplete="off"
+            spellcheck="false"
+            placeholder="provider/model"
+          />
+        </label>
+        <datalist id="ai-gateway-model-options">
+          <option value="google/gemini-2.5-flash-lite"></option>
+        </datalist>
+        <p class="ai-privacy-note" data-i18n="aiModelHint">
+          Для тарифа Hobby начните с Gemini 2.5 Flash Lite. Другую модель
+          укажите в формате provider/model.
+        </p>
+        <label class="ai-key-field" for="ai-gateway-key">
+          <span>Vercel AI Gateway API key</span>
+          <input
+            id="ai-gateway-key"
+            type="password"
+            autocomplete="off"
+            spellcheck="false"
+            placeholder="Вставьте новый ключ"
+            data-i18n-placeholder="pasteKey"
+          />
+        </label>
+        <div class="ai-settings-actions">
+          <button id="save-ai-settings" class="profile-primary" type="button">
+            <span data-i18n="connect">Подключить</span>
+          </button>
+          <button
+            id="disconnect-ai"
+            class="profile-secondary"
+            type="button"
+            hidden
+          >
+            <span data-i18n="disconnectAi">Отключить AI</span>
+          </button>
+        </div>
+        <p class="ai-privacy-note" data-i18n="aiPrivacy">
+          Ключ хранится локально в Chrome. На сервер отправляются только текущий
+          текст, задача и несколько релевантных сигналов — не полный профиль.
+        </p>
+        <a
+          class="ai-key-link"
+          href="https://vercel.com/ai-gateway"
+          target="_blank"
+          rel="noreferrer"
+        >
+          <span data-i18n="getKey">Где получить ключ →</span>
+        </a>
+      </section>
+
+      <section
+        id="readwise-settings"
+        class="ai-settings"
+        aria-labelledby="readwise-settings-title"
+        hidden
+      >
+        <div class="ai-settings-header">
+          <div>
+            <p id="readwise-eyebrow" class="eyebrow">
+              Локальные свидетельства знакомства
+            </p>
+            <h2 id="readwise-settings-title">Readwise</h2>
+          </div>
+          <button id="close-readwise-settings" type="button">Готово</button>
+        </div>
+        <p id="readwise-intro" class="readwise-intro">
+          Attention использует ваши выделения и заметки, чтобы осторожнее
+          оценивать, что для вас действительно ново.
+        </p>
+        <p id="readwise-settings-status" class="ai-settings-status"></p>
+        <p id="readwise-summary" class="readwise-summary"></p>
+        <label class="ai-key-field" for="readwise-token">
+          <span id="readwise-token-label">Readwise access token</span>
+          <input
+            id="readwise-token"
+            type="password"
+            autocomplete="off"
+            spellcheck="false"
+            placeholder="Вставьте access token"
+          />
+        </label>
+        <div class="ai-settings-actions readwise-actions">
+          <button id="connect-readwise" class="profile-primary" type="button">
+            Подключить и синхронизировать
+          </button>
+          <button
+            id="sync-readwise"
+            class="profile-primary"
+            type="button"
+            hidden
+          >
+            Синхронизировать сейчас
+          </button>
+          <button
+            id="disconnect-readwise"
+            class="profile-secondary"
+            type="button"
+            hidden
+          >
+            Удалить данные Readwise
+          </button>
+        </div>
+        <p id="readwise-privacy-note" class="ai-privacy-note">
+          Токен, выделения и заметки хранятся локально в Chrome. Attention не
+          отправляет содержимое Readwise в AI. Сохранённое не считается
+          автоматически изученным.
+        </p>
+        <a
+          class="ai-key-link"
+          href="https://readwise.io/access_token"
+          target="_blank"
+          rel="noreferrer"
+        >
+          <span id="readwise-token-link">Где получить access token →</span>
+        </a>
+      </section>
+
+      <section
+        id="privacy-settings"
+        class="privacy-settings"
+        aria-labelledby="privacy-settings-title"
+        hidden
+      >
+        <div class="privacy-settings-header">
+          <div>
+            <p id="privacy-eyebrow" class="eyebrow">Контроль пользователя</p>
+            <h2 id="privacy-settings-title">Приватность и данные</h2>
+          </div>
+          <button id="close-privacy-settings" type="button">Готово</button>
+        </div>
+
+        <section class="privacy-panel privacy-mode-panel">
+          <label class="privacy-toggle" for="local-only-mode">
+            <span>
+              <strong id="local-only-title">Только локально</strong>
+              <small id="local-only-description"
+                >Жёстко запрещает любые облачные AI-запросы</small
+              >
+            </span>
+            <input id="local-only-mode" type="checkbox" />
+          </label>
+          <p id="local-only-status" class="privacy-status"></p>
+        </section>
+
+        <section class="privacy-panel">
+          <h3 id="gateway-disclosure-title">Когда используется Gateway</h3>
+          <p id="gateway-disclosure-description">
+            Только после вашего действия и только если локальный режим выключен.
+            Передаются текст текущей страницы, задача и не более нескольких
+            локально выбранных сигналов — никогда не полный профиль.
+          </p>
+        </section>
+
+        <section class="privacy-panel">
+          <h3 id="site-access-title">Доступ ко всем сайтам</h3>
+          <p id="site-access-description">
+            Он нужен, чтобы карточки работали на обычных веб-страницах.
+            Attention читает видимый текст локально; само разрешение не означает
+            отправку данных в сеть.
+          </p>
+        </section>
+
+        <section class="privacy-panel">
+          <h3 id="session-title">Публичная сессия</h3>
+          <p id="session-status" class="privacy-status"></p>
+        </section>
+
+        <section class="privacy-panel">
+          <h3 id="profile-export-title">Диагностический профиль</h3>
+          <p id="profile-export-description">
+            Скачивает сигналы профиля и агрегированную статистику для анализа.
+            Без ключей, токенов, списка посещённых страниц и текстов заметок.
+          </p>
+          <div class="privacy-actions">
+            <button
+              id="export-diagnostic-profile"
+              class="privacy-primary-action"
+              type="button"
+            >
+              Скачать безопасный JSON
+            </button>
+          </div>
+        </section>
+
+        <section class="privacy-panel">
+          <h3 id="diagnostics-title">Диагностика</h3>
+          <p id="diagnostics-summary" class="privacy-status"></p>
+          <p id="diagnostics-description">
+            Журнал содержит только коды сбоев и время. Без URL, текста страниц,
+            профиля, ключей, токенов и исходных сообщений ошибок.
+          </p>
+          <div class="privacy-actions">
+            <button id="copy-diagnostics" type="button">
+              Копировать диагностику
+            </button>
+            <button id="clear-diagnostics" type="button">Очистить</button>
+          </div>
+        </section>
+
+        <section class="privacy-panel privacy-danger-panel">
+          <h3 id="delete-all-title">Удалить все данные Attention</h3>
+          <p id="delete-all-description">
+            Удалит профиль, историю, сохранённые материалы, настройки,
+            диагностику, сессию и подключённый Gateway-ключ из Chrome.
+          </p>
+          <button id="delete-all-data" type="button">Удалить всё</button>
+        </section>
+      </section>
+
+      <section id="result" class="result" hidden>
+        <section class="context-section" hidden>
+          <button id="analyze" class="analyze-button" type="button">
+            Оценить полезность
+          </button>
+          <p id="analysis-note" class="analysis-note">
+            Используется прозрачная локальная оценка без AI.
+          </p>
+        </section>
+
+        <article class="material-card">
+          <div class="source-line">
+            <span id="content-type" class="content-type">Статья</span>
+            <span id="site-name" class="site-name"></span>
+          </div>
+
+          <h2 id="title"></h2>
+          <p id="excerpt" class="excerpt"></p>
+
+          <div class="metrics" aria-label="Метаданные материала">
+            <div>
+              <strong id="reading-time">—</strong>
+              <span>на чтение</span>
+            </div>
+            <div>
+              <strong id="word-count">—</strong>
+              <span>слов</span>
+            </div>
+            <div>
+              <strong id="language">—</strong>
+              <span>язык</span>
+            </div>
+          </div>
+
+          <p id="article-meta" class="article-meta"></p>
+          <p id="extraction-note" class="extraction-note" hidden></p>
+        </article>
+
+        <section id="outcome-prompt" class="outcome-prompt" hidden>
+          <p class="eyebrow">Actual utility</p>
+          <h3>Насколько полезным оказался материал?</h3>
+          <p id="outcome-prompt-note" class="outcome-prompt-note">
+            Сравним фактическую полезность с прогнозом.
+          </p>
+          <div class="actual-utility-control">
+            <output id="actual-utility-value" for="actual-utility">75</output>
+            <span>/ 100</span>
+          </div>
+          <input
+            id="actual-utility"
+            class="actual-utility-range"
+            type="range"
+            min="0"
+            max="100"
+            step="5"
+            value="75"
+            aria-label="Фактическая полезность от 0 до 100"
+          />
+          <button id="save-actual-utility" class="analyze-button" type="button">
+            Сохранить actual utility
+          </button>
+        </section>
+
+        <section id="evaluation" class="evaluation-card" hidden>
+          <div class="evaluation-topline">
+            <p class="eyebrow">Worth my attention?</p>
+            <span id="confidence" class="confidence"></span>
+          </div>
+          <div class="utility-verdict">
+            <strong id="utility-score" class="utility-score">—</strong>
+            <div>
+              <h3 id="recommendation" class="recommendation"></h3>
+              <p id="useful-minutes" class="useful-minutes"></p>
+            </div>
+          </div>
+          <div class="component-scores" aria-label="Компоненты Utility Score">
+            <span
+              ><span id="label-relevance">Relevance</span>
+              <strong id="score-relevance">—</strong></span
+            >
+            <span
+              ><span id="label-novelty">Novelty</span>
+              <strong id="score-novelty">—</strong></span
+            >
+            <span
+              ><span id="label-actionability">Actionability</span>
+              <strong id="score-actionability">—</strong></span
+            >
+            <span
+              ><span id="label-quality">Quality</span>
+              <strong id="score-quality">—</strong></span
+            >
+          </div>
+          <div id="assessment-insights" class="assessment-insights" hidden>
+            <article class="assessment-panel">
+              <div class="assessment-heading">
+                <strong>Новизна</strong>
+                <span id="novelty-confidence"></span>
+              </div>
+              <p id="novelty-summary"></p>
+              <div id="likely-new-block" hidden>
+                <span class="assessment-label">Вероятно новое</span>
+                <ul id="likely-new-claims"></ul>
+              </div>
+            </article>
+            <article class="assessment-panel">
+              <div class="assessment-heading">
+                <strong>Качество</strong>
+                <span id="quality-confidence"></span>
+              </div>
+              <p id="quality-summary"></p>
+              <div class="quality-breakdown" aria-label="Критерии качества">
+                <span
+                  >Доказательность
+                  <strong id="quality-evidence">—</strong></span
+                >
+                <span>Логика <strong id="quality-reasoning">—</strong></span>
+                <span
+                  >Конкретность
+                  <strong id="quality-specificity">—</strong></span
+                >
+                <span
+                  >Оговорки <strong id="quality-calibration">—</strong></span
+                >
+              </div>
+              <p id="quality-limitation" class="quality-limitation"></p>
+            </article>
+          </div>
+          <p id="reason" class="reason"></p>
+          <div
+            class="evaluation-verdict-actions"
+            role="group"
+            aria-label="Полезность рекомендации"
+          >
+            <button id="evaluation-useful" type="button">Useful 👍</button>
+            <button id="evaluation-not-useful" type="button">
+              Not useful 👎
+            </button>
+          </div>
+          <details class="evaluation-details">
+            <summary>Разделы и использованный контекст</summary>
+            <p id="expected-value" hidden></p>
+            <div id="recommended-sections-block" class="evaluation-block">
+              <strong>С чего начать</strong>
+              <ul id="recommended-sections"></ul>
+            </div>
+            <div id="profile-signals-block" class="evaluation-block" hidden>
+              <strong>Что из профиля повлияло</strong>
+              <div id="profile-signals" class="profile-signals"></div>
+            </div>
+          </details>
+          <button
+            id="wrong-recommendation"
+            class="evaluation-feedback-button"
+            type="button"
+            hidden
+          >
+            Рекомендация была неверной
+          </button>
+          <p id="analyzer-label" class="analyzer-label">
+            Локальный анализ · без передачи данных
+          </p>
+        </section>
+
+        <section class="decision-section" aria-labelledby="decision-title">
+          <div class="section-heading">
+            <p class="eyebrow">Ваше решение</p>
+            <h3 id="decision-title">Как поступите?</h3>
+          </div>
+
+          <div class="decision-grid">
+            <button
+              class="decision-button"
+              data-decision="read"
+              type="button"
+              aria-pressed="false"
+            >
+              <span class="decision-icon" aria-hidden="true">→</span>
+              <span
+                ><strong>Читать</strong><small>Открыть полностью</small></span
+              >
+            </button>
+            <button
+              class="decision-button"
+              data-decision="skim"
+              type="button"
+              aria-pressed="false"
+            >
+              <span class="decision-icon" aria-hidden="true">≡</span>
+              <span
+                ><strong>Просмотреть части</strong
+                ><small>Сначала структура</small></span
+              >
+            </button>
+            <button
+              class="decision-button"
+              data-decision="save"
+              type="button"
+              aria-pressed="false"
+            >
+              <span class="decision-icon" aria-hidden="true">＋</span>
+              <span
+                ><strong>Сохранить</strong><small>Вернуться позже</small></span
+              >
+            </button>
+            <button
+              class="decision-button"
+              data-decision="skip"
+              type="button"
+              aria-pressed="false"
+            >
+              <span class="decision-icon" aria-hidden="true">×</span>
+              <span
+                ><strong>Пропустить</strong
+                ><small>Не тратить время</small></span
+              >
+            </button>
+          </div>
+        </section>
+
+        <section id="skim-panel" class="skim-panel" hidden>
+          <div class="section-heading compact">
+            <p class="eyebrow">Структура материала</p>
+            <h3>Основные разделы</h3>
+          </div>
+          <ol id="headings" class="headings"></ol>
+          <p id="no-headings" class="muted" hidden>
+            На странице не удалось выделить названия разделов.
+          </p>
+          <button id="continue-on-page" class="continue-on-page" type="button">
+            Продолжить на странице
+          </button>
+          <details class="text-preview">
+            <summary>Показать извлечённый текст</summary>
+            <textarea id="content" rows="8" readonly></textarea>
+          </details>
+        </section>
+
+        <details class="technical-details">
+          <summary>Детали извлечения</summary>
+          <dl>
+            <div>
+              <dt>URL</dt>
+              <dd id="url"></dd>
+            </div>
+            <div>
+              <dt>Метод</dt>
+              <dd id="method"></dd>
+            </div>
+            <div>
+              <dt>Хранение</dt>
+              <dd id="storage-state"></dd>
+            </div>
+          </dl>
+        </details>
+      </section>
+    </main>
+    <script type="module" src="popup.js"></script>
+  </body>
+</html>

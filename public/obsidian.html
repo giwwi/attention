@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Attention · Obsidian</title>
+    <link rel="stylesheet" href="obsidian.css" />
+  </head>
+  <body>
+    <main class="shell">
+      <header>
+        <div class="brand"><span></span>Attention</div>
+        <button id="close-obsidian" class="quiet" type="button">Done</button>
+      </header>
+      <section class="card" aria-labelledby="obsidian-title">
+        <p id="obsidian-eyebrow" class="eyebrow">Local knowledge source</p>
+        <h1 id="obsidian-title">Obsidian</h1>
+        <p id="obsidian-intro" class="intro"></p>
+        <div class="status-card" aria-live="polite">
+          <strong id="obsidian-status"></strong>
+          <span id="obsidian-summary"></span>
+        </div>
+        <div class="actions">
+          <button id="choose-vault" class="primary" type="button">
+            Choose Vault
+          </button>
+          <button id="refresh-vault" type="button" hidden>Refresh index</button>
+          <button id="disconnect-vault" class="danger" type="button" hidden>
+            Disconnect and delete index
+          </button>
+        </div>
+        <div class="privacy">
+          <p id="obsidian-privacy"></p>
+          <p id="obsidian-filters"></p>
+        </div>
+      </section>
+    </main>
+    <script type="module" src="obsidian.js"></script>
+  </body>
+</html>

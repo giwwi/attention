@@ -1,0 +1,27 @@
+{
+  "manifest_version": 3,
+  "name": "Attention",
+  "version": "0.21.12",
+  "minimum_chrome_version": "102",
+  "description": "Evaluate articles using your optional, locally stored personal context.",
+  "permissions": ["activeTab", "identity", "scripting", "storage"],
+  "optional_permissions": ["history"],
+  "host_permissions": ["http://*/*", "https://*/*"],
+  "content_security_policy": {
+    "extension_pages": "default-src 'self'; connect-src 'self' https://ai-gateway.vercel.sh https://readwise.io https://api.notion.com; object-src 'none'"
+  },
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": ["http://*/*", "https://*/*"],
+      "js": ["content.js"],
+      "run_at": "document_idle"
+    }
+  ],
+  "action": {
+    "default_title": "Evaluate this page",
+    "default_popup": "popup.html"
+  }
+}

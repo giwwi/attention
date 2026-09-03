@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Attention · Notion</title>
+    <link rel="stylesheet" href="obsidian.css" />
+  </head>
+  <body>
+    <main class="shell">
+      <header>
+        <div class="brand"><span></span>Attention</div>
+        <button id="close-notion" class="quiet" type="button">Done</button>
+      </header>
+      <section class="card" aria-labelledby="notion-title">
+        <p id="notion-eyebrow" class="eyebrow">Selected knowledge source</p>
+        <h1 id="notion-title">Notion</h1>
+        <p id="notion-intro" class="intro"></p>
+        <div class="status-card" aria-live="polite">
+          <strong id="notion-status"></strong>
+          <span id="notion-summary"></span>
+        </div>
+        <label class="source-mode" for="notion-source-mode">
+          <span id="notion-source-label">What is in the selected pages?</span>
+          <select id="notion-source-mode">
+            <option id="notion-mode-mixed" value="mixed">A mixture</option>
+            <option id="notion-mode-own" value="own-notes">My own notes</option>
+            <option id="notion-mode-saved" value="saved-materials">
+              Saved materials
+            </option>
+          </select>
+        </label>
+        <div class="actions">
+          <button id="connect-notion" class="primary" type="button">
+            Connect Notion
+          </button>
+          <button id="sync-notion" type="button" hidden>Refresh index</button>
+          <button id="disconnect-notion" class="danger" type="button" hidden>
+            Disconnect and delete index
+          </button>
+        </div>
+        <div class="privacy">
+          <p id="notion-privacy"></p>
+          <p id="notion-selection"></p>
+        </div>
+      </section>
+    </main>
+    <script type="module" src="notion.js"></script>
+  </body>
+</html>
