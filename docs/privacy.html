@@ -1,0 +1,311 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta
+      name="description"
+      content="How Attention handles article content, personal context, optional integrations, AI requests and local data."
+    />
+    <title>Privacy policy — Attention</title>
+    <style>
+      :root {
+        color-scheme: light;
+        --paper: #f3f1eb;
+        --ink: #20211f;
+        --muted: #595e55;
+        --line: #d8d5cb;
+        --green: #176b4f;
+        font-family:
+          ui-sans-serif,
+          system-ui,
+          -apple-system,
+          BlinkMacSystemFont,
+          'Segoe UI',
+          sans-serif;
+        color: var(--ink);
+        background: var(--paper);
+        line-height: 1.65;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+      }
+      header,
+      main,
+      footer {
+        width: min(760px, calc(100% - 40px));
+        margin-inline: auto;
+      }
+      header {
+        padding-block: 24px;
+        border-bottom: 1px solid var(--line);
+      }
+      .brand {
+        color: var(--ink);
+        font-weight: 750;
+        text-decoration: none;
+      }
+      main {
+        padding-block: 40px;
+      }
+      h1 {
+        font-size: clamp(2rem, 7vw, 3.2rem);
+        line-height: 1.1;
+        margin: 0 0 16px;
+        letter-spacing: -0.04em;
+      }
+      h2 {
+        font-size: 1.3rem;
+        line-height: 1.35;
+        margin-top: 36px;
+      }
+      h3 {
+        font-size: 1.05rem;
+        margin: 24px 0 8px;
+      }
+      p,
+      ul {
+        margin: 0 0 16px;
+      }
+      ul {
+        padding-left: 24px;
+      }
+      li + li {
+        margin-top: 10px;
+      }
+      .date,
+      footer {
+        color: var(--muted);
+        font-size: 0.9rem;
+      }
+      a {
+        color: var(--green);
+        text-underline-offset: 3px;
+        overflow-wrap: anywhere;
+      }
+      a:focus-visible {
+        outline: 2px solid var(--green);
+        outline-offset: 4px;
+        border-radius: 2px;
+      }
+      footer {
+        padding-block: 24px;
+        border-top: 1px solid var(--line);
+      }
+      @media (prefers-color-scheme: dark) {
+        :root {
+          color-scheme: dark;
+          --paper: #15221b;
+          --ink: #e4eee7;
+          --muted: #a5b9ad;
+          --line: #3b5143;
+          --green: #7bd5ad;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <header><a class="brand" href="./">Attention</a></header>
+    <main>
+      <h1>Privacy policy</h1>
+      <p class="date">Effective date: September 5, 2026</p>
+      <p>
+        Attention is developed by Aleksey Voloschuk. It helps you decide whether
+        to read, skim, save or skip an article using your current goal,
+        available time and optional personal context. This policy describes the
+        standard Attention browser extension and its project website.
+      </p>
+      <p>
+        The extension works without an Attention account or external AI.
+        Ordinary evaluation runs on your device. The developer does not receive
+        your reading data automatically. Optional services receive data only
+        through the features described below.
+      </p>
+
+      <h2>Data handled on your device</h2>
+      <ul>
+        <li>
+          <strong>Article content:</strong> accessible page text, title, source,
+          URL, headings, excerpts and estimated reading time. Attention uses
+          these to evaluate articles, display cards and highlights, and keep
+          articles you save in its local reading list.
+        </li>
+        <li>
+          <strong>Personal context:</strong> goals, interests, preferences,
+          self-described knowledge and profile information you enter or import.
+          These help personalize recommendations. Free text and imported content
+          can contain personal information you choose to include.
+        </li>
+        <li>
+          <strong>Reading activity:</strong> assessments, Read/Skim/Save/Skip
+          decisions, voluntary feedback, visible reading time and scroll
+          progress. These support feedback prompts and local calibration, not
+          advertising or remote usage analytics.
+        </li>
+        <li>
+          <strong>Optional browser history:</strong> after you grant permission,
+          Attention reads up to 10,000 history entries from the selected 7, 30
+          or 90 day period. It derives local URL fingerprints, visit counts,
+          times, topics and source hostnames. It does not retain the raw
+          visited-page list and attempts to release the history permission after
+          import.
+        </li>
+        <li>
+          <strong>Optional source content and credentials:</strong> imported
+          Readwise highlights and notes, Obsidian note indexes and the keys you
+          provide for connected services. Authentication tokens are used only
+          for their respective service connections.
+        </li>
+      </ul>
+
+      <h2>When data leaves your device</h2>
+      <h3>AI article analysis and profile creation</h3>
+      <p>
+        Cloud AI is blocked by default. To use it, you supply a Vercel AI
+        Gateway key, select a model, disable Local only mode and request an AI
+        action. Opening a card or the extension popup does not itself send an AI
+        request.
+      </p>
+      <p>
+        An article AI request sends Vercel AI Gateway and the selected model
+        provider the article title, source, excerpt, headings and text, your
+        current goal and scenario, and selected profile and knowledge signals.
+        The article body is limited to 24,000 characters. If you imported
+        browser history, selected derived signals may include whether the page
+        was encountered before and matching topics and source hostnames. The
+        full profile, raw browsing history and imported Readwise, Obsidian or
+        Notion note/highlight bodies are not included in this request.
+      </p>
+      <p>
+        When you request AI-assisted profile creation, your three short answers
+        about internet use, known topics and leisure preferences are sent to the
+        same Gateway and selected model provider, with each answer limited to
+        1,500 characters. Your existing full profile is not sent.
+      </p>
+      <p>
+        The suggested default model is Google Gemini; you can choose another
+        provider/model in AI settings. These services process requests under
+        their own policies and your account terms. Attention does not guarantee
+        their retention or model training practices. Enabling Local only blocks
+        further cloud AI requests; it does not disable the connected services
+        below.
+      </p>
+
+      <h3>Readwise</h3>
+      <p>
+        When you connect or synchronize Readwise, your token authenticates
+        direct requests to Readwise to import your highlights and notes into a
+        local index. When you choose Save to Readwise, the selected quotation,
+        article title, author when available, cleaned source URL and timestamp
+        are sent to Readwise. Removing the connection deletes Attention’s local
+        token and index; it does not delete highlights in your Readwise account.
+      </p>
+
+      <h3>Obsidian and Notion</h3>
+      <p>
+        Obsidian access is limited to the folder you choose through the
+        browser’s folder picker. Attention reads and indexes notes locally and
+        does not modify the original files or upload them.
+      </p>
+      <p>
+        Notion connection is not enabled in the standard release because it has
+        no configured OAuth service. The code also supports separately
+        configured builds: in those builds, Notion authorization uses an OAuth
+        broker to exchange authorization codes and refresh or revoke tokens, and
+        chosen workspace pages are fetched directly from Notion into a local
+        index. Such a deployment must identify its broker and disclose its data
+        handling before making that connection available.
+      </p>
+
+      <h3>Profile handoff, support and voluntary sharing</h3>
+      <p>
+        Optional ChatGPT or Claude profile setup opens the provider with a fixed
+        profile-generation prompt, using the clipboard or an application link.
+        Attention does not automatically send your existing profile or articles
+        to that conversation. You choose what to discuss with the provider and
+        which result to import.
+      </p>
+      <p>
+        Support development opens a separate Ko-fi page without an article or
+        profile payload. Ko-fi and its payment providers handle payments; the
+        extension does not receive card, bank or payment account details.
+      </p>
+      <p>
+        The optional pilot, diagnostic profile export and error diagnostics stay
+        local until you explicitly export or share them. A diagnostic profile
+        export contains personal profile signals and aggregate statistics, but
+        excludes keys, raw note text and the visited-page list. Error
+        diagnostics contain failure codes and timestamps. Review exported files
+        before sharing them. If you send a file or report through GitHub, the
+        developer and anyone with access to that report can read what you share.
+      </p>
+
+      <h2>Storage, permissions and deletion</h2>
+      <p>
+        Attention stores data in the current Chrome profile using extension
+        storage and local IndexedDB. It does not use Chrome Sync to synchronize
+        your data. Chrome storage access for profile data and keys is restricted
+        to trusted extension contexts. Attention does not add its own password
+        or encryption layer. External API requests use HTTPS.
+      </p>
+      <p>
+        Access to ordinary HTTP and HTTPS pages allows article extraction,
+        material-link previews and reading feedback on the page. Script access
+        loads Attention’s packaged interface into supported open tabs; storage
+        access preserves your settings and local records. History permission is
+        optional. You can restrict website access in Chrome’s extension
+        settings.
+      </p>
+      <p>
+        Settings and source indexes remain until you remove them. Reading
+        memory, feedback and diagnostic records have size limits, so older
+        entries may be replaced. Choose Settings → Privacy and data → Delete all
+        Attention data to remove local profiles, keys, saved articles,
+        history-derived data, indexes, pilot records and diagnostics. Unfinished
+        imports are invalidated so they cannot restore deleted data.
+      </p>
+      <p>
+        Local deletion does not delete your original Obsidian files, Readwise or
+        Notion content, previously downloaded exports, public reports, or data
+        already processed by AI providers. For a configured Notion connection,
+        Attention also attempts token revocation, without delaying local
+        deletion. Manage third-party data and permissions with those providers.
+      </p>
+
+      <h2>Limited use and website hosting</h2>
+      <p>
+        Attention uses data only to provide and improve its article-decision
+        features. It does not sell user data, use it for advertising, or use it
+        to determine creditworthiness. Attention’s use and transfer of
+        information received from Google APIs adhere to the Chrome Web Store
+        User Data Policy, including its Limited Use requirements. This
+        commitment applies to raw and derived data.
+      </p>
+      <p>
+        The extension contains no analytics or advertising trackers. The project
+        website is hosted by GitHub Pages and uses no project-added analytics or
+        tracking cookies. Hosting and external service providers may process
+        ordinary connection information, such as IP addresses and request logs,
+        under their own policies.
+      </p>
+
+      <h2>Changes and contact</h2>
+      <p>
+        Policy changes will appear here with an updated effective date. Material
+        changes to data handling will also be disclosed in the product before
+        the changed feature is used.
+      </p>
+      <p>
+        For questions or requests, open an
+        <a href="https://github.com/giwwi/attention/issues"
+          >Attention GitHub issue</a
+        >. Issues are public: do not post credentials or private documents. The
+        developer cannot retrieve data that exists only in your Chrome profile.
+      </p>
+    </main>
+    <footer><a href="./">Back to Attention</a></footer>
+  </body>
+</html>
