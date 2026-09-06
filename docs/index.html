@@ -38,17 +38,17 @@
           <p class="eyebrow">Your attention, evaluated locally</p>
           <h1>Know what’s worth reading before you open it.</h1>
           <p class="lede">
-            Attention is a Chrome extension that estimates how useful an article is
-            for you, right now—then points you to the parts worth your time.
+            Attention is a Chrome extension that estimates how useful an article
+            is for you, right now—then points you to the parts worth your time.
           </p>
           <div class="actions">
-            <a
-              class="button primary"
-              href="https://github.com/giwwi/attention/releases/latest/download/attention-extension-v0.21.12.zip"
-            >
+            <a class="button primary" href="releases/attention-0.23.0.zip">
               Download for Chrome
             </a>
-            <a class="button secondary" href="https://github.com/giwwi/attention">
+            <a
+              class="button secondary"
+              href="https://github.com/giwwi/attention"
+            >
               View on GitHub
             </a>
           </div>
@@ -71,17 +71,26 @@
         <article>
           <span class="number">01</span>
           <h2>Decide before clicking</h2>
-          <p>Preview whether a link is likely worth reading while you browse a feed.</p>
+          <p>
+            Preview whether a link is likely worth reading while you browse a
+            feed.
+          </p>
         </article>
         <article>
           <span class="number">02</span>
           <h2>Read only what matters</h2>
-          <p>Get an explainable score and jump to the sections most useful to you.</p>
+          <p>
+            Get an explainable score and jump to the sections most useful to
+            you.
+          </p>
         </article>
         <article>
           <span class="number">03</span>
           <h2>Keep your context yours</h2>
-          <p>Your profile, feedback, and reading memory stay inside your browser.</p>
+          <p>
+            Your saved profile, feedback, and reading memory are encrypted in
+            your browser with a password you choose.
+          </p>
         </article>
       </section>
 
@@ -95,21 +104,32 @@
             <span>1</span>
             <div>
               <h3>Set your context</h3>
-              <p>Choose what you are doing—working, learning, exploring, or relaxing—and how much time you have.</p>
+              <p>
+                Open an article and click Attention. Create your local vault,
+                then choose work, learning, exploration, or relaxation. Add a
+                topic or skip it. Your first assessment runs locally.
+              </p>
             </div>
           </article>
           <article>
             <span>2</span>
             <div>
               <h3>See the recommendation</h3>
-              <p>Attention weighs relevance, novelty, actionability, and argument quality to suggest Read, Skim, Save, or Skip.</p>
+              <p>
+                See the current article's score and choose Read, Skim, Save, or
+                Skip. Adjust your scenario or 5, 15, or 30 minute budget to
+                update the recommendation.
+              </p>
             </div>
           </article>
           <article>
             <span>3</span>
             <div>
               <h3>Make it personal</h3>
-              <p>Tell Attention whether the material was worth it. Future estimates calibrate locally from your feedback.</p>
+              <p>
+                Tell Attention whether the material was worth it. Future
+                estimates calibrate locally from your feedback.
+              </p>
             </div>
           </article>
         </div>
@@ -119,16 +139,22 @@
         <div class="shell privacy-inner">
           <div>
             <p class="eyebrow">Local-first by design</p>
-            <h2>Your reading history should not become someone else’s dataset.</h2>
+            <h2>
+              Your reading history should not become someone else’s dataset.
+            </h2>
           </div>
           <div class="privacy-copy">
             <p>
-              Attention works without an account, analytics, or an API key. Local
-              evaluation never sends article content anywhere.
+              Attention works without an account, analytics, or an API key.
+              Local evaluation runs in your browser. Your saved profile, goals,
+              reading history, feedback, and source indexes are protected by a
+              password-encrypted local vault.
             </p>
             <p>
-              Optional AI analysis runs only when you request it and uses your own
-              Vercel AI Gateway key. You can erase all Attention data at any time.
+              Optional AI analysis and connected services receive data when you
+              use those features, as described in the privacy policy. You can
+              lock or erase your local vault. A forgotten password can only be
+              reset by deleting the vault and starting over.
             </p>
             <a href="privacy.html">Read the privacy policy →</a>
           </div>
@@ -142,24 +168,39 @@
         </div>
         <ol>
           <li><span>01</span> Download and unzip the extension.</li>
-          <li><span>02</span> Open <code>chrome://extensions</code> and enable Developer mode.</li>
-          <li><span>03</span> Click Load unpacked and select the unzipped folder.</li>
-          <li><span>04</span> Pin Attention, open an article, and click its icon.</li>
+          <li>
+            <span>02</span> Open <code>chrome://extensions</code> and enable
+            Developer mode.
+          </li>
+          <li>
+            <span>03</span> Click Load unpacked and select the unzipped folder.
+          </li>
+          <li>
+            <span>04</span> Pin Attention, open an article, click its icon,
+            create your vault, and choose your scenario to see the assessment.
+          </li>
         </ol>
+        <p>
+          Reopen the result with the extension icon, or Tab to the Attention
+          button beside an article title and press Enter. Escape closes the
+          article card.
+        </p>
         <div class="actions">
-          <a
-            class="button primary"
-            href="https://github.com/giwwi/attention/releases/latest/download/attention-extension-v0.21.12.zip"
-          >
+          <a class="button primary" href="releases/attention-0.23.0.zip">
             Download the ZIP
           </a>
-          <a class="text-link" href="https://github.com/giwwi/attention/issues">Share feedback →</a>
+          <a class="text-link" href="https://github.com/giwwi/attention/issues"
+            >Share feedback →</a
+          >
         </div>
       </section>
     </main>
 
     <footer class="shell">
-      <a class="brand" href="#top"><span class="brand-mark" aria-hidden="true">A</span><span>Attention</span></a>
+      <a class="brand" href="#top"
+        ><span class="brand-mark" aria-hidden="true">A</span
+        ><span>Attention</span></a
+      >
       <p>Own your attention model.</p>
       <a href="https://github.com/giwwi/attention">GitHub</a>
     </footer>

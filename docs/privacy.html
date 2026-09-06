@@ -111,7 +111,7 @@
     <header><a class="brand" href="./">Attention</a></header>
     <main>
       <h1>Privacy policy</h1>
-      <p class="date">Effective date: September 5, 2026</p>
+      <p class="date">Effective date: September 6, 2026</p>
       <p>
         Attention is developed by Aleksey Voloschuk. It helps you decide whether
         to read, skim, save or skip an article using your current goal,
@@ -155,9 +155,11 @@
         </li>
         <li>
           <strong>Optional source content and credentials:</strong> imported
-          Readwise highlights and notes, Obsidian note indexes and the keys you
-          provide for connected services. Authentication tokens are used only
-          for their respective service connections.
+          Readwise highlights and notes, Obsidian notes and search indexes,
+          pages and indexes from a configured Notion connection, and the keys
+          you provide for connected services. Authentication tokens are used
+          only for their respective service connections. Stored source content,
+          titles, paths, indexes and credentials are encrypted in your vault.
         </li>
       </ul>
 
@@ -208,7 +210,11 @@
       <p>
         Obsidian access is limited to the folder you choose through the
         browser’s folder picker. Attention reads and indexes notes locally and
-        does not modify the original files or upload them.
+        does not modify the original files or upload them. The folder handle is
+        kept only in the active extension page’s memory and is cleared when the
+        vault is locked or reset. After that page closes or Chrome restarts, you
+        must choose the folder again for the next synchronization. Imported
+        notes remain encrypted in the vault; the original files are outside it.
       </p>
       <p>
         Notion connection is not enabled in the standard release because it has
@@ -234,22 +240,58 @@
         extension does not receive card, bank or payment account details.
       </p>
       <p>
-        The optional pilot, diagnostic profile export and error diagnostics stay
-        local until you explicitly export or share them. A diagnostic profile
-        export contains personal profile signals and aggregate statistics, but
-        excludes keys, raw note text and the visited-page list. Error
-        diagnostics contain failure codes and timestamps. Review exported files
-        before sharing them. If you send a file or report through GitHub, the
-        developer and anyone with access to that report can read what you share.
+        The optional pilot, diagnostic profile export and error diagnostics are
+        not shared automatically. A diagnostic profile export contains counts
+        and structural checks, without personal field values, goals, titles,
+        URLs, quotations, source text or credentials. Error diagnostics contain
+        failure codes and timestamps, excluding raw error messages. Pilot
+        exports contain the experiment’s permitted measurements, without article
+        text, URLs, goals or profiles. Exported files are outside the encrypted
+        vault. If you send a file or report through GitHub, the developer and
+        anyone with access to that report can read what you share.
       </p>
 
       <h2>Storage, permissions and deletion</h2>
       <p>
-        Attention stores data in the current Chrome profile using extension
-        storage and local IndexedDB. It does not use Chrome Sync to synchronize
-        your data. Chrome storage access for profile data and keys is restricted
-        to trusted extension contexts. Attention does not add its own password
-        or encryption layer. External API requests use HTTPS.
+        Attention stores personal data in an encrypted vault in the current
+        Chrome profile. This includes stored profiles, goals, article data,
+        saved items, derived browsing history, decisions, feedback, reading and
+        knowledge memory, source content and search indexes, credentials, pilot
+        records and diagnostics. It does not use Chrome Sync to synchronize your
+        data.
+      </p>
+      <p>
+        Personal records are encrypted with AES-256-GCM in local IndexedDB. A
+        randomly generated data key is encrypted with a key derived from your
+        password using PBKDF2-SHA-256, a random salt and 600,000 iterations.
+        Attention does not store your password or send it to a server.
+        Persistent extension storage outside the ciphertext holds non-personal
+        vault and coordination metadata, including the salt and encrypted data
+        key.
+      </p>
+      <p>
+        While unlocked, the data key is held in Chrome’s memory-only session
+        storage, accessible only to trusted extension contexts. Locking the
+        vault removes that key and blocks access to personal records; ending the
+        browser session also requires a new unlock. Attention must decrypt data
+        to evaluate articles, show relevant context on the page and make your
+        chosen AI or source requests. This protection covers stored copies; it
+        does not encrypt the website you are reading, your original source
+        files, downloaded exports or information processed by external
+        providers. External API requests use HTTPS.
+      </p>
+      <p>
+        On first setup in an existing installation, Attention copies older local
+        records and source databases into encrypted storage and verifies the
+        copy before removing the older stored data and folder handles. A failed
+        migration keeps the vault locked and retains remaining original data so
+        migration can be retried.
+      </p>
+      <p>
+        There is no password recovery service. If you forget the password, the
+        reset option irreversibly deletes Attention’s local vault and allows you
+        to create a new, empty one. It does not restore the previous profile,
+        reading history or imported records.
       </p>
       <p>
         Access to ordinary HTTP and HTTPS pages allows article extraction,
@@ -270,9 +312,9 @@
       <p>
         Local deletion does not delete your original Obsidian files, Readwise or
         Notion content, previously downloaded exports, public reports, or data
-        already processed by AI providers. For a configured Notion connection,
-        Attention also attempts token revocation, without delaying local
-        deletion. Manage third-party data and permissions with those providers.
+        already processed by AI providers. Resetting a locked vault cannot use
+        its encrypted credentials to revoke remote access. Manage third-party
+        data and permissions with those providers.
       </p>
 
       <h2>Limited use and website hosting</h2>

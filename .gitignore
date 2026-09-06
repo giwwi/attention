@@ -7,3 +7,4 @@ coverage/
 output/
 test-results/
 *.zip
+!docs/releases/attention-0.23.0.zip
