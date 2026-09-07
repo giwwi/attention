@@ -157,9 +157,10 @@ nav a:hover {
 }
 .hero {
   display: grid;
-  grid-template-columns: 1.18fr 0.82fr;
-  gap: 64px;
-  padding-block: 76px 84px;
+  max-width: 1040px;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 48px;
+  padding-block: 60px 72px;
 }
 .hero-copy > .eyebrow {
   display: flex;
@@ -772,11 +773,6 @@ code {
   padding-block: 30px;
   font-size: 14px;
 }
-@media (min-width: 1500px) {
-  .hero {
-    gap: 100px;
-  }
-}
 @media (max-width: 1100px) {
   .shell {
     width: calc(100% - 64px);
@@ -785,8 +781,7 @@ code {
     display: none;
   }
   .hero {
-    gap: 38px;
-    grid-template-columns: 1.12fr 0.88fr;
+    gap: 32px;
   }
   .reading-proof {
     padding: 20px;
