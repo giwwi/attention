@@ -290,19 +290,94 @@ h1 em::after {
 }
 .proof-card {
   width: 100%;
-  aspect-ratio: 360 / 383.156;
-  position: relative;
-  overflow: hidden;
+  padding: 22px 18px 18px;
+  background: #fbfefd;
+  border: 1px solid #dbe5e0;
   border-radius: 16px;
   box-shadow: 0 14px 35px #18352612;
+  font:
+    14px/1.45 Arial,
+    sans-serif;
+  color: #1c382e;
 }
-.proof-card img {
-  position: absolute;
-  width: 355.55556%;
-  max-width: none;
-  height: auto;
-  left: -5.55556%;
-  top: -50.109%;
+.proof-card p {
+  margin: 0;
+}
+.proof-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  color: #61766c;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+}
+.proof-card-header span:last-child {
+  font-size: 23px;
+  line-height: 1;
+}
+.proof-card .proof-context {
+  margin: 14px 0 20px;
+  color: #61766c;
+  font-size: 12px;
+}
+.proof-card .proof-verdict {
+  font-size: 23px;
+  font-weight: 700;
+  letter-spacing: -0.04em;
+}
+.proof-card .proof-reason {
+  margin-top: 10px;
+}
+.proof-card .proof-readtime {
+  margin-top: 10px;
+  color: #61766c;
+  font-size: 12px;
+  font-weight: 700;
+}
+.proof-analysis {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin: 20px 0 16px;
+  color: #61766c;
+  font-size: 12px;
+}
+.proof-ai {
+  padding: 8px 12px;
+  border: 1px solid #9cbbad;
+  border-radius: 8px;
+  color: #196b51;
+  font-weight: 700;
+}
+.proof-decisions {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+.proof-decisions span {
+  padding: 10px 8px;
+  border: 1px solid #d4e1da;
+  border-radius: 9px;
+  text-align: center;
+  font-size: 13px;
+  font-weight: 700;
+}
+.proof-decisions .proof-read {
+  grid-column: 1 / -1;
+  background: #196b51;
+  border-color: #196b51;
+  color: white;
+}
+.proof-card .proof-why {
+  margin-top: 20px;
+  padding-top: 16px;
+  border-top: 1px solid #d4e1da;
+  color: #486356;
+  font-size: 12px;
+  font-weight: 700;
 }
 .reading-proof figcaption {
   display: flex;

@@ -27,7 +27,7 @@
       type="font/ttf"
       crossorigin
     />
-    <link rel="stylesheet" href="./site.css?v=20260907-support" />
+    <link rel="stylesheet" href="./site.css?v=20260907-ai-card" />
   </head>
   <body>
     <a class="skip-link" href="#main">Skip to content</a>
@@ -79,19 +79,38 @@
           </div>
           <p class="article-source">martinfowler.com</p>
           <h2>Is High Quality Software<br />Worth the Cost?</h2>
-          <div class="proof-card">
-            <img
-              src="./media/attention-reading-session.png"
-              width="5120"
-              height="3200"
-              fetchpriority="high"
-              alt="Real Attention card: Learning, 15 minutes, Understand software quality. Worth reading. Looks like a useful next step for learning this topic. 12 minute read. Local evaluation. Read, Skim, Save and Skip."
-            />
+          <div
+            class="proof-card"
+            role="img"
+            aria-label="Example Attention card: Learning, 15 minutes, Understand software quality. Worth reading. 12 minute read. Local evaluation, with an optional Evaluate with AI button. Read, Skim, Save and Skip."
+          >
+            <div class="proof-card-content" aria-hidden="true">
+              <div class="proof-card-header">
+                <span>ATTENTION</span><span>×</span>
+              </div>
+              <p class="proof-context">
+                ▸ Learning · 15 min · Understand software quality
+              </p>
+              <p class="proof-verdict">Worth reading</p>
+              <p class="proof-reason">
+                Looks like a useful next step for learning this topic
+              </p>
+              <p class="proof-readtime">12 min read</p>
+              <div class="proof-analysis">
+                <span>Local evaluation</span
+                ><span class="proof-ai">Evaluate with AI</span>
+              </div>
+              <div class="proof-decisions">
+                <span class="proof-read">Read</span>
+                <span>Skim</span><span>Save</span><span>Skip</span>
+              </div>
+              <p class="proof-why">▸ Why this assessment</p>
+            </div>
           </div>
           <figcaption>
             <span class="proof-tick" aria-hidden="true">↳</span
             ><span
-              >A real article. A real recommendation.<br /><a
+              >A real article. An example assessment.<br /><a
                 href="https://martinfowler.com/articles/is-quality-worth-cost.html"
                 >Article by Martin Fowler</a
               >
@@ -212,8 +231,8 @@
               From <br /><em>maybe</em> <br />to a decision.
             </h2>
             <p>
-              From the first signal in your feed to passages that might be
-              new to you.
+              From the first signal in your feed to passages that might be new
+              to you.
             </p>
             <span class="film-duration"
               >00:41 <span aria-hidden="true">/</span> EN audio · EN / RU
