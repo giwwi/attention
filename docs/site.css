@@ -615,6 +615,27 @@ h2 em {
   font-size: 15px;
   line-height: 1.8;
 }
+.maker-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 20px 28px;
+  margin-top: 28px;
+}
+.button.support {
+  background: var(--lime);
+  color: var(--ink);
+  gap: 12px;
+}
+.button.support:hover {
+  background: #e7ffa5;
+}
+.support-note {
+  margin-top: 14px;
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--muted);
+}
 .install-section {
   border-top: 1px solid var(--line);
   background: #e9eee3;
