@@ -5,250 +5,410 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta
       name="description"
-      content="Attention is a local-first Chrome extension that helps you decide what is worth reading before you open it."
+      content="An article can be interesting and still not be worth your time. Attention helps you decide what to read, skim, save or skip, with local evaluation in Chrome."
     />
-    <meta name="theme-color" content="#f3f1eb" />
-    <meta property="og:title" content="Attention — Know what’s worth reading" />
+    <meta name="theme-color" content="#f7f8f2" />
+    <meta
+      property="og:title"
+      content="Attention — Interesting. But worth your time?"
+    />
     <meta
       property="og:description"
-      content="A local-first Chrome extension that estimates whether an article is worth your attention right now."
+      content="A small pause before your next read. Your goal, your time, and a recommendation you can act on. A local-first Chrome extension."
     />
     <meta property="og:type" content="website" />
     <meta property="og:url" content="https://giwwi.github.io/attention/" />
-    <title>Attention — Know what’s worth reading</title>
+    <title>Attention — Interesting. But worth your time?</title>
     <link rel="icon" href="./mark.svg" type="image/svg+xml" />
-    <link rel="stylesheet" href="./site.css?v=20260907" />
+    <link
+      rel="preload"
+      href="./fonts/InstrumentSerif-Regular.ttf"
+      as="font"
+      type="font/ttf"
+      crossorigin
+    />
+    <link rel="stylesheet" href="./site.css?v=20260907-editorial" />
   </head>
   <body>
-    <header class="nav shell">
-      <a class="brand" href="#top" aria-label="Attention home">
-        <span class="brand-mark" aria-hidden="true">A</span>
-        <span>Attention</span>
-      </a>
+    <a class="skip-link" href="#main">Skip to content</a>
+    <header class="nav shell" id="top">
+      <a class="brand" href="#top" aria-label="Attention home"
+        ><span class="brand-symbol" aria-hidden="true">a.</span>Attention</a
+      >
+      <span class="nav-note">A little space to think.</span>
       <nav aria-label="Main navigation">
-        <a href="#how-it-works">How it works</a>
-        <a href="#privacy">Privacy</a>
-        <a href="https://github.com/giwwi/attention">GitHub</a>
+        <a href="#how-it-works">The idea</a>
+        <a href="#demo">The demo</a>
+        <a class="nav-try" href="#install"
+          >Try Attention <span aria-hidden="true">↗</span></a
+        >
       </nav>
     </header>
 
-    <main id="top">
-      <section class="hero shell">
+    <main id="main">
+      <section class="hero shell" aria-labelledby="hero-title">
         <div class="hero-copy">
-          <p class="eyebrow">Your attention, evaluated locally</p>
-          <h1>Know what’s worth reading before you open it.</h1>
+          <p class="eyebrow">
+            <span class="status-dot" aria-hidden="true"></span>A reading
+            companion for Chrome
+          </p>
+          <h1 id="hero-title">
+            Interesting.<br />But <em>worth</em><br />your time<span
+              class="question"
+              >?</span
+            >
+          </h1>
           <p class="lede">
-            Attention is a Chrome extension that estimates how useful an article
-            is for you, right now—then points you to the parts worth your time.
+            The next article can wait a second. Attention considers your goal,
+            your time, and what you already know—then helps you choose what to
+            read.
           </p>
           <div class="actions">
-            <a class="button primary" href="releases/attention-0.23.0.zip">
-              Download for Chrome
-            </a>
-            <a
-              class="button secondary"
-              href="https://github.com/giwwi/attention"
+            <a class="button primary" href="#install"
+              >Get Attention for Chrome <span aria-hidden="true">↗</span></a
             >
-              View on GitHub
-            </a>
+            <a class="quiet-link" href="#demo"
+              ><span aria-hidden="true">▷</span> Watch in 40 seconds</a
+            >
           </div>
-          <p class="microcopy">Free · No account · Local evaluation</p>
+          <p class="microcopy">Free prototype. No account. Local evaluation.</p>
         </div>
-
-        <figure class="demo-frame" id="demo">
-          <div class="demo-heading">
-            <h2>See Attention in action</h2>
-            <span>40 seconds · English audio</span>
+        <figure class="reading-proof">
+          <div class="proof-meta">
+            <span>ON YOUR NEXT ARTICLE</span><span aria-hidden="true">↙</span>
           </div>
-          <div class="demo-player">
-            <video
-              id="attention-demo"
-              controls
-              playsinline
-              preload="none"
-              width="1920"
-              height="1080"
-              poster="./media/attention-promo-20260907-poster.jpg"
-              aria-label="Attention: a real article, your time budget, and saving for later"
-              aria-describedby="demo-caption"
-            >
-              <source src="./media/attention-promo-20260907.mp4" type="video/mp4" />
-              <track
-                kind="captions"
-                src="./media/attention-promo-20260907.en.vtt"
-                srclang="en"
-                label="English"
-              />
-              <track
-                kind="subtitles"
-                src="./media/attention-promo-20260907.ru.vtt"
-                srclang="ru"
-                label="Русский"
-              />
-              Your browser cannot play this video.
-              <a href="./media/attention-promo-20260907.mp4">Download the MP4</a>.
-            </video>
-            <button
-              class="demo-play"
-              type="button"
-              hidden
-              aria-controls="attention-demo"
-            >
-              <span aria-hidden="true">▶</span>
-              <span data-play-label>Watch the demo</span>
-            </button>
+          <p class="article-source">martinfowler.com</p>
+          <h2>Is High Quality Software<br />Worth the Cost?</h2>
+          <div class="proof-card">
+            <img
+              src="./media/attention-reading-session.png"
+              width="5120"
+              height="3200"
+              fetchpriority="high"
+              alt="Real Attention card: Learning, 15 minutes, Understand software quality. Worth reading. Looks like a useful next step for learning this topic. 12 minute read. Local evaluation. Read, Skim, Save and Skip."
+            />
           </div>
-          <figcaption id="demo-caption">
-            <p class="demo-explanation">
-              Your goal, a clear recommendation, and an article saved for later.
-            </p>
-            <p class="demo-note">
-              Real Attention interface and actions. Local evaluation.
-            </p>
-            <a class="demo-download" href="./media/attention-promo-20260907.mp4"
-              >Open the video</a
+          <figcaption>
+            <span class="proof-tick" aria-hidden="true">↳</span
+            ><span
+              >A real article. A real recommendation.<br /><a
+                href="https://martinfowler.com/articles/is-quality-worth-cost.html"
+                >Article by Martin Fowler</a
+              >
+              · Local evaluation</span
             >
           </figcaption>
         </figure>
       </section>
 
-      <section class="promise shell" aria-label="Benefits">
-        <article>
-          <span class="number">01</span>
-          <h2>Decide before clicking</h2>
-          <p>
-            Preview whether a link is likely worth reading while you browse a
-            feed.
-          </p>
-        </article>
-        <article>
-          <span class="number">02</span>
-          <h2>Read only what matters</h2>
-          <p>
-            Get an explainable score and jump to the sections most useful to
-            you.
-          </p>
-        </article>
-        <article>
-          <span class="number">03</span>
-          <h2>Keep your context yours</h2>
-          <p>
-            Your saved profile, feedback, and reading memory are encrypted in
-            your browser with a password you choose.
-          </p>
-        </article>
-      </section>
-
-      <section class="how shell" id="how-it-works">
-        <div class="section-heading">
-          <p class="eyebrow">How it works</p>
-          <h2>Not another summary.<br />A decision for this moment.</h2>
-        </div>
-        <div class="steps">
-          <article>
-            <span>1</span>
-            <div>
-              <h3>Set your context</h3>
-              <p>
-                Open an article and click Attention. Create your local vault,
-                then choose work, learning, exploration, or relaxation. Add a
-                topic or skip it. Your first assessment runs locally.
-              </p>
-            </div>
-          </article>
-          <article>
-            <span>2</span>
-            <div>
-              <h3>See the recommendation</h3>
-              <p>
-                See the current article's score and choose Read, Skim, Save, or
-                Skip. Adjust your scenario or 5, 15, or 30 minute budget to
-                update the recommendation.
-              </p>
-            </div>
-          </article>
-          <article>
-            <span>3</span>
-            <div>
-              <h3>Make it personal</h3>
-              <p>
-                Tell Attention whether the material was worth it. Future
-                estimates calibrate locally from your feedback.
-              </p>
-            </div>
-          </article>
-        </div>
-      </section>
-
-      <section class="privacy" id="privacy">
-        <div class="shell privacy-inner">
-          <div>
-            <p class="eyebrow">Local-first by design</p>
-            <h2>
-              Your reading history should not become someone else’s dataset.
-            </h2>
+      <section
+        class="decision-section"
+        id="how-it-works"
+        aria-labelledby="decision-title"
+      >
+        <div class="shell">
+          <div class="section-line">
+            <span class="eyebrow">01 / The decision</span>
+            <h2 id="decision-title">Good reading starts with a choice.</h2>
           </div>
-          <div class="privacy-copy">
-            <p>
-              Attention works without an account, analytics, or an API key.
-              Local evaluation runs in your browser. Your saved profile, goals,
-              reading history, feedback, and source indexes are protected by a
-              password-encrypted local vault.
-            </p>
-            <p>
-              Optional AI analysis and connected services receive data when you
-              use those features, as described in the privacy policy. You can
-              lock or erase your local vault. A forgotten password can only be
-              reset by deleting the vault and starting over.
-            </p>
-            <a href="privacy.html">Read the privacy policy →</a>
+          <div
+            class="decision-picker"
+            role="group"
+            aria-label="Explore the four reading choices"
+          >
+            <button type="button" data-decision="read" aria-pressed="true">
+              <span>Read</span><sup>01</sup>
+            </button>
+            <button type="button" data-decision="skim" aria-pressed="false">
+              <span>Skim</span><sup>02</sup>
+            </button>
+            <button type="button" data-decision="save" aria-pressed="false">
+              <span>Save</span><sup>03</sup>
+            </button>
+            <button type="button" data-decision="skip" aria-pressed="false">
+              <span>Skip</span><sup>04</sup>
+            </button>
           </div>
-        </div>
-      </section>
-
-      <section class="install shell" id="install">
-        <div>
-          <p class="eyebrow">Try the prototype</p>
-          <h2>Install in about a minute.</h2>
-        </div>
-        <ol>
-          <li><span>01</span> Download and unzip the extension.</li>
-          <li>
-            <span>02</span> Open <code>chrome://extensions</code> and enable
-            Developer mode.
-          </li>
-          <li>
-            <span>03</span> Click Load unpacked and select the unzipped folder.
-          </li>
-          <li>
-            <span>04</span> Pin Attention, open an article, click its icon,
-            create your vault, and choose your scenario to see the assessment.
-          </li>
-        </ol>
-        <p>
-          Reopen the result with the extension icon, or Tab to the Attention
-          button beside an article title and press Enter. Escape closes the
-          article card.
-        </p>
-        <div class="actions">
-          <a class="button primary" href="releases/attention-0.23.0.zip">
-            Download the ZIP
-          </a>
-          <a class="text-link" href="https://github.com/giwwi/attention/issues"
-            >Share feedback →</a
+          <div class="decision-detail">
+            <p class="decision-hint">
+              Four choices.<br />You have the last word.
+            </p>
+            <div aria-live="polite" aria-atomic="true">
+              <h3 id="decision-heading">
+                Give a good fit your full attention.
+              </h3>
+              <p id="decision-copy">
+                See the recommendation, the reason, and the reading time
+                together. Then decide whether to dive in.
+              </p>
+            </div>
+            <span class="decision-arrow" aria-hidden="true">↗</span>
+          </div>
+          <noscript
+            ><p class="no-script-note">
+              Skim to find useful sections. Save for another moment. Skip when
+              the article does not fit what you need.
+            </p></noscript
           >
         </div>
       </section>
-    </main>
 
-    <footer class="shell">
-      <a class="brand" href="#top"
-        ><span class="brand-mark" aria-hidden="true">A</span
-        ><span>Attention</span></a
+      <section class="context-section shell" aria-labelledby="context-title">
+        <div class="margin-note">
+          <span class="eyebrow">02 / The context</span>
+          <p>“Useful” is<br />personal.</p>
+        </div>
+        <div class="context-main">
+          <h2 id="context-title">
+            The same article.<br /><em>A different moment.</em>
+          </h2>
+          <p class="section-intro">
+            Learning something new? Solving a problem? Just exploring? What
+            deserves your attention depends on what you need today.
+          </p>
+          <ol class="context-steps">
+            <li>
+              <span class="step-number">01</span>
+              <div>
+                <h3>Tell it what matters now.</h3>
+                <p>
+                  Choose your scenario and available time. Add a topic if you
+                  have one. Change your context on the card to get an updated
+                  recommendation.
+                </p>
+              </div>
+            </li>
+            <li>
+              <span class="step-number">02</span>
+              <div>
+                <h3>Find what adds something.</h3>
+                <p>
+                  Preview links while browsing, or open an article for a fuller
+                  assessment. Use your profile and optional knowledge sources to
+                  help distinguish familiar ideas from new ones.
+                </p>
+              </div>
+            </li>
+            <li>
+              <span class="step-number">03</span>
+              <div>
+                <h3>Tell it when it gets things wrong.</h3>
+                <p>
+                  Was the article worth it? Your voluntary feedback helps
+                  calibrate future estimates locally. A recommendation is a
+                  starting point; you make the decision.
+                </p>
+              </div>
+            </li>
+          </ol>
+        </div>
+      </section>
+
+      <section class="film-section" id="demo" aria-labelledby="film-title">
+        <div class="shell film-layout">
+          <div class="film-copy">
+            <p class="eyebrow">03 / A moment in practice</p>
+            <h2 id="film-title">
+              From <br /><em>maybe</em> <br />to a decision.
+            </h2>
+            <p>
+              One article, a 15-minute budget, and something worth saving for
+              later.
+            </p>
+            <span class="film-duration"
+              >00:40 <span aria-hidden="true">/</span> EN audio · EN / RU
+              subtitles</span
+            >
+          </div>
+          <figure class="demo-frame">
+            <div class="demo-player">
+              <video
+                id="attention-demo"
+                controls
+                playsinline
+                preload="none"
+                width="1920"
+                height="1080"
+                poster="./media/attention-promo-20260907-poster.jpg"
+                aria-label="Attention: a real article, your time budget, and saving for later"
+                aria-describedby="demo-caption"
+              >
+                <source
+                  src="./media/attention-promo-20260907.mp4"
+                  type="video/mp4"
+                />
+                <track
+                  kind="captions"
+                  src="./media/attention-promo-20260907.en.vtt"
+                  srclang="en"
+                  label="English"
+                />
+                <track
+                  kind="subtitles"
+                  src="./media/attention-promo-20260907.ru.vtt"
+                  srclang="ru"
+                  label="Русский"
+                />
+                Your browser cannot play this video.
+                <a href="./media/attention-promo-20260907.mp4"
+                  >Download the MP4</a
+                >.
+              </video>
+              <button
+                class="demo-play"
+                type="button"
+                hidden
+                aria-controls="attention-demo"
+              >
+                <span aria-hidden="true">▶</span
+                ><span data-play-label>Watch the demo</span>
+              </button>
+            </div>
+            <figcaption id="demo-caption">
+              <p class="demo-explanation">
+                The real Attention interface, from opening a card to saving an
+                article.
+              </p>
+              <a
+                class="demo-download"
+                href="./media/attention-promo-20260907.mp4"
+                >Open video <span aria-hidden="true">↗</span></a
+              >
+            </figcaption>
+          </figure>
+        </div>
+      </section>
+
+      <section
+        class="privacy-section shell"
+        id="privacy"
+        aria-labelledby="privacy-title"
       >
-      <p>Own your attention model.</p>
-      <a href="https://github.com/giwwi/attention">GitHub</a>
+        <div class="margin-note">
+          <span class="eyebrow">04 / Your space</span
+          ><span class="privacy-mark" aria-hidden="true">[ a. ]</span>
+        </div>
+        <div class="privacy-main">
+          <h2 id="privacy-title">
+            Your reading life.<br /><em>Kept close.</em>
+          </h2>
+          <div class="privacy-columns">
+            <p>
+              Ordinary evaluation happens in your browser. Your saved profile,
+              reading memory and feedback stay in a local vault, encrypted with
+              a password you choose. No Attention account. No built-in
+              analytics.
+            </p>
+            <p>
+              External AI is optional and needs your own API key. When you
+              request AI analysis or use a connected service, relevant data goes
+              to that provider. You can lock or erase your local vault.
+            </p>
+          </div>
+          <a class="text-link" href="privacy.html"
+            >How your data is handled <span aria-hidden="true">↗</span></a
+          >
+        </div>
+      </section>
+
+      <section class="maker-section shell" aria-labelledby="maker-title">
+        <p class="eyebrow" id="maker-title">A note from the maker</p>
+        <div>
+          <blockquote>
+            “An article can be good and still not be what you need right now.
+            That’s the idea I’m building Attention around.”
+          </blockquote>
+          <p class="signature">
+            Aleksey Voloschuk <span>— creator of Attention</span>
+          </p>
+          <p class="maker-note">
+            This is an early version, shaped by real reading and honest
+            feedback. If a recommendation misses the mark, I’d like to hear
+            about it.
+          </p>
+          <a class="text-link" href="https://github.com/giwwi/attention/issues"
+            >Tell me what worked. Or didn’t.
+            <span aria-hidden="true">↗</span></a
+          >
+        </div>
+      </section>
+
+      <section
+        class="install-section"
+        id="install"
+        aria-labelledby="install-title"
+      >
+        <div class="shell install-layout">
+          <div class="install-copy">
+            <p class="eyebrow">A little less noise. A little more room.</p>
+            <h2 id="install-title">
+              Make your<br />next read<br /><em>count.</em>
+            </h2>
+            <a
+              class="button primary"
+              href="releases/attention-0.23.0.zip"
+              download
+              >Download for Chrome <span aria-hidden="true">↓</span></a
+            >
+            <p class="microcopy">
+              Free prototype · v0.23.0 · Manual installation
+            </p>
+          </div>
+          <div class="install-guide">
+            <p class="guide-heading">A few steps, then it’s yours.</p>
+            <ol>
+              <li>
+                <span>01</span>
+                <div>
+                  <strong>Download & unzip.</strong>
+                  <p>Save the extension above and extract the ZIP.</p>
+                </div>
+              </li>
+              <li>
+                <span>02</span>
+                <div>
+                  <strong>Add it to Chrome.</strong>
+                  <p>
+                    Open <code>chrome://extensions</code>, switch on Developer
+                    mode, then choose <b>Load unpacked</b> and select the
+                    extracted folder.
+                  </p>
+                </div>
+              </li>
+              <li>
+                <span>03</span>
+                <div>
+                  <strong>Bring your first article.</strong>
+                  <p>
+                    Pin Attention, open an article and click the extension icon.
+                    Create your local vault, choose your scenario, and see your
+                    first assessment.
+                  </p>
+                </div>
+              </li>
+            </ol>
+            <p class="keyboard-note">
+              At your keyboard: Tab to the Attention button beside an article
+              title, then Enter to open. Escape to close.
+            </p>
+          </div>
+        </div>
+      </section>
+    </main>
+    <footer class="shell site-footer">
+      <a class="brand" href="#top"
+        >Attention<span class="footer-period" aria-hidden="true">.</span></a
+      >
+      <p>Made for the reader.</p>
+      <nav aria-label="Footer navigation">
+        <a href="privacy.html">Privacy</a
+        ><a href="https://github.com/giwwi/attention">Source code</a
+        ><a href="https://ko-fi.com/alekseyvoloschuk"
+          >Support the project <span aria-hidden="true">↗</span></a
+        >
+      </nav>
     </footer>
-    <script src="./demo.js?v=20260907" defer></script>
+    <script src="./demo.js?v=20260907-editorial" defer></script>
+    <script src="./site.js?v=20260907-editorial" defer></script>
   </body>
 </html>
