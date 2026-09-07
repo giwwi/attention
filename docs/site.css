@@ -195,27 +195,6 @@ footer > a:last-child { justify-self: end; }
   font-size: 13px;
   line-height: 1.5;
 }
-.demo-transcript {
-  font-size: 14px;
-  line-height: 1.6;
-}
-.demo-transcript summary {
-  width: fit-content;
-  cursor: pointer;
-  font-weight: 650;
-  color: var(--green);
-}
-.demo-transcript ol {
-  max-width: 820px;
-  padding-left: 22px;
-}
-.demo-transcript li + li {
-  margin-top: 8px;
-}
-.demo-transcript p {
-  max-width: 820px;
-  color: var(--muted);
-}
 .demo-download {
   display: inline-block;
   margin-top: 12px;
