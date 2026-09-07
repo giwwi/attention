@@ -17,7 +17,7 @@
     <meta property="og:url" content="https://giwwi.github.io/attention/" />
     <title>Attention — Know what’s worth reading</title>
     <link rel="icon" href="./mark.svg" type="image/svg+xml" />
-    <link rel="stylesheet" href="./site.css" />
+    <link rel="stylesheet" href="./site.css?v=20260907" />
   </head>
   <body>
     <header class="nav shell">
@@ -55,16 +55,90 @@
           <p class="microcopy">Free · No account · Local evaluation</p>
         </div>
 
-        <div class="demo-frame">
-          <div class="window-bar" aria-hidden="true">
-            <span></span><span></span><span></span>
-            <small>Attention in action</small>
+        <figure class="demo-frame" id="demo">
+          <div class="demo-heading">
+            <h2>See Attention in action</h2>
+            <span>40 seconds · English audio</span>
           </div>
-          <img
-            src="./attention-demo.gif"
-            alt="Attention evaluates links in a feed, then gives a detailed recommendation on an article"
-          />
-        </div>
+          <div class="demo-player">
+            <video
+              id="attention-demo"
+              controls
+              playsinline
+              preload="none"
+              width="1920"
+              height="1080"
+              poster="./media/attention-promo-20260907-poster.jpg"
+              aria-label="Attention: a real article, your time budget, and saving for later"
+              aria-describedby="demo-caption"
+            >
+              <source src="./media/attention-promo-20260907.mp4" type="video/mp4" />
+              <track
+                kind="captions"
+                src="./media/attention-promo-20260907.en.vtt"
+                srclang="en"
+                label="English"
+              />
+              <track
+                kind="subtitles"
+                src="./media/attention-promo-20260907.ru.vtt"
+                srclang="ru"
+                label="Русский"
+              />
+              Your browser cannot play this video.
+              <a href="./media/attention-promo-20260907.mp4">Download the MP4</a>.
+            </video>
+            <button
+              class="demo-play"
+              type="button"
+              hidden
+              aria-controls="attention-demo"
+            >
+              <span aria-hidden="true">▶</span>
+              <span data-play-label>Watch the demo</span>
+            </button>
+          </div>
+          <figcaption id="demo-caption">
+            <p class="demo-explanation">
+              Your goal, a clear recommendation, and an article saved for later.
+            </p>
+            <p class="demo-note">
+              Real Attention interface and actions. Local evaluation.
+            </p>
+            <details class="demo-transcript">
+              <summary>Read the video transcript</summary>
+              <ol>
+                <li>
+                  Another interesting article. But is it worth your time?
+                </li>
+                <li>
+                  Open Attention before you dive in.
+                </li>
+                <li>
+                  Your goal. The time you have.
+                </li>
+                <li>
+                  A recommendation. A reason. And the reading time.
+                </li>
+                <li>
+                  Worth reading, but not right now? Save it for later.
+                </li>
+                <li>Find it when you’re ready.</li>
+                <li>Attention. Choose what deserves your attention.</li>
+              </ol>
+              <p>
+                Article:
+                <a
+                  href="https://martinfowler.com/articles/is-quality-worth-cost.html"
+                  >Martin Fowler</a
+                >. Shown to demonstrate the extension; no endorsement implied.
+              </p>
+            </details>
+            <a class="demo-download" href="./media/attention-promo-20260907.mp4"
+              >Open the video</a
+            >
+          </figcaption>
+        </figure>
       </section>
 
       <section class="promise shell" aria-label="Benefits">
@@ -204,5 +278,6 @@
       <p>Own your attention model.</p>
       <a href="https://github.com/giwwi/attention">GitHub</a>
     </footer>
+    <script src="./demo.js?v=20260907" defer></script>
   </body>
 </html>
