@@ -221,9 +221,9 @@ export async function saveReadwiseHighlight(
   fetchImpl: typeof fetch = fetch,
 ): Promise<void> {
   const token = normalizeReadwiseToken(rawToken);
-  const text = boundedHighlightText(input.text, 1_200);
+  const text = input.text.replace(/\s+/gu, ' ').trim();
   const title = boundedHighlightText(input.title, 400);
-  if (text.length < 20 || !title) {
+  if (text.length < 20 || text.length > 6_000 || !title) {
     throw new ReadwiseClientError(
       'invalid_response',
       'Выбранный фрагмент нельзя сохранить в Readwise.',

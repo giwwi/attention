@@ -81,7 +81,7 @@ function claim(
 }
 
 describe('potentially new passage matching', () => {
-  it('returns the exact source sentence for a confident likely-new claim', () => {
+  it('keeps the whole source paragraph around a confident legacy claim', () => {
     document.body.innerHTML = `
       <article>
         <h1>A useful article</h1>
@@ -98,12 +98,12 @@ describe('potentially new passage matching', () => {
 
     expect(matches).toHaveLength(1);
     expect(matches[0]?.excerpt).toBe(
-      'Solar cells reached a measured efficiency of 34 percent in the reported experiment.',
+      'The familiar introduction provides context. Solar cells reached a measured efficiency of 34 percent in the reported experiment.',
     );
     expect(matches[0]?.range.toString()).toBe(matches[0]?.excerpt);
   });
 
-  it('offers an uncertain exact claim when prior knowledge is not confirmed', () => {
+  it('does not turn uncertain legacy knowledge into a novel highlight', () => {
     document.body.innerHTML = `
       <article>
         <h1>A useful article</h1>
@@ -119,8 +119,7 @@ describe('potentially new passage matching', () => {
       ),
     ]);
 
-    expect(matches).toHaveLength(1);
-    expect(matches[0]?.range.toString()).toContain('reduced energy use');
+    expect(matches).toHaveLength(0);
   });
 
   it('uses the exact source excerpt when the AI claim is a paraphrase', () => {
@@ -134,12 +133,12 @@ describe('potentially new passage matching', () => {
     const matches = findNovelPassageMatches(document, capture, [
       claim(
         'The revised scheduling policy substantially improved performance.',
-        'uncertain',
+        'likely-new',
         {
           sourceExcerpt:
             'Researchers observed a 31 percent reduction in processing time after changing the scheduling policy.',
-          knownProbability: 0.48,
-          confidence: 0.4,
+          knownProbability: 0.2,
+          confidence: 0.8,
         },
       ),
     ]);
@@ -148,7 +147,7 @@ describe('potentially new passage matching', () => {
     expect(matches[0]?.excerpt).toContain('31 percent reduction');
   });
 
-  it('prioritizes a central fact and ignores supporting details', () => {
+  it('retains confident supporting legacy claims while dropping uncertain claims', () => {
     document.body.innerHTML = `
       <article>
         <h1>A useful article</h1>
@@ -184,7 +183,7 @@ describe('potentially new passage matching', () => {
     ]);
 
     expect(matches.map((match) => match.excerpt)).toEqual([
-      'The main trial reduced household energy costs by 22 percent.',
+      'A secondary survey happened to include 48 respondents from one city.',
       'The evidence changes the economic case for the proposed policy.',
     ]);
   });

@@ -93,11 +93,23 @@
         An article AI request sends Vercel AI Gateway and the selected model
         provider the article title, source, excerpt, headings and text, your
         current goal and scenario, and selected profile and knowledge signals.
-        The article body is limited to 24,000 characters. If you imported
-        browser history, selected derived signals may include whether the page
-        was encountered before and matching topics and source hostnames. The
-        full profile, raw browsing history and imported Readwise, Obsidian or
-        Notion note/highlight bodies are not included in this request.
+        The main article assessment is limited to 24,000 characters. If you
+        imported browser history, selected derived signals may include whether
+        the page was encountered before and matching topics and source
+        hostnames. The full profile, raw browsing history and imported Readwise,
+        Obsidian or Notion note/highlight bodies are not included in these AI
+        requests.
+      </p>
+      <p>
+        The same explicit article check can make up to four additional requests
+        to select helpful passages. Each sends up to 16,000 characters of
+        article blocks plus up to two neighboring blocks of at most 6,000
+        characters each, along with your current goal, scenario and selected
+        profile and knowledge signals. This step selects exact source blocks and
+        their context. Very long articles or failed requests can result in
+        partial coverage, which the card reports. If passage selection fails,
+        the card uses local selection and explains this. These additional
+        requests use your provider account and may increase its usage charges.
       </p>
       <p>
         When you request AI-assisted profile creation, your three short answers

@@ -208,3 +208,26 @@ describe('Readwise API client', () => {
     ]);
   });
 });
+
+it('saves the complete selected context beyond the old 1200-character limit', async () => {
+  const text =
+    'A meaningful paragraph including its qualifications and context. '
+      .repeat(35)
+      .trim();
+  const fetchImpl = vi
+    .fn<typeof fetch>()
+    .mockResolvedValue(new Response('{}', { status: 200 }));
+  await saveReadwiseHighlight(
+    'readwise-test-token',
+    {
+      text,
+      title: 'Context',
+      author: null,
+      sourceUrl: 'https://example.com/article',
+    },
+    fetchImpl,
+  );
+  expect(
+    JSON.parse(String(fetchImpl.mock.calls[0]?.[1]?.body)).highlights[0].text,
+  ).toBe(text);
+});

@@ -1,3 +1,4 @@
+import type { ArticleMap, ReadingPassages } from '../reading/types';
 export interface PageStructureSignals {
   paragraphCount: number;
   headingCount: number;
@@ -9,6 +10,7 @@ export interface PageStructureSignals {
 }
 
 export interface PageCapture {
+  readingMap?: ArticleMap;
   title: string;
   url: string;
   content: string;
@@ -79,6 +81,11 @@ export interface RelevantProfileContext {
   profileUpdatedAt: string;
   signals: PersonalizationSignal[];
   knowledgeSignals?: RelevantKnowledgeSignal[];
+  /** Bounded explicit profile signals matched across the full passage map. */
+  readingProfile?: {
+    signals: PersonalizationSignal[];
+    knowledgeSignals?: RelevantKnowledgeSignal[];
+  };
   historyEvidence?: RelevantHistoryEvidence;
   /** Local-only evidence. It must not be serialized into cloud requests. */
   readwiseEvidence?: RelevantReadwiseEvidence;
@@ -282,6 +289,7 @@ export interface AssessmentReliability {
 }
 
 export interface MaterialEvaluationInsights {
+  readingPassages?: ReadingPassages;
   keyClaims: KeyClaimAssessment[];
   likelyNewClaims: string[];
   familiarClaims: string[];
@@ -361,7 +369,7 @@ export interface StoredEvaluation {
 }
 
 export interface EvaluationCacheVersion {
-  schemaVersion: 6;
+  schemaVersion: 6 | 7;
   profile: string;
   history: string;
   readwise: string;

@@ -121,6 +121,11 @@ describe('current article interactions', () => {
   ])(
     'keeps the selected passage after feedback, but clears it on %s',
     async (key) => {
+      // A realistic whole paragraph; oversized blocks deliberately abstain.
+      document.querySelector('p')!.textContent =
+        'A substantive article paragraph with evidence and practical context. '.repeat(
+          12,
+        );
       Element.prototype.scrollIntoView = vi.fn();
       sendMessage.mockImplementation(async () => ({
         ok: true,
@@ -320,12 +325,22 @@ describe('current article interactions', () => {
 
   it('ignores a late save acknowledgement after data erasure', async () => {
     let complete!: (ok: boolean) => void;
-    installHoverPreview({ onDecision: () => new Promise((resolve) => { complete = resolve; }) });
+    installHoverPreview({
+      onDecision: () =>
+        new Promise((resolve) => {
+          complete = resolve;
+        }),
+    });
     await hover();
-    host().shadowRoot!.querySelector<HTMLButtonElement>('[data-decision="save"]')!.click();
-    runtimeListeners.forEach((listener) => listener({
-      type: ATTENTION_INPUTS_INVALIDATED_TYPE, changedKeys: ['attentionDataGeneration'],
-    }));
+    host()
+      .shadowRoot!.querySelector<HTMLButtonElement>('[data-decision="save"]')!
+      .click();
+    runtimeListeners.forEach((listener) =>
+      listener({
+        type: ATTENTION_INPUTS_INVALIDATED_TYPE,
+        changedKeys: ['attentionDataGeneration'],
+      }),
+    );
     complete(true);
     await vi.advanceTimersByTimeAsync(200);
     expect(host().style.display).toBe('none');

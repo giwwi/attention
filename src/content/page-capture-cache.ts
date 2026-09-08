@@ -20,7 +20,6 @@ export function buildPageCaptureSignature(
   titleElement: HTMLElement | null,
 ): string {
   const articleText = normalized(articleRoot?.textContent);
-  const edgeSample = `${articleText.slice(0, 240)}\n${articleText.slice(-240)}`;
   return [
     pageUrl,
     document.title,
@@ -28,7 +27,7 @@ export function buildPageCaptureSignature(
     normalized(titleElement?.textContent),
     articleText.length,
     articleRoot?.querySelectorAll('p').length ?? 0,
-    fingerprint(edgeSample),
+    fingerprint(articleText),
   ].join('\n');
 }
 

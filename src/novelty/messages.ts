@@ -50,13 +50,13 @@ export function isNovelPassageMessage(
   if (
     !boundedString(message.url, 8, 2_048) ||
     !boundedString(message.title, 1, 400) ||
-    !boundedString(message.excerpt, 20, 1_200)
+    !boundedString(message.excerpt, 20, 6_000)
   ) {
     return false;
   }
   if (message.type === NOVEL_PASSAGE_FEEDBACK_TYPE) {
     return (
-      boundedString(message.claim, 10, 500) &&
+      boundedString(message.claim, 10, 6_000) &&
       (message.value === 'known' || message.value === 'new')
     );
   }

@@ -1,3 +1,4 @@
+import { selectAiPassages } from '../reading/ai-passages';
 import { Output, createGateway, generateText, jsonSchema } from 'ai';
 import type {
   AnalysisContext,
@@ -25,7 +26,7 @@ import { applyClaimMemoryToClaim } from '../novelty/claim-memory';
 import { applyUnifiedLocalEvidenceToClaim } from '../evidence/unified-evidence';
 import { claimsFactuallyCompatible } from './claim-match';
 
-const AI_ANALYZER_VERSION = 'v6-factual-anchors';
+const AI_ANALYZER_VERSION = 'v7-contextual-passages';
 
 interface AiClaimOutput {
   claim: string;
@@ -411,7 +412,16 @@ export class AiGatewayAnalyzer implements Analyzer {
         prompt: buildAiAnalysisPrompt(material, context, profileContext),
         timeout: { totalMs: AI_ANALYSIS_LIMITS.requestTimeoutMs },
       });
+      signal?.throwIfAborted();
       const output = normalizeOutput(result.output, material);
+      const readingPassages = await selectAiPassages(
+        material,
+        context,
+        profileContext,
+        this.apiKey,
+        this.model,
+        signal,
+      );
       const keyClaims: KeyClaimAssessment[] = output.keyClaims.map((claim) => {
         const assessment: KeyClaimAssessment = {
           claim: claim.claim,
@@ -456,6 +466,7 @@ export class AiGatewayAnalyzer implements Analyzer {
         recommendedSections: output.recommendedSections,
         confidence: output.confidence,
         insights: {
+          readingPassages,
           keyClaims,
           likelyNewClaims: likelyNewClaims
             .slice(0, 3)

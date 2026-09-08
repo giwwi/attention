@@ -132,6 +132,11 @@ async function passageButton(
 test('a page cannot invoke private passage actions, while real user clicks still work', async () => {
   await worker.evaluate(async () => {
     await attentionVault.privateStorage.set({
+      analysisContext: {
+        scenario: 'work',
+        intent: 'a concrete method for allocating attention',
+        availableMinutes: 15,
+      },
       novelPassageHighlightsEnabled: true,
       readwiseToken: {
         token: 'test-only-readwise-token',

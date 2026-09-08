@@ -50,6 +50,11 @@ test('article actions jump to real passages without section headings and save wi
     await worker.evaluate(async (claims) => {
       await attentionVault.privateStorage.set({
         interfaceLanguage: 'ru',
+        analysisContext: {
+          scenario: 'work',
+          intent: 'structured review decision errors',
+          availableMinutes: 15,
+        },
         novelPassageHighlightsEnabled: true,
         aiAnalyzerSettings: {
           provider: 'vercel-ai-gateway',
@@ -64,8 +69,51 @@ test('article actions jump to real passages without section headings and save wi
       });
       // Authored provider response exercises extraction, real range matching and
       // the production UI without an external request or paid generation.
-      globalThis.fetch = async () =>
-        Response.json({
+      globalThis.fetch = async (_url, init) => {
+        const strings = (value: unknown): string[] =>
+          typeof value === 'string'
+            ? [value]
+            : value && typeof value === 'object'
+              ? Object.values(value).flatMap(strings)
+              : [];
+        const prompt = strings(JSON.parse(String(init?.body ?? '{}'))).find(
+          (text) => text.includes('"coreIds"'),
+        );
+        if (prompt) {
+          const batch = JSON.parse(prompt.slice(prompt.lastIndexOf('\n') + 1));
+          return Response.json({
+            content: [
+              {
+                type: 'text',
+                text: JSON.stringify({
+                  passages: batch.blocks
+                    .filter(
+                      (block: { text: string; id: string }) =>
+                        batch.coreIds.includes(block.id) &&
+                        claims.includes(block.text),
+                    )
+                    .map((block: { id: string }) => ({
+                      coreBlockId: block.id,
+                      contextBlockIds: [block.id],
+                      queryIndex: 0,
+                      relevance: 0.9,
+                      confidence: 0.8,
+                      contextSufficient: true,
+                      contribution: 'Evidence relevant to structured review.',
+                      knowledgeEvidenceIds: [],
+                      possiblyNew: false,
+                    })),
+                }),
+              },
+            ],
+            finishReason: { unified: 'stop', raw: 'stop' },
+            usage: {
+              inputTokens: { total: 100 },
+              outputTokens: { total: 100 },
+            },
+          });
+        }
+        return Response.json({
           content: [
             {
               type: 'text',
@@ -102,6 +150,7 @@ test('article actions jump to real passages without section headings and save wi
           finishReason: { unified: 'stop', raw: 'stop' },
           usage: { inputTokens: { total: 100 }, outputTokens: { total: 100 } },
         });
+      };
     }, claims);
     const page = await context.newPage();
     await page.goto(url);

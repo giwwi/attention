@@ -40,7 +40,9 @@ describe('LocalAnalyzer', () => {
     expect(result.utilityScore).toBeLessThan(70);
     expect(result.components.quality).toBeLessThan(60);
     expect(result.confidence).toBeGreaterThan(0.5);
-    expect(result.analyzerId).toBe('local-claim-assessment-v5-factual-guards');
+    expect(result.analyzerId).toBe(
+      'local-claim-assessment-v6-contextual-passages',
+    );
     expect(result.profileSignals).toEqual([]);
   });
 

@@ -4,6 +4,9 @@ import { buildMaterialFeatures } from '../src/analyzer/material-features';
 import { applySignalFeedback } from '../src/profile/feedback';
 import { normalizePortableProfile } from '../src/profile/normalize';
 import { selectRelevantProfileContext } from '../src/profile/relevance';
+import { selectRelevantPersonalContext } from '../src/history/relevance';
+import { createArticleMap } from '../src/reading/blocks';
+import { selectLocalPassages } from '../src/reading/local-passages';
 import type { PortableProfile } from '../src/profile/schema';
 import type { PageCapture, PersonalizationSignal } from '../src/shared/types';
 
@@ -59,6 +62,52 @@ function profile(value: Partial<PortableProfile>) {
 }
 
 describe('relevant profile selection', () => {
+  it('matches a saved goal to a passage beyond the article scoring window', async () => {
+    const goal = 'Compare model evaluation methods';
+    const personalProfile = profile({
+      goals: [{ goal, priority: 'high', status: 'active', confidence: 1 }],
+    });
+    const text =
+      'Compare model evaluation methods using separate test examples. Keep the evaluation data out of the training set.';
+    const readingMap = createArticleMap([
+      ...Array.from({ length: 60 }, () => ({
+        text: 'A history of ceramic art, pottery, decorative clay objects and their manufacture over the centuries. '.repeat(
+          4,
+        ),
+        kind: 'paragraph' as const,
+        section: 'History',
+      })),
+      { text, kind: 'paragraph', section: 'Practical comparison' },
+    ]);
+    const capture = material({
+      title: 'Collected essays',
+      excerpt: 'Essays about several different subjects.',
+      headings: [],
+      content: readingMap.blocks.map((block) => block.text).join('\n\n'),
+      readingMap,
+    });
+    const context = {
+      scenario: 'work' as const,
+      intent: '',
+      availableMinutes: 15 as const,
+    };
+    const selected = await selectRelevantPersonalContext(
+      personalProfile,
+      null,
+      null,
+      null,
+      null,
+      capture,
+      context,
+    );
+    expect(selected?.signals).toEqual([]);
+    expect(
+      selected?.readingProfile?.signals.some((signal) => signal.label === goal),
+    ).toBe(true);
+    const result = selectLocalPassages(capture, context, selected);
+    expect(result.items).toHaveLength(1);
+    expect(result.items[0]?.coreBlockId).toBe(readingMap.blocks.at(-1)!.id);
+  });
   it('does not turn the current intent into evidence about an unrelated article', async () => {
     const goal = 'Optimize PostgreSQL database indexes';
     const personalProfile = profile({

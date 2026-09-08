@@ -1,3 +1,4 @@
+import { selectLocalPassages } from '../reading/local-passages';
 import type {
   AnalysisContext,
   MaterialEvaluation,
@@ -244,7 +245,7 @@ function localComponents(
 }
 
 export class LocalAnalyzer implements Analyzer {
-  readonly id = 'local-claim-assessment-v5-factual-guards';
+  readonly id = 'local-claim-assessment-v6-contextual-passages';
 
   async analyze(
     material: PageCapture,
@@ -256,6 +257,11 @@ export class LocalAnalyzer implements Analyzer {
       const insights = buildLocalInsights(
         material,
         extractKeyClaims(material.content, material.title, material.language),
+        profileContext,
+      );
+      insights.readingPassages = selectLocalPassages(
+        material,
+        context,
         profileContext,
       );
       const components = {

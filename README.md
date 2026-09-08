@@ -2,7 +2,7 @@
 
 **A local-first Chrome extension that estimates whether an article is worth your attention right now.**
 
-[Website](https://giwwi.github.io/attention/) · [Download the extension](https://giwwi.github.io/attention/releases/attention-0.26.0.zip)
+[Website](https://giwwi.github.io/attention/) · [Download the extension](https://giwwi.github.io/attention/releases/attention-0.27.0.zip)
 
 ![Attention demo](docs/attention-demo.gif)
 
@@ -14,7 +14,7 @@ Before a profile is saved, cards invite you to create one. Personal reading reco
 
 ## Try it in Chrome
 
-1. Download and unzip the [version 0.26.0](https://giwwi.github.io/attention/releases/attention-0.26.0.zip).
+1. Download and unzip the [version 0.27.0](https://giwwi.github.io/attention/releases/attention-0.27.0.zip).
 2. Open `chrome://extensions`.
 3. Enable **Developer mode**.
 4. Click **Load unpacked** and select the unzipped `attention-extension` folder.
@@ -25,22 +25,32 @@ Deleting the profile returns article and feed cards to the setup invitation. A l
 
 Unlock the vault when you start a new browser session. **Lock** closes access to Attention's personal data until you unlock again. If you forget the password, the reset option deletes the local vault and lets you start over; it cannot recover the old data.
 
-The article card shows one recommendation, a short reason and the estimated reading time for the whole article. Its actions are **Go to passages** (when matching potentially new passages are found and passage highlighting is enabled) and **Save for later**. The first highlights the actual text, scrolls to the first passage and closes the large card. The passage panel lets you move between matches. Saving adds the whole article to the local reading list and shows **Saved ✓** without closing the card. There are no Read, Skim or Skip buttons on an already open article.
+The article card shows one recommendation, a short reason and the estimated reading time for the whole article. Its actions are **Go to passages** (when relevant passages are found and passage highlighting is enabled) and **Save for later**. The first highlights the actual text, scrolls to the first passage and closes the large card. The passage panel lets you move between matches. Saving adds the whole article to the local reading list and shows **Saved ✓** without closing the card. There are no Read, Skim or Skip buttons on an already open article.
 
 Your scenario and current goal appear above the recommendation. Expand that context row to edit them, then choose **Apply**. There is no time-budget selector: the displayed duration estimates the article’s length rather than asking you for another setting. Applying context updates the local assessment without requesting external AI. The AI action and analysis status remain visible. **Why this assessment** is collapsed by default and contains the Utility Score, explanation and recommended sections when available.
 
 To reopen the card, click the extension icon and choose **Evaluate this page**. The popup also opens your saved articles and settings for language, profile, sources, AI, and privacy. On the article itself, Tab to the **Attention** button beside its title and press Enter or Space. Focus moves to a visible action; Tab reaches the other controls and expandable details. Escape closes the card and returns focus to the title button. Hovering over the title opens the same card. On a protected or unsupported page, the launcher explains that you need an accessible article.
 
-To save a potentially new passage to Readwise, enable **Settings → Highlight new passages** and connect Readwise through the personalization sources. Open the Attention card beside the article title, choose **Go to passages**, then **Save to Readwise** in the passage panel. The panel is available when matching passages are found; its Readwise button appears when Readwise is connected. Marking a passage **New to me** or **Already knew** keeps the selected passage open so you can save it afterward. **Save for later** adds the whole article to Attention's local reading list.
+To save a selected passage with context to Readwise, enable **Settings → Highlight useful passages** and connect Readwise through the personalization sources. Open the Attention card beside the article title, choose **Go to passages**, then **Save to Readwise** in the passage panel. The panel is available when matching passages are found; its Readwise button appears when Readwise is connected. Marking a passage **New to me** or **Already knew** keeps the selected passage open so you can save it afterward. **Save for later** adds the whole article to Attention's local reading list.
 
 No API key is required for the local evaluation. To configure optional AI analysis, open **Settings → AI**, paste a Vercel AI Gateway key, and keep the suggested Gemini model or enter another `provider/model` identifier. Choose **Check with AI** directly on the article card. The same visible row shows **Checked with AI** after success or lets you retry after an error. If AI is not connected or local-only mode is enabled, the disabled control explains why it is unavailable. Opening the card, popup, or details does not itself send an AI request.
+
+## Contextual passages (0.27.0)
+
+Local selection scans paragraphs, lists and tables across the extracted article and ranks their connection to your current goal and selected profile interests or learning topics. Examples, procedures and limitations can qualify even when they are not central claims. A highlight keeps whole neighboring blocks needed for context, within the same section; the core paragraph is more prominent. If the context cannot fit without clipping, that candidate is omitted. The panel saves the full selected text to Readwise, including its context.
+
+Local matches are described as related to your goal or interests. Missing knowledge evidence does not make a passage “new.” The card says when no clear matches were found. Local selection is a lexical heuristic: it can miss paraphrases and cannot reliably establish what a person knows or whether every reference has enough context.
+
+An explicit **Check with AI** also asks the model to select passage IDs and necessary neighboring blocks, separately from the article assessment. The source text comes from those exact blocks. Invented IDs and selections with insufficient context are rejected. An AI passage may be labeled as a possible addition to your knowledge only when the model cites concrete, explicitly stated knowledge from the selected profile; this remains an estimate.
+
+Passage selection uses up to four additional AI requests, with at most 16,000 characters of core blocks plus up to two 6,000-character neighboring blocks per request. Very long articles receive a bounded sample spread across the article; incomplete coverage or failed requests are reported. If all passage requests fail, local selection is used with an explanation. Local-only mode makes no AI requests. A map is bounded to 800 blocks / 240,000 characters, and a displayed passage to 6,000 characters. Changes to the article invalidate its highlights and cached selection.
 
 ## What it does
 
 - Evaluates an article relative to your current **Work, Learn, Explore, or Relax** context.
 - Explains the recommendation in terms of the current scenario, such as relevance for work or taste and effort for relaxation.
 - Shows lightweight previews on material links in feeds and one article card with details available on request.
-- Lets you save an article or jump directly to potentially new passages.
+- Lets you save an article or jump to relevant passages with their surrounding context.
 - Asks whether the material was worth the time and calibrates later predictions locally.
 - Optionally uses local evidence from browser history, Readwise and Obsidian. Notion requires a separately configured OAuth service and is unavailable in the standard release.
 - Offers setup, profile controls, decisions, reading plans, and feedback in English, Russian, German, Spanish, French, Italian, Simplified Chinese, Arabic, and Hindi. Article text, quotations, and imported personal content keep their original language.
@@ -82,7 +92,7 @@ pnpm build
 
 Load `dist/` through `chrome://extensions` → **Load unpacked**.
 
-For an existing unpacked installation, rebuild and click **Reload** in `chrome://extensions`, then refresh open article tabs. Version 0.26.0 shows a profile setup invitation before the first recommendations. A saved profile is still required for evaluation.
+For an existing unpacked installation, rebuild and click **Reload** in `chrome://extensions`, then refresh open article tabs. Version 0.27.0 replaces sentence highlights with contextual passages. A saved profile is still required for evaluation.
 
 Useful commands:
 

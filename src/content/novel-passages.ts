@@ -1,4 +1,7 @@
-import { textTokens, tokenOverlap } from '../analyzer/text-match';
+import { collectReadingBlocks } from './reading-blocks';
+import { passageWindow } from '../reading/blocks';
+import { passageText } from '../i18n/passages';
+import type { ReadingPassage, ReadingPassages } from '../reading/types';
 import {
   NOVEL_PASSAGE_FEEDBACK_TYPE,
   READWISE_SAVE_HIGHLIGHT_TYPE,
@@ -8,29 +11,11 @@ import { uiText, type UiLanguage } from '../i18n/ui';
 import { findCurrentArticleRoot } from './article-root';
 import { CONTENT_THEME_CSS } from './theme';
 
-const PASSAGE_SELECTOR = 'p, li, blockquote, dd, td';
-const EXCLUDED_SELECTOR = [
-  'nav',
-  'aside',
-  'footer',
-  'form',
-  'pre',
-  'code',
-  '[role="navigation"]',
-  '[data-attention-preview="true"]',
-  '[data-attention-novel-passages="true"]',
-].join(', ');
 const HIGHLIGHT_NAME = 'attention-potential-new';
+const CORE_HIGHLIGHT_NAME = 'attention-reading-core';
 const MAX_PASSAGES = 3;
-const MAX_CANDIDATE_KNOWN_PROBABILITY = 0.55;
-const MIN_CANDIDATE_CONFIDENCE = 0.3;
-
-interface TextSegment {
-  element: HTMLElement;
-  text: string;
-  start: number;
-  end: number;
-}
+const MAX_CANDIDATE_KNOWN_PROBABILITY = 0.35;
+const MIN_CANDIDATE_CONFIDENCE = 0.65;
 
 export interface NovelPassageMatch {
   claim: KeyClaimAssessment;
@@ -38,105 +23,15 @@ export interface NovelPassageMatch {
   range: Range;
   element: HTMLElement;
   score: number;
+  ranges?: Range[];
+  elements?: HTMLElement[];
+  passage?: ReadingPassage;
+  fingerprint?: string;
+  coreRanges?: Range[];
 }
 
 function normalize(value: string): string {
   return value.replace(/\s+/gu, ' ').trim().toLocaleLowerCase();
-}
-
-function passageElements(root: HTMLElement): HTMLElement[] {
-  return Array.from(
-    root.querySelectorAll<HTMLElement>(PASSAGE_SELECTOR),
-  ).filter(
-    (element) =>
-      !element.closest(EXCLUDED_SELECTOR) &&
-      !Array.from(element.children).some((child) =>
-        child.matches(PASSAGE_SELECTOR),
-      ),
-  );
-}
-
-function sentenceSegments(element: HTMLElement): TextSegment[] {
-  const text = element.textContent ?? '';
-  const segments: TextSegment[] = [];
-  const sentencePattern = /[^.!?。！？\n]+(?:[.!?。！？]+|(?=\n|$))/gu;
-  for (const match of text.matchAll(sentencePattern)) {
-    const raw = match[0];
-    const leading = raw.search(/\S/u);
-    if (leading < 0) continue;
-    const trailing = raw.length - raw.trimEnd().length;
-    const start = (match.index ?? 0) + leading;
-    const end = (match.index ?? 0) + raw.length - trailing;
-    const sentence = text.slice(start, end);
-    if (normalize(sentence).length >= 20) {
-      segments.push({ element, text: sentence, start, end });
-    }
-  }
-  if (segments.length === 0) {
-    const leading = text.search(/\S/u);
-    const trimmed = text.trim();
-    if (leading >= 0 && trimmed.length >= 20 && trimmed.length <= 1_200) {
-      segments.push({
-        element,
-        text: trimmed,
-        start: leading,
-        end: leading + trimmed.length,
-      });
-    }
-  }
-  return segments;
-}
-
-function rangeForTextOffsets(
-  element: HTMLElement,
-  start: number,
-  end: number,
-): Range | null {
-  const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT);
-  let offset = 0;
-  let startNode: Text | null = null;
-  let endNode: Text | null = null;
-  let startOffset = 0;
-  let endOffset = 0;
-  for (let node = walker.nextNode(); node; node = walker.nextNode()) {
-    const textNode = node as Text;
-    const length = textNode.data.length;
-    if (!startNode && start <= offset + length) {
-      startNode = textNode;
-      startOffset = Math.max(0, start - offset);
-    }
-    if (end <= offset + length) {
-      endNode = textNode;
-      endOffset = Math.max(0, end - offset);
-      break;
-    }
-    offset += length;
-  }
-  if (!startNode || !endNode) return null;
-  const range = document.createRange();
-  range.setStart(startNode, Math.min(startOffset, startNode.data.length));
-  range.setEnd(endNode, Math.min(endOffset, endNode.data.length));
-  return range;
-}
-
-function matchScore(claim: string, excerpt: string): number {
-  const normalizedClaim = normalize(claim);
-  const normalizedExcerpt = normalize(excerpt);
-  if (
-    normalizedClaim.includes(normalizedExcerpt) ||
-    normalizedExcerpt.includes(normalizedClaim)
-  ) {
-    return 1;
-  }
-  const claimTokens = textTokens(claim);
-  const excerptTokens = textTokens(excerpt);
-  if (claimTokens.size < 3 || excerptTokens.size < 3) return 0;
-  const overlap = tokenOverlap(claimTokens, excerptTokens);
-  if (overlap < 3) return 0;
-  const coverage = overlap / claimTokens.size;
-  const precision = overlap / excerptTokens.size;
-  if (coverage < 0.4 || precision < 0.14) return 0;
-  return coverage * 0.75 + Math.min(1, precision) * 0.25;
 }
 
 function candidatePriority(claim: KeyClaimAssessment): number {
@@ -160,9 +55,7 @@ export function potentialNewKeyClaims(
   return (claims ?? [])
     .filter(
       (claim) =>
-        claim.importance === 'primary' &&
-        claim.type !== 'recommendation' &&
-        claim.novelty !== 'known' &&
+        claim.novelty === 'likely-new' &&
         claim.knownProbability <= MAX_CANDIDATE_KNOWN_PROBABILITY &&
         claim.confidence >= MIN_CANDIDATE_CONFIDENCE &&
         claim.claim.trim().length >= 10,
@@ -175,48 +68,83 @@ export function findNovelPassageMatches(
   capture: PageCapture,
   claims: KeyClaimAssessment[] | undefined,
   maximum = MAX_PASSAGES,
+  selection?: ReadingPassages,
 ): NovelPassageMatch[] {
-  const candidates = potentialNewKeyClaims(claims);
-  if (candidates.length === 0) return [];
   const root = findCurrentArticleRoot(sourceDocument, capture.title);
   if (!root) return [];
-  const segments = passageElements(root).flatMap(sentenceSegments);
-  const usedSegments = new Set<TextSegment>();
-  const results: NovelPassageMatch[] = [];
-  for (const claim of candidates) {
-    const anchor = claim.sourceExcerpt?.trim() || claim.claim;
-    const ranked = segments
-      .filter((segment) => !usedSegments.has(segment))
-      .map((segment) => ({
-        segment,
-        score: matchScore(anchor, segment.text),
+  const { map, elements } = collectReadingBlocks(root);
+  if (selection && selection.fingerprint !== map.fingerprint) return [];
+  const entries: {
+    passage: ReadingPassage | undefined;
+    claim: KeyClaimAssessment | undefined;
+  }[] = selection
+    ? selection.items.map((passage) => ({
+        passage,
+        claim: undefined as KeyClaimAssessment | undefined,
       }))
-      .filter((candidate) => candidate.score > 0)
-      .sort((left, right) => right.score - left.score);
-    const best = ranked[0];
-    if (!best) continue;
-    const range = rangeForTextOffsets(
-      best.segment.element,
-      best.segment.start,
-      best.segment.end,
+    : potentialNewKeyClaims(claims).map((claim) => {
+        const anchor = normalize(claim.sourceExcerpt || claim.claim);
+        const block = map.blocks.find((item) =>
+          normalize(item.text).includes(anchor),
+        );
+        return {
+          claim,
+          passage: block
+            ? {
+                coreBlockId: block.id,
+                blockIds: [block.id],
+                basis: 'interest' as const,
+                knowledge: 'unknown' as const,
+                score: candidatePriority(claim),
+              }
+            : undefined,
+        };
+      });
+  const used = new Set<string>();
+  const result: NovelPassageMatch[] = [];
+  for (const entry of entries) {
+    if (!entry.passage) continue;
+    const blocks = passageWindow(
+      map,
+      entry.passage.coreBlockId,
+      entry.passage.blockIds,
     );
-    if (!range) continue;
-    usedSegments.add(best.segment);
-    results.push({
-      claim,
-      excerpt: best.segment.text.replace(/\s+/gu, ' ').trim(),
-      range,
-      element: best.segment.element,
-      score: best.score,
+    if (!blocks.length || blocks.some((block) => used.has(block.id))) continue;
+    const nodes = blocks.map((block) => elements.get(block.id)!);
+    const ranges = nodes.map((element) => {
+      const range = sourceDocument.createRange();
+      range.selectNodeContents(element);
+      return range;
     });
-    if (results.length >= Math.max(1, maximum)) break;
+    const core = map.blocks.find(
+      (block) => block.id === entry.passage!.coreBlockId,
+    )!;
+    const claim = entry.claim ?? {
+      claim: core.text,
+      sourceExcerpt: core.text,
+      type: 'thesis' as const,
+      importance: 'supporting' as const,
+      novelty: 'uncertain' as const,
+      knownProbability: 0.5,
+      confidence: 0.3,
+      reason: entry.passage.reason ?? '',
+    };
+    result.push({
+      claim,
+      excerpt: blocks.map((block) => block.text).join('\n\n'),
+      range: ranges[0]!,
+      ranges,
+      elements: nodes,
+      element: nodes[0]!,
+      score: entry.passage.score,
+      passage: selection ? entry.passage : undefined,
+      coreRanges: ranges.filter((_, index) => blocks[index]!.id === core.id),
+      fingerprint: map.fingerprint,
+    });
+    blocks.forEach((block) => used.add(block.id));
+    if (result.length >= maximum) break;
   }
-  return results;
-}
-
-interface HighlightRegistry {
-  set(name: string, highlight: unknown): void;
-  delete(name: string): void;
+  return result;
 }
 
 interface PassageView {
@@ -290,6 +218,7 @@ function installPassageView(): PassageView {
 
 export class NovelPassageController {
   private matches: NovelPassageMatch[] = [];
+  private articleObserver: MutationObserver | null = null;
   private capture: PageCapture | null = null;
   private index = 0;
   private view: PassageView | null = null;
@@ -303,8 +232,20 @@ export class NovelPassageController {
     matches: NovelPassageMatch[],
     capture: PageCapture,
     options: { language: UiLanguage; readwiseConnected: boolean },
-  ): void {
-    if (matches.length === 0) return;
+  ): boolean {
+    if (matches.length === 0) return false;
+    const articleRoot = findCurrentArticleRoot(document, capture.title);
+    if (!articleRoot) return false;
+    const currentFingerprint =
+      collectReadingBlocks(articleRoot).map.fingerprint;
+    if (
+      matches.some(
+        (match) =>
+          !match.element.isConnected ||
+          (match.fingerprint && match.fingerprint !== currentFingerprint),
+      )
+    )
+      return false;
     this.clear();
     this.matches = matches;
     this.capture = capture;
@@ -313,7 +254,7 @@ export class NovelPassageController {
     this.index = 0;
     this.applyHighlights();
     this.view = installPassageView();
-    this.view.title.textContent = uiText(this.language, 'potentialNewTitle');
+    this.view.title.textContent = passageText(this.language, 'title');
     this.view.previous.textContent = uiText(this.language, 'previousPassage');
     this.view.next.textContent = uiText(this.language, 'nextPassage');
     this.view.known.textContent = uiText(this.language, 'alreadyKnew');
@@ -327,13 +268,29 @@ export class NovelPassageController {
     this.bindView();
     this.render();
     this.view.close.focus({ preventScroll: true });
+    this.articleObserver = new MutationObserver(() => {
+      if (
+        !articleRoot.isConnected ||
+        collectReadingBlocks(articleRoot).map.fingerprint !== currentFingerprint
+      )
+        this.clear();
+    });
+    this.articleObserver.observe(articleRoot, {
+      childList: true,
+      characterData: true,
+      subtree: true,
+    });
+    return true;
   }
 
   clear(): void {
+    this.articleObserver?.disconnect();
+    this.articleObserver = null;
     const css = globalThis.CSS as typeof CSS & {
       highlights?: HighlightRegistry;
     };
     css?.highlights?.delete(HIGHLIGHT_NAME);
+    css?.highlights?.delete(CORE_HIGHLIGHT_NAME);
     document
       .querySelectorAll<HTMLElement>(
         '[data-attention-novel-highlight-style="true"]',
@@ -361,19 +318,30 @@ export class NovelPassageController {
     const style = document.createElement('style');
     style.dataset.attentionNovelHighlightStyle = 'true';
     style.textContent = `
-      ::highlight(${HIGHLIGHT_NAME}) { background-color: rgba(255, 214, 64, .34); text-decoration: underline 2px #d9a800; text-underline-offset: 3px; }
+      ::highlight(${HIGHLIGHT_NAME}) { background-color: rgba(255, 214, 64, .16); }
+      ::highlight(${CORE_HIGHLIGHT_NAME}) { background-color: rgba(255, 214, 64, .34); text-decoration: underline 2px #d9a800; text-underline-offset: 3px; }
       .attention-potential-new-fallback { background-color: rgba(255, 214, 64, .16) !important; outline: 2px solid rgba(217, 168, 0, .72) !important; outline-offset: 3px !important; }
     `;
     document.head?.append(style);
     if (css?.highlights && HighlightConstructor) {
       css.highlights.set(
         HIGHLIGHT_NAME,
-        new HighlightConstructor(...this.matches.map((match) => match.range)),
+        new HighlightConstructor(
+          ...this.matches.flatMap((match) => match.ranges ?? [match.range]),
+        ),
+      );
+      css.highlights.set(
+        CORE_HIGHLIGHT_NAME,
+        new HighlightConstructor(
+          ...this.matches.flatMap((match) => match.coreRanges ?? [match.range]),
+        ),
       );
       return;
     }
     this.fallbackElements = Array.from(
-      new Set(this.matches.map((match) => match.element)),
+      new Set(
+        this.matches.flatMap((match) => match.elements ?? [match.element]),
+      ),
     );
     for (const element of this.fallbackElements) {
       element.classList.add('attention-potential-new-fallback');
@@ -452,7 +420,14 @@ export class NovelPassageController {
     );
     this.view.status.textContent = selected
       ? uiText(this.language, 'feedbackSaved')
-      : '';
+      : match.passage
+        ? passageText(
+            this.language,
+            match.passage.knowledge === 'possibly-new'
+              ? 'possiblyNew'
+              : match.passage.basis,
+          )
+        : '';
     match.element.scrollIntoView({ behavior: 'smooth', block: 'center' });
   }
 
@@ -466,7 +441,7 @@ export class NovelPassageController {
         type: NOVEL_PASSAGE_FEEDBACK_TYPE,
         url: this.capture.url,
         title: this.capture.title,
-        claim: match.claim.claim,
+        claim: match.passage ? match.excerpt : match.claim.claim,
         excerpt: match.excerpt,
         value,
       })

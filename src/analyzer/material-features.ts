@@ -42,6 +42,7 @@ export function articleTextFingerprint(material: PageCapture): string {
       material.excerpt,
       ...material.headings,
       material.content,
+      material.readingMap?.fingerprint ?? 'legacy',
       material.wordCount,
       material.extractionMethod,
     ].join('\n'),

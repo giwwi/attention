@@ -1,3 +1,4 @@
+import { isArticleMap } from '../reading/blocks';
 import {
   ATTENTION_OUTCOME_PROMPT_SHOWN_TYPE,
   ATTENTION_OUTCOME_SUBMIT_TYPE,
@@ -24,6 +25,7 @@ export function isPageCapture(value: unknown): value is PageCapture {
     typeof capture.title === 'string' &&
     typeof capture.url === 'string' &&
     typeof capture.content === 'string' &&
+    (capture.readingMap === undefined || isArticleMap(capture.readingMap)) &&
     typeof capture.excerpt === 'string' &&
     typeof capture.wordCount === 'number' &&
     typeof capture.readingTimeMinutes === 'number' &&

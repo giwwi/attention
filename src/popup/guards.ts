@@ -1,3 +1,4 @@
+import { isArticleMap } from '../reading/blocks';
 import type {
   AnalysisContext,
   AttentionSessionProgressResponse,
@@ -17,6 +18,8 @@ export function isPageCapture(value: unknown): value is PageCapture {
     typeof candidate.title === 'string' &&
     typeof candidate.url === 'string' &&
     typeof candidate.content === 'string' &&
+    (candidate.readingMap === undefined ||
+      isArticleMap(candidate.readingMap)) &&
     typeof candidate.excerpt === 'string' &&
     (typeof candidate.byline === 'string' || candidate.byline === null) &&
     typeof candidate.siteName === 'string' &&

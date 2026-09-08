@@ -1,3 +1,4 @@
+import { passageText } from '../i18n/passages';
 import { isTrustedUserInteraction } from './user-interaction';
 import { installCardHost } from './card-view';
 import { installProfilePrompt } from './profile-prompt';
@@ -1255,6 +1256,16 @@ export function personalValuePromise(
   language: UiLanguage = DEFAULT_UI_LANGUAGE,
   passageMatches?: readonly NovelPassageMatch[],
 ): string {
+  if (preview.insights?.readingPassages) {
+    const selection = preview.insights.readingPassages;
+    const first = selection.items[0];
+    return first
+      ? passageText(
+          language,
+          first.knowledge === 'possibly-new' ? 'possiblyNew' : first.basis,
+        )
+      : '';
+  }
   const claims = passageMatches
     ? passageMatches.map((match) => match.claim)
     : potentialNewKeyClaims(preview.insights?.keyClaims);
@@ -1747,11 +1758,15 @@ export function installHoverPreview(
       const capture = activeNovelCapture;
       const matches = activeNovelMatches.slice();
       const readwiseConnected = activeReadwiseConnected;
-      hide();
-      novelPassages.show(matches, capture, {
+      const shown = novelPassages.show(matches, capture, {
         language: currentLanguage(),
         readwiseConnected,
       });
+      if (shown) hide();
+      else {
+        view.actionStatus.hidden = false;
+        view.actionStatus.textContent = passageText(currentLanguage(), 'stale');
+      }
     },
     { signal: listenerController.signal },
   );
@@ -1975,6 +1990,8 @@ export function installHoverPreview(
             document,
             cachedPageCapture,
             preview.insights?.keyClaims,
+            undefined,
+            preview.insights?.readingPassages,
           )
         : [];
     activeNovelCapture =
@@ -2001,10 +2018,29 @@ export function installHoverPreview(
         ),
       ),
     );
-    view.passageHint.hidden = !hasPassages;
-    view.passageHint.textContent = hasPassages
-      ? cardText(language, 'passageHint', { minutes: passageMinutes })
-      : '';
+    const selection = preview.insights?.readingPassages;
+    view.passageHint.hidden =
+      !expanded ||
+      cachedResponse?.novelPassageHighlightsEnabled !== true ||
+      (!hasPassages && !selection);
+    const passageStatus =
+      selection?.status === 'no-context'
+        ? 'noContext'
+        : !hasPassages
+          ? 'empty'
+          : 'hint';
+    const coverageStatus =
+      selection?.status === 'unavailable'
+        ? 'unavailable'
+        : selection?.coverage === 'partial'
+          ? 'partial'
+          : null;
+    view.passageHint.textContent = [
+      coverageStatus ? passageText(language, coverageStatus) : '',
+      passageText(language, passageStatus, { minutes: passageMinutes }),
+    ]
+      .filter(Boolean)
+      .join(' ');
     const isSaved = savedUrls.has(canonicalPageUrl(details.url));
     const isSaving = savingUrl === canonicalPageUrl(details.url);
     view.host.dataset.attentionSaved = String(isSaved);

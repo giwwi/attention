@@ -1,3 +1,4 @@
+import { collectReadingBlocks } from './reading-blocks';
 import { Readability } from '@mozilla/readability';
 import type { PageCapture, PageStructureSignals } from '../shared/types';
 import {
@@ -210,6 +211,7 @@ function captureDocumentInternal(
     isArticle: Boolean(hasReadableArticle || root),
     extractionMethod,
     structure,
+    readingMap: collectReadingBlocks(root ?? document.body).map,
     capturedAt: capturedAt.toISOString(),
   };
 }

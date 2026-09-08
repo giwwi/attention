@@ -37,6 +37,7 @@ test('cold cards guide setup; profile save activates existing tabs; deletion res
     await feed.goto('http://127.0.0.1:4317/feed');
     // A genuinely fresh installation has no vault yet. Both kinds of cards
     // must lead to setup without ever inventing a recommendation.
+    await article.bringToFront();
     await expect(
       article.locator('[data-attention-profile-required]'),
     ).toHaveCount(1);
@@ -59,6 +60,7 @@ test('cold cards guide setup; profile save activates existing tabs; deletion res
     await article.screenshot({
       path: 'output/playwright/profile-card-cold-article.png',
     });
+    await feed.bringToFront();
     await expect(feed.locator('[data-attention-profile-required]')).toHaveCount(
       1,
     );

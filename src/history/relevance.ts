@@ -155,6 +155,16 @@ export async function selectRelevantPersonalContext(
     context,
     features,
   );
+  // A useful passage may be beyond the text window used by article scoring.
+  // Match its explicit profile separately, keeping the main score unchanged.
+  const readingProfile = material.readingMap
+    ? selectRelevantProfileContext(profile, material, context, {
+        ...features,
+        matchingText: material.readingMap.blocks
+          .map((block) => block.text)
+          .join('\n'),
+      })
+    : null;
   const [history, readwise, notion] = await Promise.all([
     selectRelevantHistoryEvidence(historyEvidence, material, features),
     selectRelevantReadwiseEvidence(readwiseEvidence, material, features),
@@ -215,6 +225,14 @@ export async function selectRelevantPersonalContext(
       new Date(0).toISOString(),
     signals: weightedSignals,
     knowledgeSignals: profileContext?.knowledgeSignals ?? [],
+    ...(readingProfile
+      ? {
+          readingProfile: {
+            signals: readingProfile.signals,
+            knowledgeSignals: readingProfile.knowledgeSignals,
+          },
+        }
+      : {}),
     ...(history ? { historyEvidence: history } : {}),
     ...(readwise ? { readwiseEvidence: readwise } : {}),
     ...(obsidian ? { obsidianEvidence: obsidian } : {}),
