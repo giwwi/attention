@@ -1,5 +1,10 @@
 import { startContentRuntime } from './runtime';
 import {
+  installHoverPreview,
+  type HoverPreviewController,
+} from './hover-preview';
+import { normalizeUiLanguage } from '../i18n/ui';
+import {
   VAULT_CHANGED_TYPE,
   VAULT_STATUS_TYPE,
   type VaultPublicStatus,
@@ -7,6 +12,8 @@ import {
 import {
   CONTENT_RUNTIME_PING_TYPE,
   CAPTURE_MESSAGE_TYPE,
+  UI_LANGUAGE_GET_TYPE,
+  UI_LANGUAGE_CHANGED_TYPE,
 } from '../shared/types';
 import { EXTENSION_RUNTIME_VERSION } from '../shared/version';
 import { isAttentionInputsInvalidatedMessage } from '../background/input-invalidation';
@@ -24,8 +31,21 @@ let activeEpoch: string | undefined;
 let stopRuntime: (() => void) | undefined;
 let handoffAbort: AbortController | undefined;
 let vaultUnlocked = false;
+let profilePrompt: HoverPreviewController | undefined;
+let interfaceLanguage = normalizeUiLanguage(
+  (chrome.i18n?.getUILanguage() ?? navigator.language).split('-')[0],
+);
+function showProfilePrompt(): void {
+  if (!profilePrompt)
+    profilePrompt = installHoverPreview({
+      profileRequired: true,
+      getUiLanguage: () => interfaceLanguage,
+    });
+}
 
 function suspend(): void {
+  profilePrompt?.dispose();
+  profilePrompt = undefined;
   stopRuntime?.();
   stopRuntime = undefined;
   activeEpoch = undefined;
@@ -44,10 +64,25 @@ async function reconcile(): Promise<void> {
     vaultUnlocked = Boolean(state?.ok && state.unlocked);
     if (!state?.ok || !state.unlocked || !state.epoch) {
       suspend();
+      if (state?.ok && state.unconfigured === true) showProfilePrompt();
       return;
     }
+    void chrome.runtime
+      .sendMessage({ type: UI_LANGUAGE_GET_TYPE })
+      .then((response: unknown) => {
+        if (
+          stopped ||
+          revision !== requestRevision ||
+          !response ||
+          typeof response !== 'object'
+        )
+          return;
+        const result = response as { ok?: boolean; language?: unknown };
+        if (result.ok) interfaceLanguage = normalizeUiLanguage(result.language);
+      })
+      .catch(() => undefined);
     // Import instructions still work on ChatGPT before a profile exists.
-    // Article capture, hover, keyboard launchers and reading tracking do not.
+    // The separate setup-only hover never captures or evaluates an article.
     if (!handoffAbort) {
       handoffAbort = new AbortController();
       void installChatGptProfileHandoffNotice({
@@ -58,8 +93,15 @@ async function reconcile(): Promise<void> {
       stopRuntime?.();
       stopRuntime = undefined;
       activeEpoch = undefined;
+      if (state.profileReady === false) showProfilePrompt();
+      else {
+        profilePrompt?.dispose();
+        profilePrompt = undefined;
+      }
       return;
     }
+    profilePrompt?.dispose();
+    profilePrompt = undefined;
     if (activeEpoch === state.epoch) return;
     stopRuntime?.();
     activeEpoch = state.epoch;
@@ -88,6 +130,13 @@ const listener: Parameters<typeof chrome.runtime.onMessage.addListener>[0] = (
     // Clear the old runtime before an asynchronous status read can finish.
     suspend();
     void reconcile();
+  } else if (
+    type === UI_LANGUAGE_CHANGED_TYPE &&
+    sender.id === chrome.runtime.id
+  ) {
+    interfaceLanguage = normalizeUiLanguage(
+      (message as { language?: unknown }).language,
+    );
   } else if (type === CONTENT_RUNTIME_PING_TYPE) {
     sendResponse({ ok: true, version: EXTENSION_RUNTIME_VERSION });
   } else if (type === CAPTURE_MESSAGE_TYPE && !activeEpoch) {
@@ -96,6 +145,19 @@ const listener: Parameters<typeof chrome.runtime.onMessage.addListener>[0] = (
       error: vaultUnlocked ? 'profile_required' : 'vault_locked',
     });
   } else if (type === ATTENTION_CARD_OPEN_TYPE && !activeEpoch) {
+    if (
+      profilePrompt &&
+      sender.id === chrome.runtime.id &&
+      sender.url?.split(/[?#]/)[0] ===
+        `chrome-extension://${chrome.runtime.id}/popup.html`
+    ) {
+      void profilePrompt
+        .openCurrentArticle()
+        .then(sendResponse, () =>
+          sendResponse({ ok: false, reason: 'unavailable' }),
+        );
+      return true;
+    }
     sendResponse({
       ok: false,
       reason: vaultUnlocked ? 'profile_required' : 'unavailable',

@@ -1,5 +1,7 @@
 import { isTrustedUserInteraction } from './user-interaction';
 import { installCardHost } from './card-view';
+import { installProfilePrompt } from './profile-prompt';
+import { profileCardText } from '../i18n/profile-card';
 import { isInHoverRegion } from './hover-region';
 import { CardContextControl } from './card-context';
 import { cardText, type CardTextKey } from '../i18n/card';
@@ -59,7 +61,7 @@ interface HoverPreviewGlobal {
 }
 
 const hoverGlobal = globalThis as typeof globalThis & HoverPreviewGlobal;
-const HOVER_CONTRACT_VERSION = 'feed-compact-article-passages-save-v18';
+const HOVER_CONTRACT_VERSION = 'feed-compact-article-profile-prompt-v19';
 const MATERIAL_TITLE_SELECTOR = [
   'h1',
   'h2',
@@ -200,8 +202,8 @@ function fallbackMaterialScope(document: Document): HTMLElement | null {
   );
 }
 
-function documentTitleAliases(): string[] {
-  const extractedTitle = extractedCurrentPageTitle();
+function documentTitleAliases(titleOnly = false): string[] {
+  const extractedTitle = titleOnly ? '' : extractedCurrentPageTitle();
   return Array.from(
     new Set(
       [
@@ -268,10 +270,13 @@ function currentPageCapture(): PageCapture | null {
   });
 }
 
-function documentTitleMatchScore(element: HTMLElement): number {
+function documentTitleMatchScore(
+  element: HTMLElement,
+  titleOnly = false,
+): number {
   const candidate = normalizedComparableTitle(element);
   if (!candidate) return 0;
-  return documentTitleAliases().reduce((best, title) => {
+  return documentTitleAliases(titleOnly).reduce((best, title) => {
     if (title === candidate) return Math.max(best, 1_000);
     if (
       title.startsWith(`${candidate} |`) ||
@@ -745,7 +750,10 @@ function isSourceCitation(element: Element): boolean {
   );
 }
 
-function isExcludedUiRegion(element: Element | null): boolean {
+function isExcludedUiRegion(
+  element: Element | null,
+  titleOnly = false,
+): boolean {
   const region = element?.closest(
     'nav, header, footer, aside, [role="navigation"], [role="menubar"], [role="menu"]',
   );
@@ -756,14 +764,17 @@ function isExcludedUiRegion(element: Element | null): boolean {
   if (
     region.matches('header') &&
     element instanceof HTMLElement &&
-    documentTitleMatchScore(element) > 0
+    documentTitleMatchScore(element, titleOnly) > 0
   ) {
     return false;
   }
   return true;
 }
 
-function findCardLink(element: Element): {
+function findCardLink(
+  element: Element,
+  titleOnly = false,
+): {
   card: HTMLElement;
   anchor: HTMLAnchorElement;
   url: string;
@@ -775,7 +786,7 @@ function findCardLink(element: Element): {
     current && depth < HOVER_PREVIEW_CONFIG.maximumCardAncestors;
     depth += 1
   ) {
-    if (isExcludedUiRegion(current)) return null;
+    if (isExcludedUiRegion(current, titleOnly)) return null;
     const links = uniqueLinkedUrls(current);
     const postLinks = links.filter(({ url }) => {
       try {
@@ -794,7 +805,10 @@ function findCardLink(element: Element): {
           ? links[0]
           : undefined;
     const heading = element.closest<HTMLElement>(MATERIAL_TITLE_SELECTOR);
-    if (candidate && isLikelyMaterialAnchor(candidate.anchor, heading)) {
+    if (
+      candidate &&
+      isLikelyMaterialAnchor(candidate.anchor, heading, titleOnly)
+    ) {
       return { card: current, anchor: candidate.anchor, url: candidate.url };
     }
     current = current.parentElement;
@@ -811,8 +825,10 @@ function usefulTitle(element: Element | null | undefined): string {
 function isLikelyMaterialAnchor(
   anchor: HTMLAnchorElement,
   heading: HTMLElement | null,
+  titleOnly = false,
 ): boolean {
-  if (isExcludedUiRegion(anchor) || isSourceCitation(anchor)) return false;
+  if (isExcludedUiRegion(anchor, titleOnly) || isSourceCitation(anchor))
+    return false;
   if (heading) return true;
   const title = usefulTitle(anchor);
   if (title.length < 12) return false;
@@ -842,6 +858,105 @@ function isLikelyMaterialAnchor(
   }
   const slug = path.split('/').filter(Boolean).at(-1) ?? '';
   return slug.includes('-') && slug.split('-').filter(Boolean).length >= 4;
+}
+
+/** Setup-only title detection. Never invokes article extraction or evaluation. */
+function profileArticleTitle(): HTMLElement | null {
+  if (isNonContentApplicationPath(window.location.pathname)) return null;
+  const articlePath = isArticlePagePath(window.location.pathname);
+  const candidates = Array.from(
+    document.querySelectorAll<HTMLElement>(
+      `${CURRENT_PAGE_TITLE_SELECTOR}${articlePath ? ', a[href]' : ''}`,
+    ),
+  );
+  const ranked = candidates.flatMap((title) => {
+    if (
+      !usefulTitle(title) ||
+      isExcludedUiRegion(title, true) ||
+      isSourceCitation(title)
+    )
+      return [];
+    const score = documentTitleMatchScore(title, true);
+    const link =
+      title.closest<HTMLAnchorElement>('a[href]') ??
+      title.querySelector<HTMLAnchorElement>('a[href]');
+    // A reader shell may link its title to the publisher's original URL.
+    // Accept that only when the open article's own metadata matches it.
+    if (
+      link &&
+      !isCurrentDocumentUrl(link.href) &&
+      !(articlePath && score >= 900)
+    )
+      return [];
+    if (title.matches('a') && score < 900) return [];
+    const article = title.closest(
+      'article, [role="article"], [itemprop="articleBody"]',
+    );
+    const primaryHeading = title.matches(
+      'h1, [role="heading"][aria-level="1"], [itemprop="headline"]',
+    );
+    if (!((article && primaryHeading) || (articlePath && score >= 900)))
+      return [];
+    return [{ title, score }];
+  });
+  ranked.sort((a, b) => b.score - a.score);
+  return ranked[0]?.title ?? null;
+}
+
+export function resolveProfileHoverTargetDetails(
+  element: Element,
+  point?: HoverPoint,
+): HoverTargetDetails | null {
+  if (isSourceCitation(element) || isExcludedUiRegion(element, true))
+    return null;
+  const title = profileArticleTitle();
+  if (title) {
+    const rect = title.getBoundingClientRect();
+    const overTitle =
+      title.contains(element) ||
+      (point &&
+        point.x >= rect.left &&
+        point.x <= rect.right &&
+        point.y >= rect.top &&
+        point.y <= rect.bottom &&
+        rect.width > 0);
+    return overTitle
+      ? {
+          element: title,
+          positionElement: title,
+          url: window.location.href,
+          title: usefulTitle(title),
+          snippet: '',
+          currentPage: true,
+        }
+      : null;
+  }
+  const heading = element.closest<HTMLElement>(MATERIAL_TITLE_SELECTOR);
+  const anchor = element.closest<HTMLAnchorElement>('a[href]');
+  const direct =
+    anchor && isLikelyMaterialAnchor(anchor, heading, true)
+      ? httpUrl(anchor)
+      : null;
+  const card = direct ? null : findCardLink(element, true);
+  const target = direct ? anchor! : card?.anchor;
+  const url = direct ?? card?.url;
+  if (
+    !target ||
+    !url ||
+    isCurrentDocumentUrl(url) ||
+    suppressApplicationUiPreview(url)
+  )
+    return null;
+  const label = usefulTitle(heading) || usefulTitle(target);
+  if (!label) return null;
+  return {
+    element: target,
+    positionElement: heading ?? target,
+    url,
+    title: label,
+    snippet: '',
+    currentPage: false,
+  };
 }
 
 export function resolveHoverTargetDetails(
@@ -1275,13 +1390,18 @@ export function materialReadingInfo(
 function positionCard(host: HTMLElement, target: HTMLElement): void {
   const rect = target.getBoundingClientRect();
   const expanded = host.dataset.attentionExpanded === 'true';
-  const width = expanded ? 360 : 200;
-  const estimatedHeight = expanded
-    ? Math.min(
-        host.getBoundingClientRect().height || 320,
-        window.innerHeight - 20,
-      )
-    : 48;
+  const profilePrompt = host.dataset.attentionProfileRequired === 'true';
+  const width = Math.min(
+    expanded ? 360 : profilePrompt ? 290 : 200,
+    window.innerWidth - 20,
+  );
+  const estimatedHeight =
+    expanded || profilePrompt
+      ? Math.min(
+          host.getBoundingClientRect().height || 320,
+          window.innerHeight - 20,
+        )
+      : 48;
   if (expanded && rect.right + 12 + width <= window.innerWidth - 10) {
     const top = Math.min(
       Math.max(10, rect.top),
@@ -1305,11 +1425,13 @@ function positionCard(host: HTMLElement, target: HTMLElement): void {
 }
 
 export interface HoverPreviewController {
+  dispose(): void;
   openCurrentArticle(): Promise<CardOpenResponse>;
 }
 
 export function installHoverPreview(
   options: {
+    profileRequired?: boolean;
     onCurrentPageEvaluation?: (capture: PageCapture) => void;
     getUiLanguage?: () => UiLanguage;
     onDecision?: (
@@ -1335,6 +1457,17 @@ export function installHoverPreview(
   const view = installCardHost();
   const currentLanguage = (): UiLanguage =>
     options.getUiLanguage?.() ?? DEFAULT_UI_LANGUAGE;
+  const profileRequired = options.profileRequired === true;
+  const profilePrompt = profileRequired
+    ? installProfilePrompt(view, currentLanguage, listenerController.signal)
+    : null;
+  const resolveTarget = profileRequired
+    ? resolveProfileHoverTargetDetails
+    : resolveHoverTargetDetails;
+  const openLabel = (): string =>
+    profileRequired
+      ? profileCardText(currentLanguage(), 'create')
+      : readingPlanText(currentLanguage(), 'open');
   view.host.dataset.attentionVersion = EXTENSION_RUNTIME_VERSION;
   view.host.dataset.attentionContract = HOVER_CONTRACT_VERSION;
   view.host.dataset.attentionExpanded = 'false';
@@ -1425,7 +1558,8 @@ export function installHoverPreview(
   );
 
   const cacheKey = (details: HoverTargetDetails): string => {
-    const capture = details.currentPage ? currentPageCapture() : null;
+    const capture =
+      !profileRequired && details.currentPage ? currentPageCapture() : null;
     const hydrationSignature = capture
       ? `${capture.wordCount}:${capture.content.length}`
       : '';
@@ -1508,7 +1642,7 @@ export function installHoverPreview(
     if (
       !activeDetails ||
       view.host.style.display !== 'block' ||
-      view.host.dataset.attentionExpanded !== 'true'
+      (view.host.dataset.attentionExpanded !== 'true' && !profileRequired)
     )
       return false;
     if (synchronizeHoverRoute()) return false;
@@ -1731,6 +1865,21 @@ export function installHoverPreview(
     details: HoverTargetDetails,
     version: number,
   ): Promise<void> => {
+    if (profilePrompt) {
+      if (version !== requestVersion || activeTarget !== details.element)
+        return;
+      profilePrompt.render(details.currentPage);
+      view.host.style.display = 'block';
+      view.host.style.pointerEvents = 'auto';
+      positionCard(view.host, details.positionElement);
+      keyboardTrigger?.setAttribute('aria-expanded', 'true');
+      if (keyboardOpening) {
+        keyboardOpening = false;
+        profilePrompt.button.focus({ preventScroll: true });
+      }
+      settlePendingCardOpen({ ok: true });
+      return;
+    }
     const key = cacheKey(details);
     // Target resolution already captured the current article. Reuse that
     // cached result instead of cloning and parsing the full page a second time.
@@ -2072,7 +2221,7 @@ export function installHoverPreview(
   const schedulePreview = (element: Element, point?: HoverPoint): void => {
     if (listenerController.signal.aborted) return;
     synchronizeHoverRoute();
-    const details = resolveHoverTargetDetails(element, point);
+    const details = resolveTarget(element, point);
     if (!details) {
       if (activeTarget) hide();
       return;
@@ -2080,7 +2229,11 @@ export function installHoverPreview(
     // Product contract has two page modes. Feed pages show compact verdicts
     // for material links. Once an article is open, all linked/body previews are
     // silent and only its exact title can show the expanded evaluation.
-    if (isCurrentArticleDocument() && !details.currentPage) {
+    if (
+      !profileRequired &&
+      isCurrentArticleDocument() &&
+      !details.currentPage
+    ) {
       if (activeTarget) hide();
       return;
     }
@@ -2113,17 +2266,15 @@ export function installHoverPreview(
 
   refreshKeyboardTrigger = (): void => {
     if (listenerController.signal.aborted) return;
-    const capture = currentPageCapture();
-    const title =
-      capture?.isArticle && capture.wordCount >= 80
+    const capture = profileRequired ? null : currentPageCapture();
+    const title = profileRequired
+      ? profileArticleTitle()
+      : capture?.isArticle && capture.wordCount >= 80
         ? (exactDocumentTitleElement() ?? currentArticleTitleElement(capture))
         : null;
     if (title === keyboardTitle && keyboardTrigger?.isConnected) {
-      keyboardTrigger.setAttribute(
-        'aria-label',
-        readingPlanText(currentLanguage(), 'open'),
-      );
-      keyboardTrigger.title = readingPlanText(currentLanguage(), 'open');
+      keyboardTrigger.setAttribute('aria-label', openLabel());
+      keyboardTrigger.title = openLabel();
       return;
     }
     keyboardTrigger?.remove();
@@ -2134,11 +2285,8 @@ export function installHoverPreview(
     button.type = 'button';
     button.dataset.attentionTrigger = 'true';
     button.textContent = 'Attention';
-    button.setAttribute(
-      'aria-label',
-      readingPlanText(currentLanguage(), 'open'),
-    );
-    button.title = readingPlanText(currentLanguage(), 'open');
+    button.setAttribute('aria-label', openLabel());
+    button.title = openLabel();
     button.setAttribute('aria-controls', view.host.id);
     button.setAttribute('aria-expanded', 'false');
     Object.assign(button.style, {
@@ -2161,9 +2309,11 @@ export function installHoverPreview(
         keyboardOpening = true;
         if (view.host.style.display === 'block' && activeDetails?.currentPage) {
           keyboardOpening = false;
-          const primary = view.passagesButton.hidden
-            ? view.saveButton
-            : view.passagesButton;
+          const primary =
+            profilePrompt?.button ??
+            (view.passagesButton.hidden
+              ? view.saveButton
+              : view.passagesButton);
           (primary.disabled ? view.closeButton : primary).focus();
         } else {
           schedulePreview(title);
@@ -2185,6 +2335,7 @@ export function installHoverPreview(
         event.target.closest('[data-attention-trigger]')
       )
         return;
+      if (profileRequired) return;
       const details = resolveHoverTargetDetails(event.target);
       if (!details) return;
       const preview = cache.get(cacheKey(details))?.preview;
@@ -2234,7 +2385,7 @@ export function installHoverPreview(
       if (
         !activeTarget &&
         !event.target.closest(`a[href], ${MATERIAL_TITLE_SELECTOR}`) &&
-        !headingAtPoint(point)
+        !(profileRequired ? profileArticleTitle() : headingAtPoint(point))
       ) {
         return;
       }
@@ -2276,7 +2427,8 @@ export function installHoverPreview(
       if (related instanceof Node && activeTarget.contains(related)) return;
       if (handleExpandedPointer({ x: event.clientX, y: event.clientY })) return;
       if (event.target instanceof Node && activeTarget.contains(event.target)) {
-        if (view.host.dataset.attentionExpanded === 'true') scheduleHide();
+        if (profileRequired || view.host.dataset.attentionExpanded === 'true')
+          scheduleHide();
         else hide();
       }
     },
@@ -2373,9 +2525,14 @@ export function installHoverPreview(
   };
   restartHydrationObservation = (): void => {
     stopHydrationObservation();
-    if (!isCurrentArticleDocument()) return;
+    if (
+      !(profileRequired
+        ? profileArticleTitle() || isArticlePagePath(window.location.pathname)
+        : isCurrentArticleDocument())
+    )
+      return;
     const observationRoot =
-      findCurrentArticleRoot(document) ??
+      (profileRequired ? null : findCurrentArticleRoot(document)) ??
       document.querySelector<HTMLElement>('article, main, [role="main"]') ??
       document.body;
     if (!observationRoot || typeof MutationObserver === 'undefined') return;
@@ -2424,8 +2581,23 @@ export function installHoverPreview(
     novelPassages.clear();
   });
   return {
+    dispose: () => listenerController.abort(),
     async openCurrentArticle(): Promise<CardOpenResponse> {
+      if (listenerController.signal.aborted)
+        return { ok: false, reason: 'unavailable' };
       synchronizeHoverRoute();
+      if (profilePrompt) {
+        const title = profileArticleTitle();
+        const details = title && resolveTarget(title);
+        if (!details) return { ok: false, reason: 'not_article' };
+        hide();
+        activeTarget = details.element;
+        activeDetails = details;
+        activeCacheKey = cacheKey(details);
+        keyboardOpening = true;
+        await show(details, ++requestVersion);
+        return { ok: true };
+      }
       const capture = currentPageCapture();
       const root = capture && findCurrentArticleRoot(document, capture.title);
       if (!capture?.isArticle || capture.wordCount < 80 || !root)

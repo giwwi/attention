@@ -2,7 +2,7 @@
 
 **A local-first Chrome extension that estimates whether an article is worth your attention right now.**
 
-[Website](https://giwwi.github.io/attention/) · [Download the extension](https://giwwi.github.io/attention/releases/attention-0.25.1.zip)
+[Website](https://giwwi.github.io/attention/) · [Download the extension](https://giwwi.github.io/attention/releases/attention-0.26.0.zip)
 
 ![Attention demo](docs/attention-demo.gif)
 
@@ -10,18 +10,18 @@ Attention combines the article, your personal profile, and your current goal to 
 
 The **Utility Score** is an estimate on a 0–100 scale, shown as **/100** in the card's details. It is not a probability that the article will be useful or correct. Article and passage reading durations are estimates, not measured time savings. Later feedback can calibrate future predictions locally.
 
-A saved personal profile is required before cards appear. Start with a profile prepared in ChatGPT or Claude using context you have already shared, review it, and save it locally. Attention does not access your chat history or connect to either account. Local article evaluation needs no API key or analytics. An optional Vercel AI Gateway connection can provide a deeper analysis with a model selected by the user; `google/gemini-2.5-flash-lite` is the default suggestion.
+Before a profile is saved, cards invite you to create one. Personal reading recommendations require a saved profile. Start with a profile prepared in ChatGPT or Claude using context you have already shared, review it, and save it locally. Attention does not access your chat history or connect to either account. Local article evaluation needs no API key or analytics. An optional Vercel AI Gateway connection can provide a deeper analysis with a model selected by the user; `google/gemini-2.5-flash-lite` is the default suggestion.
 
 ## Try it in Chrome
 
-1. Download and unzip the [version 0.25.1](https://giwwi.github.io/attention/releases/attention-0.25.1.zip).
+1. Download and unzip the [version 0.26.0](https://giwwi.github.io/attention/releases/attention-0.26.0.zip).
 2. Open `chrome://extensions`.
 3. Enable **Developer mode**.
 4. Click **Load unpacked** and select the unzipped `attention-extension` folder.
 5. Pin **Attention**, open an article, and click the extension icon.
-6. On first use, create your local vault with a password of at least 12 characters. Keep the password: Attention cannot recover it. Then choose **ChatGPT** or **Claude**, follow the handoff instructions, paste the returned profile, review it and choose **Use this profile**. The saved profile enables article and feed cards in already open tabs. Until then, Attention does not extract articles, track reading, add title launchers or show recommendation cards. A detailed manual profile is available under **Other ways**; the short AI questionnaire is offered only to existing users.
+6. On first use, create your local vault with a password of at least 12 characters. Keep the password: Attention cannot recover it. Then choose **ChatGPT** or **Claude**, follow the handoff instructions, paste the returned profile, review it and choose **Use this profile**. Before setup, hovering over a feed headline or the title of an open article shows a friendly **Create my profile** card. Its button opens setup, including vault creation on a fresh installation. Until a meaningful profile is saved, Attention does not extract articles, evaluate them or track reading. Saving the profile enables recommendations in already open tabs. Start with either ChatGPT or Claude; you can add the other profile later. A detailed manual profile is available under **Other ways**; the short AI questionnaire is offered only to existing users.
 
-Deleting the profile disables article and feed cards again. An old “onboarding complete” flag, an unfinished import, empty profile or format preferences alone does not enable them. Existing saved profiles with personal context continue to work.
+Deleting the profile returns article and feed cards to the setup invitation. A locked existing vault stays silent until you unlock it. An old “onboarding complete” flag, an unfinished import, empty profile or format preferences alone does not enable recommendations. Existing saved profiles with personal context continue to work.
 
 Unlock the vault when you start a new browser session. **Lock** closes access to Attention's personal data until you unlock again. If you forget the password, the reset option deletes the local vault and lets you start over; it cannot recover the old data.
 
@@ -82,7 +82,7 @@ pnpm build
 
 Load `dist/` through `chrome://extensions` → **Load unpacked**.
 
-For an existing unpacked installation, rebuild and click **Reload** in `chrome://extensions`, then refresh open article tabs. Version 0.25.1 requires a saved profile before cards activate.
+For an existing unpacked installation, rebuild and click **Reload** in `chrome://extensions`, then refresh open article tabs. Version 0.26.0 shows a profile setup invitation before the first recommendations. A saved profile is still required for evaluation.
 
 Useful commands:
 

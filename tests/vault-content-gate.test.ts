@@ -1,15 +1,22 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { VAULT_CHANGED_TYPE, VAULT_STATUS_TYPE } from '../src/vault/messages';
 import { ATTENTION_INPUTS_INVALIDATED_TYPE } from '../src/background/input-invalidation';
+import { UI_LANGUAGE_GET_TYPE } from '../src/shared/types';
 import { ATTENTION_CARD_OPEN_TYPE } from '../src/shared/card-messages';
 
 const runtime = vi.hoisted(() => ({
   start: vi.fn(),
   stop: vi.fn(),
   handoff: vi.fn(),
+  prompt: vi.fn(),
+  dispose: vi.fn(),
+  open: vi.fn(),
 }));
 vi.mock('../src/content/profile-handoff-notice', () => ({
   installChatGptProfileHandoffNotice: runtime.handoff,
+}));
+vi.mock('../src/content/hover-preview', () => ({
+  installHoverPreview: runtime.prompt,
 }));
 vi.mock('../src/content/runtime', () => ({
   startContentRuntime: runtime.start,
@@ -29,11 +36,20 @@ describe('locked content runtime', () => {
     runtime.start.mockReset().mockReturnValue(runtime.stop);
     runtime.stop.mockReset();
     runtime.handoff.mockReset().mockResolvedValue(undefined);
+    runtime.dispose.mockReset();
+    runtime.open.mockReset().mockResolvedValue({ ok: true });
+    runtime.prompt.mockReset().mockReturnValue({
+      dispose: runtime.dispose,
+      openCurrentArticle: runtime.open,
+    });
     send = vi.fn();
     vi.stubGlobal('chrome', {
       runtime: {
         id: 'attention-id',
-        sendMessage: send,
+        sendMessage: (message: { type: string }) =>
+          message.type === UI_LANGUAGE_GET_TYPE
+            ? Promise.resolve({ ok: false })
+            : send(message),
         onMessage: {
           addListener: (value: Listener) => {
             listener = value;
@@ -55,6 +71,20 @@ describe('locked content runtime', () => {
     await Promise.resolve();
     expect(send.mock.calls).toEqual([[{ type: VAULT_STATUS_TYPE }]]);
     expect(runtime.start).not.toHaveBeenCalled();
+  });
+
+  it('offers setup before a vault exists but removes the invitation when an existing vault is locked', async () => {
+    send.mockResolvedValue({ ok: true, unlocked: false, unconfigured: true });
+    await import('../src/content/index');
+    await Promise.resolve();
+    expect(runtime.prompt).toHaveBeenCalledOnce();
+    expect(runtime.start).not.toHaveBeenCalled();
+    expect(send.mock.calls).toEqual([[{ type: VAULT_STATUS_TYPE }]]);
+    send.mockResolvedValue({ ok: true, unlocked: false, unconfigured: false });
+    listener({ type: VAULT_CHANGED_TYPE }, { id: 'attention-id' }, vi.fn());
+    await Promise.resolve();
+    expect(runtime.dispose).toHaveBeenCalledOnce();
+    expect(runtime.prompt).toHaveBeenCalledOnce();
   });
 
   it('suspends immediately on a trusted lifecycle event while the new status is still pending', async () => {
@@ -87,7 +117,7 @@ describe('locked content runtime', () => {
     await Promise.resolve();
     expect(runtime.start).not.toHaveBeenCalled();
   });
-  it('keeps an unlocked installation silent until a profile is saved, but allows import instructions', async () => {
+  it('shows only setup until a profile is saved, then replaces it with the full runtime', async () => {
     send.mockResolvedValue({
       ok: true,
       unlocked: true,
@@ -98,6 +128,9 @@ describe('locked content runtime', () => {
     await Promise.resolve();
     expect(runtime.start).not.toHaveBeenCalled();
     expect(runtime.handoff).toHaveBeenCalledOnce();
+    expect(runtime.prompt).toHaveBeenCalledWith(
+      expect.objectContaining({ profileRequired: true }),
+    );
     const response = vi.fn();
     listener(
       { type: ATTENTION_CARD_OPEN_TYPE },
@@ -125,6 +158,7 @@ describe('locked content runtime', () => {
     );
     await Promise.resolve();
     expect(runtime.start).toHaveBeenCalledOnce();
+    expect(runtime.dispose).toHaveBeenCalledOnce();
 
     send.mockReturnValue(new Promise(() => undefined));
     listener(

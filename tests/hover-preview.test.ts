@@ -246,7 +246,7 @@ describe('hover preview content script', () => {
     expect(hosts).toHaveLength(1);
     expect(hosts[0]?.dataset.attentionVersion).toBe(EXTENSION_RUNTIME_VERSION);
     expect(hosts[0]?.dataset.attentionContract).toBe(
-      'feed-compact-article-passages-save-v18',
+      'feed-compact-article-profile-prompt-v19',
     );
   });
 
@@ -273,7 +273,7 @@ describe('hover preview content script', () => {
     expect(hosts).toHaveLength(1);
     expect(hosts[0]).not.toBe(staleHost);
     expect(hosts[0]?.dataset.attentionContract).toBe(
-      'feed-compact-article-passages-save-v18',
+      'feed-compact-article-profile-prompt-v19',
     );
   });
 
@@ -1511,7 +1511,7 @@ describe('hover preview content script', () => {
     expect(host?.style.display).toBe('none');
     expect(host?.dataset.attentionExpanded).toBe('false');
     expect(host?.dataset.attentionContract).toBe(
-      'feed-compact-article-passages-save-v18',
+      'feed-compact-article-profile-prompt-v19',
     );
   });
 

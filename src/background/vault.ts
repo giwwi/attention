@@ -1,16 +1,28 @@
 import { loadProfileHandoffState } from '../onboarding/handoff/state';
 import { loadProfile } from '../profile/storage';
 import { isProfileReady } from '../profile/readiness';
-import { getVaultEpoch, onVaultStateChanged } from '../vault/storage';
+import {
+  getVaultEpoch,
+  getVaultStatus,
+  onVaultStateChanged,
+} from '../vault/storage';
 import {
   VAULT_CHANGED_TYPE,
   VAULT_HANDOFF_NOTICE_TYPE,
   VAULT_STATUS_TYPE,
+  PROFILE_SETUP_OPEN_TYPE,
   type VaultPublicStatus,
 } from '../vault/messages';
 
 async function publicStatus(): Promise<VaultPublicStatus> {
   try {
+    const status = await getVaultStatus();
+    if (status !== 'unlocked')
+      return {
+        ok: true,
+        unlocked: false,
+        unconfigured: status === 'unconfigured',
+      };
     const epoch = await getVaultEpoch();
     const profileReady = isProfileReady(await loadProfile());
     if (epoch !== (await getVaultEpoch())) throw new Error('Vault changed.');
@@ -24,7 +36,11 @@ export function installVaultMessages(): void {
   chrome.runtime.onMessage.addListener((message: unknown, sender, respond) => {
     if (!message || typeof message !== 'object') return;
     const type = (message as { type?: unknown }).type;
-    if (type !== VAULT_STATUS_TYPE && type !== VAULT_HANDOFF_NOTICE_TYPE)
+    if (
+      type !== VAULT_STATUS_TYPE &&
+      type !== VAULT_HANDOFF_NOTICE_TYPE &&
+      type !== PROFILE_SETUP_OPEN_TYPE
+    )
       return;
     if (sender.id !== chrome.runtime.id) {
       respond({ ok: false });
@@ -32,6 +48,25 @@ export function installVaultMessages(): void {
     }
     if (type === VAULT_STATUS_TYPE) {
       void publicStatus().then(respond);
+      return true;
+    }
+    if (type === PROFILE_SETUP_OPEN_TYPE) {
+      // No caller-supplied destination: a trusted card gesture can only open
+      // our own setup page, which handles vault creation before the profile.
+      if (
+        sender.frameId !== 0 ||
+        typeof sender.tab?.id !== 'number' ||
+        !/^https?:\/\//u.test(sender.url ?? '')
+      ) {
+        respond({ ok: false });
+        return;
+      }
+      void chrome.tabs
+        .create({ url: chrome.runtime.getURL('popup.html'), active: true })
+        .then(
+          () => respond({ ok: true }),
+          () => respond({ ok: false }),
+        );
       return true;
     }
     let allowed = false;

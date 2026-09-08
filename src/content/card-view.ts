@@ -72,6 +72,16 @@ export function installCardHost(): CardView {
     .card:not(.expanded) > :not(.verdict) { display: none !important; }
     .card.expanded { display: block; width: min(360px, calc(100vw - 20px)); min-width: 0; max-height: calc(100vh - 20px); max-height: calc(100dvh - 20px); overflow: auto; overscroll-behavior: contain; padding: 16px; color: var(--attention-fg); background: var(--attention-bg); border-color: var(--attention-border); border-radius: 16px; box-shadow: 0 12px 36px var(--attention-shadow); font-weight: 400; line-height: 1.45; letter-spacing: 0; text-align: start; text-transform: none; overflow-wrap: anywhere; }
     .card.expanded::before { display: none; }
+    .card.profile-required > :not(.card-header):not(.profile-prompt) { display: none !important; }
+    .card.profile-compact { width: min(290px, calc(100vw - 20px)); padding: 12px 14px; }
+    .profile-prompt h2 { margin: 0; font-size: 20px; line-height: 1.2; font-weight: 750; letter-spacing: -.02em; }
+    .profile-compact h2 { font-size: 17px; }
+    .profile-prompt p { margin: 10px 0 0; font-size: 14px; line-height: 1.5; }
+    .profile-compact p { font-size: 13px; }
+    .profile-prompt .profile-providers { color: var(--attention-muted); font-size: 13px; }
+    .profile-create-button { width: 100%; min-height: 42px; margin-block-start: 16px; color: var(--attention-on-accent); background: var(--attention-accent); border-color: var(--attention-accent); font-size: 14px; }
+    .profile-create-button:not(:disabled):hover { background: var(--attention-accent-hover); border-color: var(--attention-accent-hover); }
+    .profile-status:empty { display: none; }
     [hidden] { display: none !important; }
     button, input, select, textarea { font: inherit; }
     button { min-width: 0; border: 1px solid var(--attention-border); border-radius: 9px; padding: 8px 10px; color: var(--attention-fg); background: var(--attention-control-bg); font-size: 12px; font-weight: 650; line-height: 1.35; cursor: pointer; }

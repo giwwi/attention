@@ -7,9 +7,14 @@ import {
   createVaultThroughUi,
   extensionWorker,
 } from './helpers/vault';
+import {
+  clickCardElement,
+  cardTextContent,
+  shadowElementState,
+} from './helpers/card';
 import { importTestProfile, PROFILE_IMPORT } from './helpers/profile';
 
-test('profile review and save activate existing tabs; deletion silences them again', async () => {
+test('cold cards guide setup; profile save activates existing tabs; deletion restores setup', async () => {
   test.setTimeout(90_000);
   const directory = await mkdtemp(
     path.join(tmpdir(), 'attention-profile-activation-'),
@@ -30,9 +35,57 @@ test('profile review and save activate existing tabs; deletion silences them aga
     const loadedAt = await article.evaluate(() => performance.timeOrigin);
     const feed = await context.newPage();
     await feed.goto('http://127.0.0.1:4317/feed');
-    let popup = await context.newPage();
+    // A genuinely fresh installation has no vault yet. Both kinds of cards
+    // must lead to setup without ever inventing a recommendation.
+    await expect(
+      article.locator('[data-attention-profile-required]'),
+    ).toHaveCount(1);
+    await article.bringToFront();
+    await article.mouse.move(0, 0);
+    await article.locator('h1').hover();
+    const articleCard = article.locator('[data-attention-preview]');
+    await expect(articleCard).toBeVisible();
+    await expect(articleCard).toHaveAttribute(
+      'data-attention-profile-required',
+      'true',
+    );
+    await expect(articleCard).toHaveAttribute(
+      'data-attention-expanded',
+      'true',
+    );
+    await expect
+      .poll(() => cardTextContent(context, article, '.profile-prompt'))
+      .toContain('ChatGPT or Claude');
+    await article.screenshot({
+      path: 'output/playwright/profile-card-cold-article.png',
+    });
+    await expect(feed.locator('[data-attention-profile-required]')).toHaveCount(
+      1,
+    );
+    await feed.bringToFront();
+    await feed.mouse.move(0, 0);
+    await feed.locator('#feed-link').hover();
+    const feedCard = feed.locator('[data-attention-preview]');
+    await expect(feedCard).toBeVisible();
+    await expect(feedCard).toHaveAttribute('data-attention-expanded', 'false');
+    await expect(feedCard).toHaveAttribute(
+      'data-attention-profile-required',
+      'true',
+    );
+    // Travel slowly across the title/card gap: the setup CTA must stay usable.
+    const box = await feedCard.boundingBox();
+    await feed.mouse.move(box!.x + box!.width / 2, box!.y + box!.height / 2, {
+      steps: 20,
+    });
+    await expect(feedCard).toBeVisible();
+    await feed.screenshot({
+      path: 'output/playwright/profile-card-cold-feed.png',
+    });
     const popupUrl = `chrome-extension://${new URL(worker.url()).host}/popup.html`;
-    await popup.goto(popupUrl);
+    const opened = context.waitForEvent('page');
+    await clickCardElement(context, feed, '.profile-create-button');
+    let popup = await opened;
+    await expect(popup).toHaveURL(popupUrl);
     await popup.setViewportSize({ width: 380, height: 850 });
     await createVaultThroughUi(popup);
     await expect(popup.locator('#profile-source-step')).toBeVisible();
@@ -65,12 +118,16 @@ test('profile review and save activate existing tabs; deletion silences them aga
     await article.mouse.wheel(0, 300);
     await feed.locator('#feed-link').hover();
     await feed.waitForTimeout(900);
-    for (const tab of [article, feed])
-      await expect(
-        tab.locator(
-          '[data-attention-preview], [data-attention-trigger], [data-attention-outcome]',
-        ),
-      ).toHaveCount(0);
+    for (const tab of [article, feed]) {
+      await expect(tab.locator('[data-attention-preview]')).toHaveAttribute(
+        'data-attention-profile-required',
+        'true',
+      );
+      await expect(tab.locator('[data-attention-outcome]')).toHaveCount(0);
+    }
+    await expect
+      .poll(() => cardTextContent(context, feed, '.profile-prompt'))
+      .toContain('Создать мой профиль');
     expect(
       await worker.evaluate(
         async () =>
@@ -92,7 +149,10 @@ test('profile review and save activate existing tabs; deletion silences them aga
     await popup.locator('#profile-import-json').fill('{broken');
     await popup.locator('#validate-profile').click();
     await expect(popup.locator('#profile-validation-errors')).toBeVisible();
-    await expect(article.locator('[data-attention-preview]')).toHaveCount(0);
+    await expect(article.locator('[data-attention-preview]')).toHaveAttribute(
+      'data-attention-profile-required',
+      'true',
+    );
     await popup.locator('#profile-import-json').fill(PROFILE_IMPORT);
     await popup.locator('#validate-profile').click();
     await expect(popup.locator('#profile-review-step')).toBeVisible();
@@ -103,10 +163,19 @@ test('profile review and save activate existing tabs; deletion silences them aga
             .personalProfile,
       ),
     ).toBeUndefined();
-    await expect(article.locator('[data-attention-preview]')).toHaveCount(0);
+    await expect(article.locator('[data-attention-preview]')).toHaveAttribute(
+      'data-attention-profile-required',
+      'true',
+    );
     await popup.locator('#save-profile').click();
     await expect(popup.locator('#launcher-home')).toBeVisible();
     await expect(popup.locator('#open-page-card')).toBeEnabled();
+    await expect(
+      article.locator('[data-attention-profile-required]'),
+    ).toHaveCount(0);
+    await expect(feed.locator('[data-attention-profile-required]')).toHaveCount(
+      0,
+    );
     await expect(article.locator('[data-attention-trigger]')).toHaveCount(1);
     await article.bringToFront();
     await article.mouse.move(0, 0);
@@ -129,9 +198,31 @@ test('profile review and save activate existing tabs; deletion silences them aga
     settings.once('dialog', (dialog) => dialog.accept());
     await settings.locator('#delete-profile').click();
     for (const tab of [article, feed])
-      await expect(
-        tab.locator('[data-attention-preview], [data-attention-trigger]'),
-      ).toHaveCount(0);
+      await expect(tab.locator('[data-attention-preview]')).toHaveAttribute(
+        'data-attention-profile-required',
+        'true',
+      );
+    // A keyboard user can reach setup on the open article too.
+    await article.bringToFront();
+    await article.locator('[data-attention-trigger]').focus();
+    await article.keyboard.press('Enter');
+    await expect(article.locator('[data-attention-preview]')).toBeVisible();
+    await expect
+      .poll(
+        async () =>
+          (await shadowElementState(context, article, '.profile-create-button'))
+            .focused,
+      )
+      .toBe(true);
+    await article.emulateMedia({ colorScheme: 'dark' });
+    await article.screenshot({
+      path: 'output/playwright/profile-card-ru-dark.png',
+    });
+    const articleOpened = context.waitForEvent('page');
+    await article.keyboard.press('Enter');
+    const articleSetup = await articleOpened;
+    await expect(articleSetup.locator('#profile-source-step')).toBeVisible();
+    await articleSetup.close();
     await expect(popup.locator('#profile-source-step')).toBeVisible();
     await expect(popup.locator('#open-page-card')).toBeDisabled();
     await expect(settings.locator('#profile-source-step')).toBeVisible();
