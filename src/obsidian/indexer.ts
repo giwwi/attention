@@ -1,11 +1,18 @@
 import {
   loadObsidianNotes,
   applyObsidianNoteChanges,
+  loadVaultHandle,
   type PersistedDirectoryHandle,
 } from './database';
 import { parseObsidianNote } from './markdown';
 import { loadObsidianSettings, saveObsidianSettings } from './storage';
 import type { ObsidianNoteRecord, ObsidianSettings } from './types';
+import {
+  beginSyncOperation,
+  commitDataOperation,
+  assertDataOperationCurrent,
+  type DataOperation,
+} from '../privacy/data-operations';
 import {
   canonicalizeHistoryPage,
   fingerprintHistoryUrl,
@@ -43,6 +50,7 @@ export interface ObsidianIndexingResult {
   reusedNoteCount: number;
   changedNoteCount: number;
   removedNoteCount: number;
+  operation: DataOperation;
 }
 
 async function withSourceFingerprint(
@@ -60,17 +68,19 @@ async function withSourceFingerprint(
 
 async function markdownFiles(
   directory: FileSystemDirectoryHandle,
+  checkCurrent: () => Promise<void>,
   prefix = '',
   files: MarkdownFile[] = [],
 ): Promise<MarkdownFile[]> {
   const iterableDirectory = directory as IterableDirectoryHandle;
   for await (const [name, handle] of iterableDirectory.entries()) {
+    await checkCurrent();
     if (files.length >= MAX_NOTES) break;
     if (name.startsWith('.')) continue;
     const path = prefix ? `${prefix}/${name}` : name;
     if (handle.kind === 'directory') {
       if (EXCLUDED_DIRECTORIES.has(name)) continue;
-      await markdownFiles(handle, path, files);
+      await markdownFiles(handle, checkCurrent, path, files);
       continue;
     }
     if (/\.md$/iu.test(name)) files.push({ path, handle });
@@ -82,12 +92,27 @@ export async function indexObsidianVault(
   handle: PersistedDirectoryHandle,
   onProgress?: (progress: ObsidianIndexingProgress) => void,
   now = new Date(),
+  startedOperation?: DataOperation,
 ): Promise<ObsidianIndexingResult> {
-  onProgress?.({ phase: 'scanning', processed: 0, total: 0 });
-  const files = await markdownFiles(handle);
-  const existing = new Map(
-    (await loadObsidianNotes()).map((note) => [note.path, note]),
+  const operation = await beginSyncOperation('obsidian', startedOperation);
+  await assertDataOperationCurrent(operation);
+  const snapshot = await commitDataOperation(operation, async () => ({
+    handle: await loadVaultHandle(),
+    notes: await loadObsidianNotes(),
+    settings: await loadObsidianSettings(),
+  }));
+  // Directory names and relative paths are not identity. If identity cannot
+  // be established, rebuild; never reuse another vault's matching metadata.
+  const sameVault = Boolean(
+    snapshot.handle &&
+    typeof handle.isSameEntry === 'function' &&
+    (await handle.isSameEntry(snapshot.handle).catch(() => false)),
   );
+  onProgress?.({ phase: 'scanning', processed: 0, total: 0 });
+  const files = await markdownFiles(handle, () =>
+    assertDataOperationCurrent(operation),
+  );
+  const existing = new Map(snapshot.notes.map((note) => [note.path, note]));
   const notes: ObsidianNoteRecord[] = [];
   const changedNotes: ObsidianNoteRecord[] = [];
   let skippedFileCount = 0;
@@ -96,6 +121,7 @@ export async function indexObsidianVault(
   let changedNoteCount = 0;
 
   for (const [index, item] of files.entries()) {
+    await assertDataOperationCurrent(operation);
     onProgress?.({ phase: 'reading', processed: index, total: files.length });
     const file = await item.handle.getFile();
     if (
@@ -108,6 +134,7 @@ export async function indexObsidianVault(
     totalCharacters += file.size;
     const previous = existing.get(item.path);
     if (
+      sameVault &&
       previous &&
       previous.modifiedAt === file.lastModified &&
       previous.size === file.size &&
@@ -147,20 +174,14 @@ export async function indexObsidianVault(
       (note) => changedPaths.has(note.path) || !retainedPaths.has(note.path),
     )
     .flatMap((note) => note.fragments.map((fragment) => fragment.id));
-  const previousSettings = await loadObsidianSettings();
-  const dataChanged = changedNotes.length > 0 || removedNotes.length > 0;
+  const previousSettings = snapshot.settings;
+  const dataChanged =
+    !sameVault || changedNotes.length > 0 || removedNotes.length > 0;
   const evidenceUpdatedAt = dataChanged
     ? lastIndexedAt
     : (previousSettings.evidenceUpdatedAt ??
       previousSettings.lastIndexedAt ??
       lastIndexedAt);
-  await applyObsidianNoteChanges({
-    upserts: changedNotes,
-    removedPaths: removedNotes.map((note) => note.path),
-    removedFragmentIds,
-    allNotes: notes,
-    generatedAt: evidenceUpdatedAt,
-  });
   const settings: ObsidianSettings = {
     connected: true,
     vaultName: handle.name,
@@ -170,8 +191,19 @@ export async function indexObsidianVault(
     fragmentCount: notes.reduce((sum, note) => sum + note.fragments.length, 0),
     skippedFileCount,
   };
-  await saveObsidianSettings(settings);
+  await commitDataOperation(operation, async () => {
+    await applyObsidianNoteChanges({
+      upserts: changedNotes,
+      removedPaths: removedNotes.map((note) => note.path),
+      removedFragmentIds,
+      allNotes: notes,
+      generatedAt: evidenceUpdatedAt,
+      vaultHandle: handle,
+    });
+    await saveObsidianSettings(settings);
+  });
   return {
+    operation,
     settings,
     reusedNoteCount,
     changedNoteCount,

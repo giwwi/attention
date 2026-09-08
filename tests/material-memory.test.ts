@@ -267,8 +267,7 @@ describe('material memory', () => {
         },
       },
     });
-    expect(storage.data[MATERIAL_MEMORY_KEY]).toEqual([
-      expect.objectContaining({ actualUtilityScenario: 'work' }),
-    ]);
+    expect(storage.data[MATERIAL_MEMORY_KEY]).toEqual([legacy]);
+    expect(legacy.actualUtilityScenario).toBeUndefined();
   });
 });

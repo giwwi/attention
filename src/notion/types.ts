@@ -17,6 +17,8 @@ export interface NotionSettings {
   pageCount: number;
   fragmentCount: number;
   excludedPageCount: number;
+  /** False when request limits or incomplete page content prevented a full refresh. */
+  syncComplete?: boolean;
 }
 
 export interface NotionAuth {

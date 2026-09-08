@@ -1,3 +1,4 @@
+import { privateStorage } from '../vault/storage';
 import type {
   NovelPassageFeedbackMessage,
   NovelPassageFeedbackValue,
@@ -39,7 +40,7 @@ export function isNovelPassageFeedbackRecord(
 }
 
 export async function loadNovelPassageFeedback(
-  storage: chrome.storage.StorageArea = chrome.storage.local,
+  storage: chrome.storage.StorageArea = privateStorage,
 ): Promise<NovelPassageFeedbackRecord[]> {
   const stored = await measuredStorageGet(
     storage,
@@ -51,7 +52,7 @@ export async function loadNovelPassageFeedback(
 }
 
 export async function loadClaimMemoryRevision(
-  storage: chrome.storage.StorageArea = chrome.storage.local,
+  storage: chrome.storage.StorageArea = privateStorage,
 ): Promise<string | null> {
   const stored = await measuredStorageGet(storage, 'claim-memory-revision', [
     CLAIM_MEMORY_REVISION_KEY,
@@ -72,7 +73,7 @@ export async function loadClaimMemoryRevision(
 
 export async function recordNovelPassageFeedback(
   message: NovelPassageFeedbackMessage,
-  storage: chrome.storage.StorageArea = chrome.storage.local,
+  storage: chrome.storage.StorageArea = privateStorage,
 ): Promise<void> {
   const records = await loadNovelPassageFeedback(storage);
   const canonical = canonicalNovelPassageUrl(message.url);
@@ -89,6 +90,7 @@ export async function recordNovelPassageFeedback(
     (record) =>
       !(
         canonicalNovelPassageUrl(record.url) === canonical &&
+        normalize(record.claim) === normalize(next.claim) &&
         normalize(record.excerpt) === normalize(next.excerpt)
       ),
   );

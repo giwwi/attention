@@ -1,3 +1,4 @@
+import { privateStorage } from '../vault/storage';
 export const AI_ANALYZER_SETTINGS_KEY = 'aiAnalyzerSettings';
 export const AI_GATEWAY_DEFAULT_MODEL_ID = 'google/gemini-2.5-flash-lite';
 export const AI_GATEWAY_SUGGESTED_MODELS = [
@@ -63,19 +64,17 @@ function isLegacyAiAnalyzerSettings(
 }
 
 export async function loadAiAnalyzerSettings(): Promise<AiAnalyzerSettings | null> {
-  const stored = await chrome.storage.local.get(AI_ANALYZER_SETTINGS_KEY);
+  const stored = await privateStorage.get(AI_ANALYZER_SETTINGS_KEY);
   const value: unknown = stored[AI_ANALYZER_SETTINGS_KEY];
   if (isAiAnalyzerSettings(value)) return value;
   if (!isLegacyAiAnalyzerSettings(value)) return null;
 
-  const migrated: AiAnalyzerSettings = {
+  // Reads must not restore a key after a concurrent data erasure. The next
+  // explicit settings save persists the upgraded shape under the data lock.
+  return {
     ...value,
     model: AI_GATEWAY_DEFAULT_MODEL_ID,
   };
-  await chrome.storage.local.set({
-    [AI_ANALYZER_SETTINGS_KEY]: migrated,
-  });
-  return migrated;
 }
 
 export async function saveAiAnalyzerSettings(
@@ -93,10 +92,10 @@ export async function saveAiAnalyzerSettings(
     apiKey: normalizedKey,
     updatedAt: new Date().toISOString(),
   };
-  await chrome.storage.local.set({ [AI_ANALYZER_SETTINGS_KEY]: settings });
+  await privateStorage.set({ [AI_ANALYZER_SETTINGS_KEY]: settings });
   return settings;
 }
 
 export async function clearAiAnalyzerSettings(): Promise<void> {
-  await chrome.storage.local.remove(AI_ANALYZER_SETTINGS_KEY);
+  await privateStorage.remove(AI_ANALYZER_SETTINGS_KEY);
 }

@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   installHoverPreview,
+  materialHoverReadingPlan,
   materialReadingInfo,
   personalValuePromise,
   personalValueReason,
@@ -108,12 +109,7 @@ describe('hover preview content script', () => {
         </a>
       </article>
     `;
-    let storageChangeListener:
-      | ((
-          changes: Record<string, chrome.storage.StorageChange>,
-          areaName: string,
-        ) => void)
-      | undefined;
+    let invalidateListener: ((message: unknown) => void) | undefined;
     let previewRequestCount = 0;
     const workResponse = {
       ok: true,
@@ -160,11 +156,11 @@ describe('hover preview content script', () => {
     Object.defineProperty(globalThis, 'chrome', {
       configurable: true,
       value: {
-        runtime: { sendMessage },
-        storage: {
-          onChanged: {
+        runtime: {
+          sendMessage,
+          onMessage: {
             addListener: vi.fn((listener) => {
-              storageChangeListener = listener;
+              invalidateListener = listener;
             }),
             removeListener: vi.fn(),
           },
@@ -183,15 +179,10 @@ describe('hover preview content script', () => {
     );
     expect(host?.dataset.attentionVerdict).toBe('maybe');
 
-    storageChangeListener?.(
-      {
-        analysisContext: {
-          oldValue: { scenario: 'work' },
-          newValue: { scenario: 'learn' },
-        },
-      },
-      'local',
-    );
+    invalidateListener?.({
+      type: 'ATTENTION_INPUTS/INVALIDATED',
+      changedKeys: ['analysisContext'],
+    });
     expect(host?.style.display).toBe('none');
 
     link.dispatchEvent(new Event('pointerover', { bubbles: true }));
@@ -199,6 +190,42 @@ describe('hover preview content script', () => {
 
     expect(previewRequestCount).toBe(2);
     expect(host?.dataset.attentionVerdict).toBe('read');
+  });
+
+  it('cannot recreate a title control from a broadcast queued before profile removal', () => {
+    document.title = 'A practical reading guide';
+    document.body.innerHTML = `<article><h1>${document.title}</h1><p>${'Evidence and useful reading methods. '.repeat(100)}</p></article>`;
+    let queuedListener: ((message: unknown) => void) | undefined;
+    Object.defineProperty(globalThis, 'chrome', {
+      configurable: true,
+      value: {
+        runtime: {
+          sendMessage: vi.fn().mockResolvedValue(undefined),
+          onMessage: {
+            addListener: (listener: (message: unknown) => void) => {
+              queuedListener = listener;
+            },
+            removeListener: vi.fn(),
+          },
+        },
+      },
+    });
+    installHoverPreview();
+    expect(document.querySelector('[data-attention-trigger]')).not.toBeNull();
+    (
+      globalThis as typeof globalThis & {
+        __attentionHoverPreviewAbort?: AbortController;
+      }
+    ).__attentionHoverPreviewAbort?.abort();
+    queuedListener?.({
+      type: 'ATTENTION_INPUTS/INVALIDATED',
+      changedKeys: ['personalProfile'],
+    });
+    expect(
+      document.querySelector(
+        '[data-attention-trigger], [data-attention-preview]',
+      ),
+    ).toBeNull();
   });
 
   it('replaces an older hover runtime already installed in the page', () => {
@@ -219,7 +246,7 @@ describe('hover preview content script', () => {
     expect(hosts).toHaveLength(1);
     expect(hosts[0]?.dataset.attentionVersion).toBe(EXTENSION_RUNTIME_VERSION);
     expect(hosts[0]?.dataset.attentionContract).toBe(
-      'feed-compact-current-title-expanded-actionable-value-spa-v13',
+      'feed-compact-current-title-attention-plan-spa-v16',
     );
   });
 
@@ -246,7 +273,7 @@ describe('hover preview content script', () => {
     expect(hosts).toHaveLength(1);
     expect(hosts[0]).not.toBe(staleHost);
     expect(hosts[0]?.dataset.attentionContract).toBe(
-      'feed-compact-current-title-expanded-actionable-value-spa-v13',
+      'feed-compact-current-title-attention-plan-spa-v16',
     );
   });
 
@@ -426,6 +453,17 @@ describe('hover preview content script', () => {
         'ru',
       ),
     ).toBe('Чтение — 6 мин');
+
+    expect(materialHoverReadingPlan(preview, longMaterial)).toEqual({
+      title: '24 min article. Read 2 sections in ~24 min.',
+      headings: ['Evidence', 'Practical implications'],
+    });
+    expect(
+      materialHoverReadingPlan(
+        { ...preview, recommendedSections: ['Invented section'] },
+        longMaterial,
+      ),
+    ).toBeNull();
   });
 
   it('resolves a Substack-style post when the heading is separate from its link', () => {
@@ -805,7 +843,9 @@ describe('hover preview content script', () => {
           <a href="https://publication.substack.com/p/apple-is-the-king-of-ai">
             <h1><span>Apple Is the King of AI and Nobody Knows It</span></h1>
           </a>
+          <h2>Evidence</h2>
           <p>The dataset contains a previously unreported result.</p>
+          <h2>Practical implications</h2>
           <p>The result changes how attention should be allocated.</p>
           <p>${'A detailed article paragraph with useful evidence. '.repeat(20)}</p>
         </article>
@@ -913,20 +953,13 @@ describe('hover preview content script', () => {
     expect(host?.dataset.attentionAnalysisSource).toBe('local');
     expect(host?.dataset.attentionAiState).toBe('ready');
     expect(host?.style.pointerEvents).toBe('auto');
-    expect(host?.getAttribute('aria-label')).toContain(
-      'PROBABLY READ, 78 percent',
-    );
-    expect(host?.getAttribute('aria-label')).toContain(
-      'For you: likely 1 new fact and 1 new conclusion',
-    );
+    expect(host?.getAttribute('role')).toBe('dialog');
+    expect(host?.getAttribute('aria-label')).toBe('Attention');
+    expect(host?.dataset.attentionScore).toBe('78');
+    expect(host?.dataset.attentionHeadline).toBe('Worth reading');
     expect(host?.dataset.attentionWeakExtraction).toBe('true');
     expect(host?.dataset.attentionReadingInfo).toContain('1 min read');
-    expect(host?.getAttribute('aria-label')).toContain(
-      'Part of the text may be missing',
-    );
-    expect(host?.getAttribute('aria-label')).toContain(
-      'The topic fits you · the conclusions look convincing',
-    );
+    expect(host?.dataset.attentionPlan).toContain('Read 2 sections in ~1 min.');
     expect(onCurrentPageEvaluation).toHaveBeenCalledWith(
       expect.objectContaining({
         url: window.location.href,
@@ -1409,7 +1442,7 @@ describe('hover preview content script', () => {
     expect(host?.style.display).toBe('none');
     expect(host?.dataset.attentionExpanded).toBe('false');
     expect(host?.dataset.attentionContract).toBe(
-      'feed-compact-current-title-expanded-actionable-value-spa-v13',
+      'feed-compact-current-title-attention-plan-spa-v16',
     );
   });
 
@@ -1930,6 +1963,50 @@ describe('hover preview content script', () => {
 
     const title = document.querySelector('h2 span');
     if (!title) throw new Error('Missing account action fixture');
+    expect(resolveHoverTargetDetails(title)).toBeNull();
+  });
+
+  it.each([
+    '/intros',
+    '/onboarding?source=earnings',
+    'https://connections.example.com/explore',
+    '/articles/unlock-more-earnings-with-intros',
+  ])('ignores linked promotions on an account page: %s', (href) => {
+    window.history.replaceState({}, '', '/earnings');
+    document.body.innerHTML = `
+      <main>
+        <h1>Earnings</h1>
+        <section>
+          <a href="${href}">
+            <h2><span>Unlock more earnings with Mercor Intros</span></h2>
+            <p>Explore your connections and invite people.</p>
+          </a>
+        </section>
+      </main>
+    `;
+    const title = document.querySelector('h2 span');
+    if (!title) throw new Error('Missing account promotion fixture');
+    expect(resolveHoverTargetDetails(title)).toBeNull();
+
+    // The destination URL is not a global material whitelist: the same
+    // linked heading remains eligible on an ordinary feed.
+    window.history.replaceState({}, '', '/feed');
+    expect(resolveHoverTargetDetails(title)?.url).toBe(
+      new URL(href, window.location.href).href,
+    );
+  });
+
+  it('ignores a promotion discovered through its card on an account page', () => {
+    window.history.replaceState({}, '', '/earnings');
+    document.body.innerHTML = `
+      <main><article>
+        <h2>Unlock more earnings with Mercor Intros</h2>
+        <p>Explore your connections and invite people.</p>
+        <a href="https://connections.example.com/explore">Explore connections</a>
+      </article></main>
+    `;
+    const title = document.querySelector('h2');
+    if (!title) throw new Error('Missing account promotion card fixture');
     expect(resolveHoverTargetDetails(title)).toBeNull();
   });
 

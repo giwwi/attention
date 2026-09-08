@@ -1,4 +1,6 @@
 const EXCLUDED_ELEMENTS = new Set(['SCRIPT', 'STYLE', 'NOSCRIPT', 'TEMPLATE']);
+const ATTENTION_UI_SELECTOR =
+  '[data-attention-preview], [data-attention-trigger], [data-attention-outcome-prompt], [data-attention-novel-passages]';
 
 export function normalizeWhitespace(value: string): string {
   return value
@@ -41,6 +43,7 @@ export function extractVisibleText(root: HTMLElement = document.body): string {
       if (
         !parent ||
         EXCLUDED_ELEMENTS.has(parent.tagName) ||
+        parent.closest(ATTENTION_UI_SELECTOR) ||
         !isElementVisible(parent, visibilityCache) ||
         !normalizeWhitespace(node.textContent ?? '')
       ) {

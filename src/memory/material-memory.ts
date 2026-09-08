@@ -1,3 +1,5 @@
+import { privateStorage } from '../vault/storage';
+import { evaluationPrediction } from '../utility/prediction';
 import type {
   AttentionScenario,
   DecisionRecord,
@@ -5,6 +7,9 @@ import type {
   HoverPreviewEventMessage,
   HoverPreviewVerdict,
   StoredEvaluation,
+  MaterialOutcome,
+  UtilityOutcomeSource,
+  UtilityPredictionProvenance,
 } from '../shared/types';
 import { STORAGE_RETENTION_LIMITS } from '../storage/limits';
 import {
@@ -43,6 +48,9 @@ export interface MaterialMemoryRecord {
   actualUtility: number | null;
   actualUtilityAt: string | null;
   actualUtilityScenario: AttentionScenario | null;
+  actualUtilitySource?: UtilityOutcomeSource | null;
+  actualUtilityPrediction?: UtilityPredictionProvenance | null;
+  actualOutcome?: MaterialOutcome | null;
   updatedAt: string;
 }
 
@@ -122,7 +130,7 @@ function isMaterialMemoryRecord(value: unknown): value is MaterialMemoryRecord {
 }
 
 export async function loadMaterialMemory(
-  storage: StorageArea = chrome.storage.local,
+  storage: StorageArea = privateStorage,
 ): Promise<MaterialMemoryRecord[]> {
   const stored = await measuredStorageGet(
     storage,
@@ -131,29 +139,28 @@ export async function loadMaterialMemory(
   );
   const value = stored[MATERIAL_MEMORY_KEY];
   if (!Array.isArray(value)) return [];
-  let needsMigration = false;
   const records = value.filter(isMaterialMemoryRecord).map((record) => {
     const migrated = structuredClone(record);
+    migrated.actualUtilitySource =
+      migrated.actualUtilitySource ??
+      (migrated.actualUtility === null ? null : 'legacy-unknown');
+    migrated.actualUtilityPrediction = migrated.actualUtilityPrediction ?? null;
+    migrated.actualOutcome = migrated.actualOutcome ?? null;
     if (migrated.preview && !migrated.preview.scenario) {
       migrated.preview.scenario = 'work';
-      needsMigration = true;
     }
     if (migrated.actualUtility !== null && !migrated.actualUtilityScenario) {
       migrated.actualUtilityScenario = 'work';
-      needsMigration = true;
     }
     if (migrated.storedEvaluation) {
       const storedEvaluation = migrated.storedEvaluation;
-      if (!storedEvaluation.context.scenario) needsMigration = true;
       storedEvaluation.context = {
         ...storedEvaluation.context,
         scenario: storedEvaluation.context.scenario ?? 'work',
       };
       const evaluation = storedEvaluation.evaluation;
-      if (!evaluation.scenario || !evaluation.scenarioSignals) {
-        needsMigration = true;
-      }
       evaluation.scenario = evaluation.scenario ?? 'work';
+      evaluation.prediction = evaluationPrediction(evaluation);
       evaluation.scenarioSignals = evaluation.scenarioSignals ?? {
         relevance: evaluation.components.relevance,
         novelty: evaluation.components.novelty,
@@ -169,16 +176,14 @@ export async function loadMaterialMemory(
     }
     return migrated;
   });
-  if (needsMigration)
-    await measuredStorageSet(storage, 'material-memory', {
-      [MATERIAL_MEMORY_KEY]: records,
-    });
+  // Keep reads side-effect free: an old migrated snapshot must not recreate
+  // erased history. Normal writes persist normalized records under their lock.
   return records;
 }
 
 export async function findMaterialMemory(
   url: string,
-  storage: StorageArea = chrome.storage.local,
+  storage: StorageArea = privateStorage,
 ): Promise<MaterialMemoryRecord | null> {
   const canonical = canonicalMaterialUrl(url);
   const records = await loadMaterialMemory(storage);
@@ -221,7 +226,7 @@ async function updateMaterialMemory(
 
 export async function recordHoverPreviewEvent(
   event: HoverPreviewEventMessage,
-  storage: StorageArea = chrome.storage.local,
+  storage: StorageArea = privateStorage,
 ): Promise<MaterialMemoryRecord> {
   return updateMaterialMemory(
     event.url,
@@ -266,13 +271,19 @@ export async function recordHoverPreviewEvent(
 export async function recordMaterialEvaluation(
   storedEvaluation: StoredEvaluation,
   title: string,
-  storage: StorageArea = chrome.storage.local,
+  storage: StorageArea = privateStorage,
 ): Promise<MaterialMemoryRecord> {
   return updateMaterialMemory(
     storedEvaluation.url,
     title,
     (record) => {
-      record.storedEvaluation = storedEvaluation;
+      record.storedEvaluation = {
+        ...storedEvaluation,
+        evaluation: {
+          ...storedEvaluation.evaluation,
+          prediction: evaluationPrediction(storedEvaluation.evaluation),
+        },
+      };
     },
     storage,
     storedEvaluation.evaluation.analyzedAt,
@@ -280,7 +291,7 @@ export async function recordMaterialEvaluation(
 }
 
 export async function invalidateMaterialEvaluations(
-  storage: StorageArea = chrome.storage.local,
+  storage: StorageArea = privateStorage,
 ): Promise<void> {
   const records = await loadMaterialMemory(storage);
   if (!records.some((record) => record.storedEvaluation)) return;
@@ -295,7 +306,7 @@ export async function invalidateMaterialEvaluations(
 
 export async function recordMaterialDecision(
   decision: DecisionRecord,
-  storage: StorageArea = chrome.storage.local,
+  storage: StorageArea = privateStorage,
 ): Promise<MaterialMemoryRecord> {
   return updateMaterialMemory(
     decision.url,
@@ -308,13 +319,20 @@ export async function recordMaterialDecision(
   );
 }
 
+export interface MaterialOutcomeEvidence {
+  source: UtilityOutcomeSource;
+  prediction?: UtilityPredictionProvenance;
+  outcome?: MaterialOutcome | null;
+}
+
 export async function recordMaterialActualUtility(
   url: string,
   title: string,
   actualUtility: number,
   occurredAt: string,
-  storage: StorageArea = chrome.storage.local,
+  storage: StorageArea = privateStorage,
   scenario: AttentionScenario = 'work',
+  evidence?: MaterialOutcomeEvidence,
 ): Promise<MaterialMemoryRecord> {
   return updateMaterialMemory(
     url,
@@ -325,6 +343,9 @@ export async function recordMaterialActualUtility(
       );
       record.actualUtilityAt = occurredAt;
       record.actualUtilityScenario = scenario;
+      record.actualUtilitySource = evidence?.source ?? 'legacy-unknown';
+      record.actualUtilityPrediction = evidence?.prediction ?? null;
+      record.actualOutcome = evidence?.outcome ?? null;
     },
     storage,
     occurredAt,

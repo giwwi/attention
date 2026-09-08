@@ -5,7 +5,13 @@ import {
 import { parseObsidianNote } from '../obsidian/markdown';
 import { applyNotionPageChanges, loadNotionPages } from './database';
 import { NotionApiClient, type NotionApiPage } from './client';
-import { loadNotionSettings } from './storage';
+import { loadNotionSettings, saveNotionConnection } from './storage';
+import {
+  beginSyncOperation,
+  commitDataOperation,
+  assertDataOperationCurrent,
+  type DataOperation,
+} from '../privacy/data-operations';
 import type {
   NotionAuth,
   NotionFragment,
@@ -90,42 +96,97 @@ export async function syncNotionWorkspace(input: {
   sourceMode: NotionSourceMode;
   client: NotionApiClient;
   now?: Date;
+  operation?: DataOperation;
 }): Promise<NotionSyncResult> {
+  const operation = await beginSyncOperation('notion', input.operation);
+  await assertDataOperationCurrent(operation);
   const now = input.now ?? new Date();
-  const existing = new Map(
-    (await loadNotionPages()).map((page) => [page.id, page]),
-  );
-  const remotePages = await input.client.searchPages();
-  const pages: NotionPageRecord[] = [];
+  const snapshot = await commitDataOperation(operation, async () => ({
+    pages: await loadNotionPages(),
+    settings: await loadNotionSettings(),
+  }));
+  const existing = new Map(snapshot.pages.map((page) => [page.id, page]));
+  const sameWorkspace =
+    snapshot.settings.workspaceId === input.auth.workspaceId;
+  const retained = new Map(sameWorkspace ? existing : []);
+  const search = await input.client.searchPages();
+  const remotePages = new Map(search.pages.map((page) => [page.id, page]));
   const changedPages: NotionPageRecord[] = [];
   let excludedPageCount = 0;
+  let syncComplete = search.paginationComplete;
   let totalCharacters = 0;
 
-  for (const remote of remotePages) {
+  // Search is not an exhaustive listing, even after its last cursor. Confirm
+  // missing known pages individually; absence from a capped result is not deletion.
+  // https://developers.notion.com/reference/search-optimizations-and-limitations
+  if (sameWorkspace && search.paginationComplete) {
+    let checked = 0;
+    for (const previous of existing.values()) {
+      if (remotePages.has(previous.id)) continue;
+      if (++checked > 300) {
+        syncComplete = false;
+        continue;
+      }
+      await assertDataOperationCurrent(operation);
+      try {
+        remotePages.set(
+          previous.id,
+          await input.client.retrievePage(previous.id),
+        );
+      } catch (error) {
+        const code =
+          error && typeof error === 'object' && 'code' in error
+            ? String(error.code)
+            : '';
+        if (code === 'restricted_resource' || code === 'object_not_found') {
+          retained.delete(previous.id);
+          excludedPageCount += 1;
+        } else throw error;
+      }
+    }
+  }
+
+  for (const remote of remotePages.values()) {
+    await assertDataOperationCurrent(operation);
+    if (remote.archived || remote.in_trash) {
+      retained.delete(remote.id);
+      continue;
+    }
     const title = pageTitle(remote);
     const editedAt = numericDate(remote.last_edited_time);
-    const cached = existing.get(remote.id);
+    const cached = sameWorkspace ? existing.get(remote.id) : undefined;
     if (
       cached &&
       cached.editedAt === editedAt &&
       cached.sourceMode === input.sourceMode
     ) {
-      pages.push(cached);
+      retained.set(remote.id, cached);
       continue;
     }
     if (totalCharacters >= MAX_TOTAL_MARKDOWN_CHARS) {
       excludedPageCount += 1;
+      syncComplete = false;
       continue;
     }
     const sourceUrl = externalSourceUrl(remote);
     try {
       const response = await input.client.pageMarkdown(remote.id);
-      const markdown = response.markdown.slice(
-        0,
-        MAX_TOTAL_MARKDOWN_CHARS - totalCharacters,
-      );
+      await assertDataOperationCurrent(operation);
+      if (
+        response.truncated ||
+        response.unknown_block_ids?.length ||
+        response.markdown.length > MAX_TOTAL_MARKDOWN_CHARS - totalCharacters
+      ) {
+        excludedPageCount += 1;
+        syncComplete = false;
+        continue;
+      }
+      const markdown = response.markdown;
       totalCharacters += markdown.length;
-      if (!markdown.trim()) continue;
+      if (!markdown.trim()) {
+        retained.delete(remote.id);
+        continue;
+      }
       const parsed = parseObsidianNote({
         path: `${remote.id}.md`,
         markdown,
@@ -149,7 +210,10 @@ export async function syncNotionWorkspace(input: {
           };
         },
       );
-      if (fragments.length === 0) continue;
+      if (fragments.length === 0) {
+        retained.delete(remote.id);
+        continue;
+      }
       const changedPage: NotionPageRecord = {
         id: remote.id,
         title,
@@ -159,7 +223,7 @@ export async function syncNotionWorkspace(input: {
         sourceMode: input.sourceMode,
         fragments,
       };
-      pages.push(changedPage);
+      retained.set(remote.id, changedPage);
       changedPages.push(changedPage);
     } catch (error) {
       const code =
@@ -168,6 +232,7 @@ export async function syncNotionWorkspace(input: {
           : '';
       if (code === 'restricted_resource' || code === 'object_not_found') {
         excludedPageCount += 1;
+        retained.delete(remote.id);
         continue;
       }
       throw error;
@@ -175,6 +240,7 @@ export async function syncNotionWorkspace(input: {
   }
 
   const generatedAt = now.toISOString();
+  const pages = [...retained.values()];
   const retainedIds = new Set(pages.map((page) => page.id));
   const removedPages = [...existing.values()].filter(
     (page) => !retainedIds.has(page.id),
@@ -183,35 +249,40 @@ export async function syncNotionWorkspace(input: {
   const removedFragmentIds = [...existing.values()]
     .filter((page) => changedIds.has(page.id) || !retainedIds.has(page.id))
     .flatMap((page) => page.fragments.map((fragment) => fragment.id));
-  const previousSettings = await loadNotionSettings();
+  const previousSettings = snapshot.settings;
   const dataChanged = changedPages.length > 0 || removedPages.length > 0;
   const evidenceUpdatedAt = dataChanged
     ? generatedAt
     : (previousSettings.evidenceUpdatedAt ??
       previousSettings.lastSyncedAt ??
       generatedAt);
-  await applyNotionPageChanges({
-    upserts: changedPages,
-    removedPageIds: removedPages.map((page) => page.id),
-    removedFragmentIds,
-    allPages: pages,
-    generatedAt: evidenceUpdatedAt,
+  const settings: NotionSettings = {
+    connected: true,
+    workspaceName: input.auth.workspaceName,
+    workspaceId: input.auth.workspaceId,
+    sourceMode: input.sourceMode,
+    lastSyncedAt: generatedAt,
+    evidenceUpdatedAt,
+    pageCount: pages.length,
+    fragmentCount: pages.reduce(
+      (total, page) => total + page.fragments.length,
+      0,
+    ),
+    excludedPageCount,
+    syncComplete,
+  };
+  await commitDataOperation(operation, async () => {
+    await applyNotionPageChanges({
+      upserts: changedPages,
+      removedPageIds: removedPages.map((page) => page.id),
+      removedFragmentIds,
+      allPages: pages,
+      generatedAt: evidenceUpdatedAt,
+    });
+    await saveNotionConnection(input.client.currentAuth, settings);
   });
   return {
     auth: input.client.currentAuth,
-    settings: {
-      connected: true,
-      workspaceName: input.auth.workspaceName,
-      workspaceId: input.auth.workspaceId,
-      sourceMode: input.sourceMode,
-      lastSyncedAt: generatedAt,
-      evidenceUpdatedAt,
-      pageCount: pages.length,
-      fragmentCount: pages.reduce(
-        (total, page) => total + page.fragments.length,
-        0,
-      ),
-      excludedPageCount,
-    },
+    settings,
   };
 }

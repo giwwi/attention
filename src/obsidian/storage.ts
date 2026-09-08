@@ -1,3 +1,4 @@
+import { privateStorage } from '../vault/storage';
 import {
   EMPTY_OBSIDIAN_SETTINGS,
   OBSIDIAN_SETTINGS_KEY,
@@ -28,7 +29,7 @@ function isSettings(value: unknown): value is ObsidianSettings {
 
 export async function loadObsidianSettings(): Promise<ObsidianSettings> {
   const stored = await measuredStorageGet(
-    chrome.storage.local,
+    privateStorage,
     'obsidian-settings',
     OBSIDIAN_SETTINGS_KEY,
   );
@@ -44,14 +45,14 @@ export async function loadObsidianSettings(): Promise<ObsidianSettings> {
 export async function saveObsidianSettings(
   settings: ObsidianSettings,
 ): Promise<void> {
-  await measuredStorageSet(chrome.storage.local, 'obsidian-settings', {
+  await measuredStorageSet(privateStorage, 'obsidian-settings', {
     [OBSIDIAN_SETTINGS_KEY]: settings,
   });
 }
 
 export async function clearObsidianSettings(): Promise<void> {
   await measuredStorageRemove(
-    chrome.storage.local,
+    privateStorage,
     'obsidian-settings',
     OBSIDIAN_SETTINGS_KEY,
   );

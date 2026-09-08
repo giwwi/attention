@@ -1,4 +1,11 @@
+import { privateStorage } from '../../vault/storage';
 import { uiText, type UiLanguage } from '../../i18n/ui';
+import { popupText } from '../../i18n/popup';
+import {
+  beginDataOperation,
+  commitDataOperation,
+  DataOperationCancelledError,
+} from '../../privacy/data-operations';
 import type { PageCapture, SavedMaterial } from '../../shared/types';
 import { closeExtensionPopup, getElement, setPopupStatus } from '../dom';
 import { isSavedMaterial } from '../guards';
@@ -18,6 +25,8 @@ export interface SavedMaterialsControllerOptions {
   result: HTMLElement;
   getLanguage: () => UiLanguage;
   isMainStarted: () => boolean;
+  onShow?: () => void;
+  onClose?: () => void;
 }
 
 export class SavedMaterialsController {
@@ -53,22 +62,15 @@ export class SavedMaterialsController {
     this.options.result.hidden = true;
     if (this.options.isMainStarted()) this.options.settingsHome.hidden = false;
     this.openButton.setAttribute('aria-expanded', 'false');
+    this.options.onClose?.();
   }
 
   async save(capture: PageCapture): Promise<void> {
     const saved = await this.load();
     const next = upsertSavedMaterial(saved, capture, new Date().toISOString());
 
-    while (next.length > 0) {
-      try {
-        await chrome.storage.local.set({ [SAVED_MATERIALS_KEY]: next });
-        this.render(next);
-        return;
-      } catch {
-        next.pop();
-      }
-    }
-    throw new Error('Недостаточно места для сохранения материала.');
+    await privateStorage.set({ [SAVED_MATERIALS_KEY]: next });
+    this.render(next);
   }
 
   private bindEvents(): void {
@@ -78,7 +80,7 @@ export class SavedMaterialsController {
           setPopupStatus(
             this.options.status,
             'error',
-            'Не удалось открыть сохранённые материалы.',
+            popupText(this.options.getLanguage(), 'savedActionFailed'),
           );
         });
       } else {
@@ -89,7 +91,7 @@ export class SavedMaterialsController {
   }
 
   private async load(): Promise<SavedMaterial[]> {
-    const stored = await chrome.storage.local.get(SAVED_MATERIALS_KEY);
+    const stored = await privateStorage.get(SAVED_MATERIALS_KEY);
     const value: unknown = stored[SAVED_MATERIALS_KEY];
     return Array.isArray(value) ? value.filter(isSavedMaterial) : [];
   }
@@ -121,7 +123,8 @@ export class SavedMaterialsController {
       source.className = 'saved-material-source';
       source.textContent = material.capture.siteName;
       const title = document.createElement('h3');
-      title.textContent = material.capture.title || 'Материал без заголовка';
+      title.textContent =
+        material.capture.title || popupText(language, 'untitled');
       const savedAt = document.createElement('p');
       savedAt.className = 'saved-material-time';
       savedAt.textContent = this.formatSavedAt(material.savedAt);
@@ -141,7 +144,7 @@ export class SavedMaterialsController {
       remove.textContent = uiText(language, 'delete');
       remove.setAttribute(
         'aria-label',
-        `Удалить «${material.capture.title || 'материал'}»`,
+        `${uiText(language, 'delete')}: ${material.capture.title || popupText(language, 'article')}`,
       );
       remove.addEventListener('click', () => {
         void this.delete(material.capture.url, remove);
@@ -159,6 +162,7 @@ export class SavedMaterialsController {
     this.options.readwiseSettingsPanel.hidden = true;
     this.options.privacySettingsPanel.hidden = true;
     this.view.hidden = false;
+    this.options.onShow?.();
     this.options.result.hidden = true;
     this.openButton.setAttribute('aria-expanded', 'true');
     this.view.scrollIntoView({ block: 'start' });
@@ -178,7 +182,7 @@ export class SavedMaterialsController {
       setPopupStatus(
         this.options.status,
         'error',
-        'Не удалось открыть сохранённый материал.',
+        popupText(this.options.getLanguage(), 'savedActionFailed'),
       );
     }
   }
@@ -189,21 +193,26 @@ export class SavedMaterialsController {
   ): Promise<void> {
     button.disabled = true;
     try {
-      const saved = await this.load();
-      const next = removeSavedMaterial(saved, pageUrl);
-      await chrome.storage.local.set({ [SAVED_MATERIALS_KEY]: next });
+      const operation = await beginDataOperation();
+      const next = await commitDataOperation(operation, async () => {
+        const saved = await this.load();
+        const next = removeSavedMaterial(saved, pageUrl);
+        await privateStorage.set({ [SAVED_MATERIALS_KEY]: next });
+        return next;
+      });
       this.render(next);
       setPopupStatus(
         this.options.status,
         'success',
-        'Материал удалён из сохранённых.',
+        popupText(this.options.getLanguage(), 'savedRemoved'),
       );
-    } catch {
+    } catch (error) {
+      if (error instanceof DataOperationCancelledError) return;
       button.disabled = false;
       setPopupStatus(
         this.options.status,
         'error',
-        'Не удалось удалить материал.',
+        popupText(this.options.getLanguage(), 'savedActionFailed'),
       );
     }
   }

@@ -1,3 +1,4 @@
+import { privateStorage } from '../vault/storage';
 import type {
   MaterialDecision,
   PersonalizationSignal,
@@ -142,7 +143,7 @@ function isFeedbackRecord(value: unknown): value is ProfileFeedbackRecord {
 export async function recordProfileFeedback(
   record: Omit<ProfileFeedbackRecord, 'id' | 'createdAt'>,
 ): Promise<void> {
-  const stored = await chrome.storage.local.get(PROFILE_FEEDBACK_KEY);
+  const stored = await privateStorage.get(PROFILE_FEEDBACK_KEY);
   const value: unknown = stored[PROFILE_FEEDBACK_KEY];
   const records = Array.isArray(value) ? value.filter(isFeedbackRecord) : [];
   const next: ProfileFeedbackRecord = {
@@ -150,7 +151,7 @@ export async function recordProfileFeedback(
     id: crypto.randomUUID(),
     createdAt: new Date().toISOString(),
   };
-  await chrome.storage.local.set({
+  await privateStorage.set({
     [PROFILE_FEEDBACK_KEY]: [next, ...records].slice(
       0,
       STORAGE_RETENTION_LIMITS.profileFeedback,

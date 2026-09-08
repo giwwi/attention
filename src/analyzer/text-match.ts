@@ -29,7 +29,33 @@ const STOP_WORDS = new Set([
   'уже',
 ]);
 
-const SHORT_MEANINGFUL_TOKENS = new Set(['ai', 'ml', 'ui', 'ux', 'vr']);
+const SHORT_MEANINGFUL_TOKENS = new Set([
+  'ai',
+  'ml',
+  'ui',
+  'ux',
+  'vr',
+  'no',
+  'не',
+  'ни',
+  'g',
+  'kg',
+  'mg',
+  'm',
+  'cm',
+  'mm',
+  'km',
+  's',
+  'ms',
+  'h',
+  'г',
+  'кг',
+  'мг',
+  'м',
+  'см',
+  'мм',
+  'км',
+]);
 
 function normalizeToken(word: string): string {
   if (!/[а-яё]/u.test(word) || word.length < 6) return word;
@@ -40,12 +66,20 @@ function normalizeToken(word: string): string {
 }
 
 export function textTokens(value: string): Set<string> {
-  const words = value.match(/[\p{L}\p{N}]{2,}/gu) ?? [];
+  // Preserve quantities before splitting words: 1, 10, 1.5, -5 and 5% must
+  // not collapse to the same bag of words. Claim matching additionally checks
+  // their ordered values, units and polarity before treating overlap as known.
+  const words =
+    value
+      .normalize('NFKC')
+      .match(/[+−-]?\p{N}+(?:[.,]\p{N}+)*|[\p{L}\p{N}]+|[%‰$€£¥₹₽<>≤≥]/gu) ??
+    [];
   const tokens = new Set(
     words
       .filter(
         (word) =>
           word.length >= 3 ||
+          /\p{N}|[%‰$€£¥₹₽<>≤≥]/u.test(word) ||
           SHORT_MEANINGFUL_TOKENS.has(word.toLocaleLowerCase()) ||
           (word.toLocaleUpperCase() === word &&
             word.toLocaleLowerCase() !== word),

@@ -1,3 +1,4 @@
+import { privateStorage } from '../vault/storage';
 import type {
   AnalysisContext,
   AttentionScenario,
@@ -106,7 +107,7 @@ export function normalizeScenarioState(
 }
 
 export async function loadScenarioState(
-  storage: StorageArea = chrome.storage.local,
+  storage: StorageArea = privateStorage,
 ): Promise<ScenarioState> {
   const stored = await storage.get(SCENARIO_STATE_KEY);
   return normalizeScenarioState(stored[SCENARIO_STATE_KEY]);
@@ -114,7 +115,7 @@ export async function loadScenarioState(
 
 export async function saveScenarioState(
   state: ScenarioState,
-  storage: StorageArea = chrome.storage.local,
+  storage: StorageArea = privateStorage,
 ): Promise<void> {
   await storage.set({ [SCENARIO_STATE_KEY]: normalizeScenarioState(state) });
 }

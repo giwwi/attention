@@ -1,11 +1,14 @@
+import { isTrustedUserInteraction } from './user-interaction';
 import type { MaterialOutcome } from '../shared/types';
 import { DEFAULT_UI_LANGUAGE, uiText, type UiLanguage } from '../i18n/ui';
+import { CONTENT_THEME_CSS } from './theme';
 
 const SAVED_CONFIRMATION_MS = 450;
 
 export interface OutcomePromptController {
   show(onOutcome: (outcome: MaterialOutcome) => Promise<boolean>): void;
   hide(): void;
+  destroy(): void;
   setLanguage(language: UiLanguage): void;
 }
 
@@ -41,17 +44,19 @@ export function installOutcomePrompt(
   const shadow = host.attachShadow({ mode: shadowMode });
   const style = document.createElement('style');
   style.textContent = `
+    ${CONTENT_THEME_CSS}
     [hidden] { display: none !important; }
-    .panel { box-sizing: border-box; width: min(360px, calc(100vw - 24px)); border: 1px solid #48504c; border-radius: 14px; padding: 15px; color: #f4f7f5; background: #151a18; box-shadow: 0 18px 48px rgba(0,0,0,.34); font: 500 14px/1.35 Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+    .panel { box-sizing: border-box; width: min(360px, calc(100vw - 24px)); border: 1px solid var(--attention-border); border-radius: 14px; padding: 15px; color: var(--attention-fg); background: var(--attention-bg); box-shadow: 0 18px 48px var(--attention-shadow); font: 500 14px/1.35 Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
     .top { display: flex; align-items: start; justify-content: space-between; gap: 12px; }
     .question { margin: 0; font-size: 15px; font-weight: 750; }
-    .close { width: 28px; height: 28px; margin: -6px -6px 0 0; border: 0; border-radius: 7px; color: #aeb6b2; background: transparent; font: 600 19px/1 system-ui, sans-serif; cursor: pointer; }
-    .close:hover, .close:focus-visible { color: #fff; background: rgba(255,255,255,.08); outline: none; }
+    .close { width: 28px; height: 28px; margin: -6px -6px 0 0; border: 0; border-radius: 7px; color: var(--attention-muted); background: transparent; font: 600 19px/1 system-ui, sans-serif; cursor: pointer; }
+    .close:hover, .close:focus-visible { color: var(--attention-fg); background: var(--attention-control-hover); }
     .options { display: grid; grid-template-columns: repeat(2, 1fr); gap: 7px; margin-top: 13px; }
-    .option { min-height: 38px; border: 1px solid #4b5550; border-radius: 9px; color: #edf3f0; background: #202724; font: 700 13px/1 system-ui, sans-serif; cursor: pointer; }
-    .option:hover, .option:focus-visible { border-color: #42d392; background: #18352a; outline: none; }
+    .option { min-height: 38px; border: 1px solid var(--attention-border); border-radius: 9px; color: var(--attention-fg); background: var(--attention-control-bg); font: 700 13px/1 system-ui, sans-serif; cursor: pointer; }
+    .option:hover, .option:focus-visible { border-color: var(--attention-border-hover); background: var(--attention-control-hover); }
+    button:focus-visible { outline: 2px solid var(--attention-focus); outline-offset: 2px; }
     .option:disabled { cursor: default; opacity: .55; }
-    .confirmation { margin: 0; color: #bfead5; font-size: 14px; font-weight: 650; }
+    .confirmation { margin: 0; color: var(--attention-accent); font-size: 14px; font-weight: 650; }
   `;
   const panel = document.createElement('section');
   panel.className = 'panel';
@@ -84,9 +89,10 @@ export function installOutcomePrompt(
     const button = document.createElement('button');
     button.type = 'button';
     button.className = 'option';
+    button.dataset.outcome = outcome;
     button.textContent = uiText(language, labelKey);
-    button.addEventListener('click', async () => {
-      if (!submit) return;
+    button.addEventListener('click', async (event) => {
+      if (!isTrustedUserInteraction(event) || !submit) return;
       for (const item of buttons) item.disabled = true;
       const saved = await submit(outcome).catch(() => false);
       if (!saved) {
@@ -112,7 +118,8 @@ export function installOutcomePrompt(
   shadow.append(style, panel);
   document.documentElement.append(host);
 
-  close.addEventListener('click', () => {
+  close.addEventListener('click', (event) => {
+    if (!isTrustedUserInteraction(event)) return;
     host.style.display = 'none';
     host.dataset.state = 'dismissed';
     submit = null;
@@ -150,6 +157,12 @@ export function installOutcomePrompt(
       submit = null;
       host.dataset.state = 'hidden';
       host.style.display = 'none';
+    },
+    destroy(): void {
+      submit = null;
+      host.remove();
+      if (promptGlobal.__attentionOutcomePrompt === controller)
+        delete promptGlobal.__attentionOutcomePrompt;
     },
     setLanguage(nextLanguage): void {
       language = nextLanguage;

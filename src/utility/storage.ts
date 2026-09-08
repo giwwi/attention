@@ -1,8 +1,12 @@
+import { privateStorage } from '../vault/storage';
 import type {
   AnalysisContext,
   AttentionScenario,
   AttentionSessionRecord,
   MaterialEvaluation,
+  MaterialOutcome,
+  UtilityOutcomeSource,
+  UtilityPredictionProvenance,
 } from '../shared/types';
 import { normalizeScore } from '../analyzer/utility';
 import { STORAGE_RETENTION_LIMITS } from '../storage/limits';
@@ -17,6 +21,8 @@ import {
   type UtilityCalibrationModel,
 } from './calibration';
 
+import { normalizeUtilityPrediction } from './prediction';
+
 export const UTILITY_FEEDBACK_KEY = 'utilityFeedback';
 
 interface StorageArea {
@@ -29,12 +35,15 @@ export interface UtilityFeedbackRecord {
   sessionId: string;
   url: string;
   title: string;
+  /** Historical alias for the displayed score, never an assumed raw score. */
   predictedUtility: number;
+  prediction?: UtilityPredictionProvenance;
+  outcome?: MaterialOutcome | null;
   actualUtility: number;
   components: MaterialEvaluation['components'];
   evaluatedAt: string;
   recordedAt: string;
-  source: 'slider' | 'quick';
+  source: UtilityOutcomeSource;
   scenario: AttentionScenario;
   scenarioContext: Pick<
     AnalysisContext,
@@ -63,20 +72,23 @@ function isUtilityFeedbackRecord(
     typeof item.url === 'string' &&
     typeof item.title === 'string' &&
     typeof item.predictedUtility === 'number' &&
+    Number.isFinite(item.predictedUtility) &&
     typeof item.actualUtility === 'number' &&
+    Number.isFinite(item.actualUtility) &&
     isComponents(item.components) &&
     typeof item.evaluatedAt === 'string' &&
     typeof item.recordedAt === 'string' &&
     (item.source === undefined ||
       item.source === 'slider' ||
-      item.source === 'quick') &&
+      item.source === 'quick' ||
+      item.source === 'legacy-unknown') &&
     (item.scenario === undefined ||
       ['work', 'learn', 'explore', 'relax'].includes(String(item.scenario)))
   );
 }
 
 export async function loadUtilityFeedback(
-  storage: StorageArea = chrome.storage.local,
+  storage: StorageArea = privateStorage,
 ): Promise<UtilityFeedbackRecord[]> {
   const stored = await measuredStorageGet(
     storage,
@@ -87,7 +99,13 @@ export async function loadUtilityFeedback(
   if (!Array.isArray(value)) return [];
   const records = value.filter(isUtilityFeedbackRecord).map((record) => ({
     ...record,
-    source: record.source ?? 'slider',
+    source: record.source ?? 'legacy-unknown',
+    outcome: record.outcome ?? null,
+    prediction: normalizeUtilityPrediction(
+      record.prediction,
+      record.predictedUtility,
+      record.scenario ?? 'work',
+    ),
     scenario: record.scenario ?? 'work',
     scenarioContext: record.scenarioContext ?? {
       intent: '',
@@ -96,20 +114,13 @@ export async function loadUtilityFeedback(
       desiredEffort: null,
     },
   }));
-  const needsMigration = value.some((item) => {
-    if (!item || typeof item !== 'object') return false;
-    const record = item as Record<string, unknown>;
-    return !record.scenario || !record.scenarioContext || !record.source;
-  });
-  if (needsMigration)
-    await measuredStorageSet(storage, 'utility-feedback', {
-      [UTILITY_FEEDBACK_KEY]: records,
-    });
+  // Reads normalize legacy records in memory. A delayed read must never write
+  // an old snapshot back after another extension context erased its data.
   return records;
 }
 
 export async function loadUtilityCalibration(
-  storage: StorageArea = chrome.storage.local,
+  storage: StorageArea = privateStorage,
 ): Promise<UtilityCalibrationModel | null> {
   const stored = await measuredStorageGet(
     storage,
@@ -121,25 +132,25 @@ export async function loadUtilityCalibration(
   const feedback = await loadUtilityFeedback(storage);
   if (feedback.length === 0) return null;
   const model = buildUtilityCalibration(feedback);
-  await measuredStorageSet(storage, 'utility-calibration-migration', {
-    [UTILITY_CALIBRATION_KEY]: model,
-  });
-  return model;
+  return model.sampleSize > 0 ? model : null;
 }
 
 export async function recordActualUtility(
   session: AttentionSessionRecord,
   actualUtility: number,
-  storage: StorageArea = chrome.storage.local,
+  storage: StorageArea = privateStorage,
   now = new Date(),
-  source: UtilityFeedbackRecord['source'] = 'slider',
+  source: Exclude<UtilityOutcomeSource, 'legacy-unknown'> = 'slider',
 ): Promise<UtilityFeedbackRecord> {
   if (
-    session.expected.predictedUtility === null ||
+    typeof session.expected.predictedUtility !== 'number' ||
+    !Number.isFinite(session.expected.predictedUtility) ||
     session.expected.components === null
   ) {
     throw new Error('Для этого чтения нет сохранённого прогноза Utility.');
   }
+  if (!Number.isFinite(actualUtility))
+    throw new Error('Utility outcome must be finite.');
   const previous = await loadUtilityFeedback(storage);
   const record: UtilityFeedbackRecord = {
     id: crypto.randomUUID(),
@@ -147,6 +158,14 @@ export async function recordActualUtility(
     url: session.url,
     title: session.title,
     predictedUtility: normalizeScore(session.expected.predictedUtility),
+    prediction: normalizeUtilityPrediction(
+      session.expected.prediction,
+      session.expected.predictedUtility,
+      session.scenario,
+      session.expected.analyzerId,
+    ),
+    outcome:
+      actualUtility >= 70 ? 'yes' : actualUtility >= 40 ? 'partial' : 'no',
     actualUtility: normalizeScore(actualUtility),
     components: session.expected.components,
     evaluatedAt: session.startedAt,
@@ -177,7 +196,7 @@ export interface UtilityFeedbackStats {
 }
 
 export async function getUtilityFeedbackStats(
-  storage: StorageArea = chrome.storage.local,
+  storage: StorageArea = privateStorage,
 ): Promise<UtilityFeedbackStats> {
   const records = await loadUtilityFeedback(storage);
   const emptyByScenario = (): UtilityFeedbackStats['byScenario'] => ({

@@ -298,11 +298,30 @@ export interface MaterialEvaluationInsights {
 export type ProfileFeedbackType =
   'affirmSignal' | 'ignoreSignal' | 'wrongRecommendation';
 
+export type UtilityOutcomeSource = 'slider' | 'quick' | 'legacy-unknown';
+
+/** The exact prediction seen by the reader, separate from its pre-calibration score. */
+export interface UtilityPredictionProvenance {
+  schemaVersion: 1;
+  rawUtility: number | null;
+  displayedUtility: number;
+  scenario: AttentionScenario;
+  analyzerVersion: string | null;
+  rawScoreVersion: string | null;
+  calibrationVersion: string | null;
+  calibrationModelUpdatedAt: string | null;
+  calibrationSampleSize: number;
+  provenance: 'captured' | 'legacy-display-only';
+}
+
 export interface MaterialEvaluation {
   scenario: AttentionScenario;
   suggestedScenario?: AttentionScenario;
   recommendedAction: MaterialDecision;
   utilityScore: number;
+  prediction?: UtilityPredictionProvenance;
+  /** A suitability decision which score calibration cannot override. */
+  recommendationConstraint?: 'skip';
   components: {
     relevance: number;
     novelty: number;
@@ -342,7 +361,7 @@ export interface StoredEvaluation {
 }
 
 export interface EvaluationCacheVersion {
-  schemaVersion: 4;
+  schemaVersion: 6;
   profile: string;
   history: string;
   readwise: string;
@@ -383,6 +402,7 @@ export interface ExpectedMaterialOutcome {
   confidence: number | null;
   profileSignalIds: string[];
   predictedUtility: number | null;
+  prediction?: UtilityPredictionProvenance | null;
   components: MaterialEvaluation['components'] | null;
 }
 
@@ -408,6 +428,7 @@ export interface AttentionSessionRecord {
   outcome: MaterialOutcome | null;
   outcomeReason: MaterialOutcomeReason | null;
   outcomeAt: string | null;
+  outcomeSource?: UtilityOutcomeSource | null;
 }
 
 export const ATTENTION_SESSION_START_TYPE = 'ATTENTION_SESSION/START';
@@ -495,6 +516,8 @@ export interface CaptureResponse {
 
 export const CAPTURE_MESSAGE_TYPE = 'PAGE_CAPTURE/CAPTURE';
 export const SCROLL_TO_HEADING_MESSAGE_TYPE = 'PAGE_CAPTURE/SCROLL_TO_HEADING';
+export const HIGHLIGHT_SECTIONS_MESSAGE_TYPE =
+  'PAGE_CAPTURE/HIGHLIGHT_SECTIONS';
 
 export interface CaptureMessage {
   type: typeof CAPTURE_MESSAGE_TYPE;
@@ -508,6 +531,16 @@ export interface ScrollToHeadingMessage {
 export interface ScrollToHeadingResponse {
   ok: true;
   found: boolean;
+}
+
+export interface HighlightSectionsMessage {
+  type: typeof HIGHLIGHT_SECTIONS_MESSAGE_TYPE;
+  headings: string[];
+}
+
+export interface HighlightSectionsResponse {
+  ok: true;
+  highlighted: number;
 }
 
 export const CONTENT_RUNTIME_PING_TYPE = 'ATTENTION_RUNTIME/PING';
@@ -575,6 +608,7 @@ export interface HoverPreview {
 export interface HoverPreviewResponse {
   ok: true;
   preview: HoverPreview;
+  context?: AnalysisContext;
   saved?: boolean;
   novelPassageHighlightsEnabled?: boolean;
   readwiseConnected?: boolean;

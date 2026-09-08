@@ -128,6 +128,11 @@ function captureDocumentInternal(
   const root = findCurrentArticleRoot(document);
   const matchedTitle = findCurrentArticleTitleElement(document);
   const documentClone = readabilityDocument(document, root);
+  documentClone
+    .querySelectorAll(
+      '[data-attention-preview], [data-attention-trigger], [data-attention-outcome-prompt], [data-attention-novel-passages]',
+    )
+    .forEach((element) => element.remove());
   let article: ReturnType<Readability['parse']> = null;
   try {
     article = new Readability(documentClone, {

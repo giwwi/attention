@@ -23,14 +23,21 @@ export class FallbackAnalyzer implements Analyzer {
     material: PageCapture,
     context: AnalysisContext,
     profileContext: RelevantProfileContext | null = null,
+    signal?: AbortSignal,
   ): Promise<MaterialEvaluation> {
     try {
-      return await this.primary.analyze(material, context, profileContext);
+      return await this.primary.analyze(
+        material,
+        context,
+        profileContext,
+        signal,
+      );
     } catch (error) {
+      if (signal?.aborted) throw error;
       await Promise.resolve(this.onPrimaryFailure?.(error)).catch(
         () => undefined,
       );
-      return this.fallback.analyze(material, context, profileContext);
+      return this.fallback.analyze(material, context, profileContext, signal);
     }
   }
 }

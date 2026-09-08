@@ -1,4 +1,5 @@
 import { loadProfileHandoffState } from '../onboarding/handoff/state';
+import { VAULT_HANDOFF_NOTICE_TYPE } from '../vault/messages';
 import { PROFILE_PROVIDERS } from '../profile/providers';
 
 const NOTICE_SELECTOR = '[data-attention-profile-handoff-notice="true"]';
@@ -14,6 +15,7 @@ export interface ProfileHandoffNoticeOptions {
   storage?: StorageArea;
   copyText?: (text: string) => Promise<void>;
   platform?: string;
+  signal?: AbortSignal;
 }
 
 function isChatGptUrl(value: string): boolean {
@@ -35,8 +37,11 @@ export async function installChatGptProfileHandoffNotice(
   const currentUrl = options.currentUrl ?? window.location.href;
   if (!isChatGptUrl(currentUrl)) return null;
 
-  const storage = options.storage ?? chrome.storage.local;
-  const state = await loadProfileHandoffState(storage);
+  const state = options.storage
+    ? await loadProfileHandoffState(options.storage)
+    : (await chrome.runtime.sendMessage({ type: VAULT_HANDOFF_NOTICE_TYPE }))
+        ?.state;
+  if (options.signal?.aborted) return null;
   if (
     state?.profileImportProvider !== 'chatgpt' ||
     state.profileImportStage !== 'waiting-for-response' ||
@@ -123,6 +128,7 @@ export async function installChatGptProfileHandoffNotice(
     listeners.abort();
     host.remove();
   };
+  options.signal?.addEventListener('abort', dismiss, { once: true });
   close.addEventListener('click', dismiss, { signal: listeners.signal });
   document.addEventListener('paste', dismiss, {
     once: true,

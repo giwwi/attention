@@ -22,7 +22,7 @@ function canonicalUrl(value: string): string | null {
  * Validates page messages against the tab's current URL. `sender.url` belongs
  * to the document that created the content-script context and can remain on the
  * previous route after a History API navigation. `sender.tab.url` reflects the
- * URL currently shown in the tab, so it must be checked first for SPA pages.
+ * URL currently shown in the tab and is authoritative when present.
  */
 export function messageSenderMatchesPage(
   sender: PageMessageSender,
@@ -34,8 +34,6 @@ export function messageSenderMatchesPage(
   const expected = canonicalUrl(expectedUrl);
   if (!expected) return false;
 
-  return [sender.tab.url, sender.url].some((candidate) => {
-    if (!candidate) return false;
-    return canonicalUrl(candidate) === expected;
-  });
+  const currentUrl = sender.tab.url ?? sender.url;
+  return Boolean(currentUrl && canonicalUrl(currentUrl) === expected);
 }

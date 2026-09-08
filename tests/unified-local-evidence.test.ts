@@ -70,6 +70,39 @@ const claim: KeyClaimAssessment = {
 };
 
 describe('unified local evidence', () => {
+  it.each(['highlight', 'own-note', 'imported'] as const)(
+    'does not convert changed quantities into known claims from %s',
+    (kind) => {
+      const text =
+        'A field experiment found that structured review reduced errors by 90 percent.';
+      const merged = mergeUnifiedLocalEvidence({ readwise })!;
+      const item = {
+        ...merged.items[0]!,
+        kind,
+        excerpt: text,
+        attentionStrength: 1,
+      };
+      const evidence = { ...merged, items: [item] };
+      const same = { ...claim, claim: text, sourceExcerpt: text };
+      const changed = {
+        ...claim,
+        claim: text.replace('90', '10'),
+        sourceExcerpt: text.replace('90', '10'),
+      };
+      expect(
+        applyUnifiedLocalEvidenceToClaim(same, evidence).knownProbability,
+      ).toBeGreaterThan(claim.knownProbability);
+      expect(applyUnifiedLocalEvidenceToClaim(changed, evidence)).toEqual(
+        changed,
+      );
+      expect(
+        applyUnifiedLocalEvidenceToClaim(
+          { ...changed, sourceExcerpt: text },
+          evidence,
+        ).knownProbability,
+      ).toBe(claim.knownProbability);
+    },
+  );
   it('deduplicates one material stored in multiple connectors', () => {
     const merged = mergeUnifiedLocalEvidence({ readwise, notion });
 

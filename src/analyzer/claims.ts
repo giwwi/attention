@@ -5,6 +5,7 @@ import {
   type HeuristicLanguageResolution,
 } from './language-heuristics';
 import { textTokens, tokenOverlap } from './text-match';
+import { claimsFactuallyCompatible } from './claim-match';
 import { CLAIM_EXTRACTION_LIMITS } from './config';
 
 export interface ExtractedClaim {
@@ -78,6 +79,7 @@ function sentenceCandidates(
 }
 
 function sentenceSimilarity(left: string, right: string): number {
+  if (!claimsFactuallyCompatible(left, right)) return 0;
   const leftTokens = textTokens(left);
   const rightTokens = textTokens(right);
   const overlap = tokenOverlap(leftTokens, rightTokens);

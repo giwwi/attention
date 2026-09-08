@@ -4,8 +4,44 @@ import {
   syncReadwiseLibrary,
   validateReadwiseToken,
 } from '../src/readwise/client';
+import { DataOperationCancelledError } from '../src/privacy/data-operations';
 
 describe('Readwise API client', () => {
+  it('aborts an ongoing request when its source operation is cancelled', async () => {
+    const controller = new AbortController();
+    let entered!: () => void;
+    const started = new Promise<void>((resolve) => {
+      entered = resolve;
+    });
+    const fetchImpl = vi
+      .fn<typeof fetch>()
+      .mockImplementation(async (_url, init) => {
+        entered();
+        return new Promise<Response>((_resolve, reject) => {
+          init?.signal?.addEventListener(
+            'abort',
+            () => reject(new DOMException('Aborted', 'AbortError')),
+            { once: true },
+          );
+        });
+      });
+    const pending = syncReadwiseLibrary(
+      'readwise-test-token',
+      fetchImpl,
+      new Date(),
+      null,
+      null,
+      controller.signal,
+    );
+    const rejected = expect(pending).rejects.toBeInstanceOf(
+      DataOperationCancelledError,
+    );
+    await started;
+    controller.abort();
+    await rejected;
+    expect(fetchImpl).toHaveBeenCalledOnce();
+    expect(fetchImpl.mock.calls[0]?.[1]?.signal?.aborted).toBe(true);
+  });
   it('validates the token and follows export pagination', async () => {
     const fetchImpl = vi
       .fn<typeof fetch>()

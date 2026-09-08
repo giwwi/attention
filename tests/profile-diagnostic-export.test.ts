@@ -139,10 +139,17 @@ describe('diagnostic profile export', () => {
     );
 
     const serialized = JSON.stringify(snapshot);
-    expect(snapshot.profile?.goals[0]?.goal).toBe('Improve article evaluation');
-    expect(snapshot.evidence.browserHistory?.topics[0]?.topic).toBe(
+    expect(snapshot.exportSchemaVersion).toBe(2);
+    expect(snapshot.profile.goalCount).toBe(1);
+    expect(snapshot.evidence.browserHistory.processedUrlCount).toBe(25);
+    for (const secret of [
+      'Improve article evaluation',
       'machine learning',
-    );
+      'example.com',
+      'currentContext',
+      '2026-08-28T08:00:00.000Z',
+    ])
+      expect(serialized).not.toContain(secret);
     expect(snapshot.feedback.novelty).toMatchObject({
       total: 1,
       markedNew: 1,

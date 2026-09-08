@@ -1,3 +1,7 @@
+import {
+  beginDataOperation,
+  assertDataOperationCurrent,
+} from '../../privacy/data-operations';
 import { loadPublicSession } from '../../auth/session';
 import {
   clearDiagnostics,
@@ -7,7 +11,6 @@ import {
 import type { UiLanguage } from '../../i18n/ui';
 import { deleteAllAttentionData } from '../../privacy/data-erasure';
 import { loadPrivacySettings, saveLocalOnlyMode } from '../../privacy/settings';
-import { NOTION_DISCONNECT_TYPE } from '../../notion/messages';
 import {
   createDiagnosticProfileExport,
   diagnosticProfileFilename,
@@ -59,23 +62,24 @@ const ru: PrivacyCopy = {
   done: 'Готово',
   localTitle: 'Только локально',
   localDescription: 'Жёстко запрещает любые облачные AI-запросы',
-  localOn: 'Включено: данные не покидают устройство.',
-  localOff: 'Выключено: разрешены облачные запросы после вашего действия.',
+  localOn:
+    'Включено: облачный AI заблокирован. Подключённые сервисы работают по вашему запросу.',
+  localOff: 'Выключено: облачный AI доступен после вашего действия.',
   gatewayTitle: 'Когда используется Gateway',
   gatewayDescription:
-    'Только после вашего действия и только если локальный режим выключен. Передаются текст текущей страницы, задача и не более нескольких локально выбранных сигналов — никогда не полный профиль.',
+    'После вашего запроса, если локальный режим выключен, Vercel AI Gateway и выбранная модель получают текст статьи, цель и выбранные сигналы профиля, знаний и истории. При создании профиля с AI передаются ваши ответы. Полный профиль и исходные заметки не отправляются.',
   accessTitle: 'Доступ ко всем сайтам',
   accessDescription:
     'Он нужен, чтобы карточки работали на обычных веб-страницах. Attention читает видимый текст локально; само разрешение не означает отправку данных в сеть.',
   sessionTitle: 'Публичная сессия',
   sessionActive: 'Активна защищённая краткосрочная сессия.',
   sessionInactive: 'Сессии нет. Общий секрет не встроен в расширение.',
-  profileExportTitle: 'Диагностический профиль',
+  profileExportTitle: 'Сводка для диагностики',
   profileExportDescription:
-    'Скачивает сигналы профиля и агрегированную статистику для анализа. Без ключей, токенов, списка посещённых страниц и текстов заметок.',
+    'Только версия расширения и общие счётчики. Без содержания профиля, целей, тем, адресов, текстов и ключей.',
   exportProfile: 'Скачать безопасный JSON',
-  profileExported: 'Диагностический профиль скачан: {filename}',
-  profileExportFailed: 'Не удалось создать диагностический профиль.',
+  profileExported: 'Диагностическая сводка скачана: {filename}',
+  profileExportFailed: 'Не удалось создать диагностическую сводку.',
   diagnosticsTitle: 'Диагностика',
   diagnosticsDescription:
     'Только коды сбоев и время. Без URL, текста страниц, профиля, ключей, токенов и исходных сообщений ошибок.',
@@ -101,23 +105,24 @@ const en: PrivacyCopy = {
   done: 'Done',
   localTitle: 'Local only',
   localDescription: 'Hard-block every cloud AI request',
-  localOn: 'On: data stays on this device.',
-  localOff: 'Off: cloud requests are allowed after your action.',
+  localOn:
+    'On: cloud AI is blocked. Connected services still work when you request them.',
+  localOff: 'Off: cloud AI is available after your action.',
   gatewayTitle: 'When Gateway is used',
   gatewayDescription:
-    'Only after your action and only when local-only mode is off. Attention sends the current page text, your task and a few locally selected signals—never your full profile.',
+    'On your request, with local-only mode off, Vercel AI Gateway and your selected model receive article text, your goal and selected profile, knowledge and history signals. AI profile creation sends your answers instead. Your full profile and original notes are not sent.',
   accessTitle: 'Access to all websites',
   accessDescription:
     'This is required for cards on normal web pages. Attention reads visible text locally; the permission itself does not send data anywhere.',
   sessionTitle: 'Public session',
   sessionActive: 'A protected short-lived session is active.',
   sessionInactive: 'No session. No shared secret is embedded in the extension.',
-  profileExportTitle: 'Diagnostic profile',
+  profileExportTitle: 'Diagnostic summary',
   profileExportDescription:
-    'Downloads profile signals and aggregate statistics for analysis. No keys, tokens, visited-page list or note text.',
+    'Extension version and aggregate counts only. No profile content, goals, topics, addresses, text or keys.',
   exportProfile: 'Download safe JSON',
-  profileExported: 'Diagnostic profile downloaded: {filename}',
-  profileExportFailed: 'Could not create the diagnostic profile.',
+  profileExported: 'Diagnostic summary downloaded: {filename}',
+  profileExportFailed: 'Could not create the diagnostic summary.',
   diagnosticsTitle: 'Diagnostics',
   diagnosticsDescription:
     'Failure codes and timestamps only. No URLs, page text, profile values, keys, tokens or raw error messages.',
@@ -143,9 +148,15 @@ const overrides: Partial<Record<UiLanguage, Partial<PrivacyCopy>>> = {
     done: 'Fertig',
     localTitle: 'Nur lokal',
     localDescription: 'Blockiert alle Cloud-AI-Anfragen vollständig',
-    localOn: 'Aktiv: Daten bleiben auf diesem Gerät.',
-    localOff: 'Inaktiv: Cloud-Anfragen sind nach Ihrer Aktion erlaubt.',
-    profileExportTitle: 'Diagnoseprofil',
+    localOn:
+      'Aktiv: Cloud-KI ist blockiert. Verbundene Dienste funktionieren weiterhin auf Ihre Anfrage.',
+    localOff: 'Inaktiv: Cloud-KI ist nach Ihrer Aktion verfügbar.',
+    gatewayTitle: 'Wann Gateway verwendet wird',
+    gatewayDescription:
+      'Auf Ihre Anfrage und bei deaktiviertem lokalen Modus erhalten Vercel AI Gateway und das gewählte Modell Artikeltext, Ziel und ausgewählte Profil-, Wissens- und Verlaufssignale. Bei der KI-Profilerstellung werden stattdessen Ihre Antworten gesendet. Das vollständige Profil und Originalnotizen werden nicht gesendet.',
+    profileExportTitle: 'Diagnoseübersicht',
+    profileExportDescription:
+      'Nur Erweiterungsversion und Gesamtzahlen. Keine Profilinhalte, Ziele, Themen, Adressen, Texte oder Schlüssel.',
     exportProfile: 'Sicheres JSON herunterladen',
     deleteButton: 'Alles löschen',
   },
@@ -156,9 +167,15 @@ const overrides: Partial<Record<UiLanguage, Partial<PrivacyCopy>>> = {
     done: 'Listo',
     localTitle: 'Solo local',
     localDescription: 'Bloquea todas las solicitudes de IA en la nube',
-    localOn: 'Activado: los datos permanecen en este dispositivo.',
-    localOff: 'Desactivado: permite la nube después de tu acción.',
-    profileExportTitle: 'Perfil de diagnóstico',
+    localOn:
+      'Activado: la IA en la nube está bloqueada. Los servicios conectados siguen funcionando cuando los solicitas.',
+    localOff: 'Desactivado: la IA en la nube está disponible tras tu acción.',
+    gatewayTitle: 'Cuándo se usa Gateway',
+    gatewayDescription:
+      'A petición tuya y con el modo local desactivado, Vercel AI Gateway y el modelo elegido reciben el texto, tu objetivo y señales seleccionadas del perfil, conocimientos e historial. Al crear un perfil con IA se envían tus respuestas. No se envían el perfil completo ni las notas originales.',
+    profileExportTitle: 'Resumen de diagnóstico',
+    profileExportDescription:
+      'Solo la versión de la extensión y cifras agregadas. Sin contenido del perfil, objetivos, temas, direcciones, textos ni claves.',
     exportProfile: 'Descargar JSON seguro',
     deleteButton: 'Eliminar todo',
   },
@@ -169,9 +186,16 @@ const overrides: Partial<Record<UiLanguage, Partial<PrivacyCopy>>> = {
     done: 'Terminé',
     localTitle: 'Local uniquement',
     localDescription: 'Bloque toutes les requêtes IA dans le cloud',
-    localOn: 'Activé : les données restent sur cet appareil.',
-    localOff: 'Désactivé : le cloud est permis après votre action.',
-    profileExportTitle: 'Profil de diagnostic',
+    localOn:
+      'Activé : l’IA dans le cloud est bloquée. Les services connectés restent disponibles sur votre demande.',
+    localOff:
+      'Désactivé : l’IA dans le cloud est disponible après votre action.',
+    gatewayTitle: 'Quand Gateway est utilisé',
+    gatewayDescription:
+      'Sur votre demande, avec le mode local désactivé, Vercel AI Gateway et le modèle choisi reçoivent le texte, votre objectif et des signaux sélectionnés du profil, des connaissances et de l’historique. La création du profil avec l’IA envoie vos réponses. Le profil complet et les notes originales ne sont pas envoyés.',
+    profileExportTitle: 'Résumé de diagnostic',
+    profileExportDescription:
+      'Uniquement la version de l’extension et des totaux. Aucun contenu du profil, objectif, sujet, adresse, texte ou clé.',
     exportProfile: 'Télécharger le JSON sécurisé',
     deleteButton: 'Tout supprimer',
   },
@@ -182,9 +206,15 @@ const overrides: Partial<Record<UiLanguage, Partial<PrivacyCopy>>> = {
     done: 'Fatto',
     localTitle: 'Solo locale',
     localDescription: 'Blocca tutte le richieste AI al cloud',
-    localOn: 'Attivo: i dati restano su questo dispositivo.',
-    localOff: 'Disattivo: il cloud è consentito dopo una tua azione.',
-    profileExportTitle: 'Profilo diagnostico',
+    localOn:
+      'Attivo: l’AI nel cloud è bloccata. I servizi collegati funzionano ancora su tua richiesta.',
+    localOff: 'Disattivo: l’AI nel cloud è disponibile dopo una tua azione.',
+    gatewayTitle: 'Quando viene usato Gateway',
+    gatewayDescription:
+      'Su tua richiesta, con la modalità locale disattivata, Vercel AI Gateway e il modello scelto ricevono il testo, il tuo obiettivo e segnali selezionati di profilo, conoscenze e cronologia. La creazione del profilo con AI invia le tue risposte. Il profilo completo e le note originali non vengono inviati.',
+    profileExportTitle: 'Riepilogo diagnostico',
+    profileExportDescription:
+      'Solo versione dell’estensione e conteggi aggregati. Nessun contenuto del profilo, obiettivo, argomento, indirizzo, testo o chiave.',
     exportProfile: 'Scarica JSON sicuro',
     deleteButton: 'Elimina tutto',
   },
@@ -195,9 +225,14 @@ const overrides: Partial<Record<UiLanguage, Partial<PrivacyCopy>>> = {
     done: '完成',
     localTitle: '仅本地',
     localDescription: '彻底阻止所有云端 AI 请求',
-    localOn: '已开启：数据不会离开此设备。',
-    localOff: '已关闭：您操作后可使用云端请求。',
-    profileExportTitle: '诊断资料',
+    localOn: '已开启：云端 AI 已被阻止。已连接的服务仍可按您的请求运行。',
+    localOff: '已关闭：您操作后可使用云端 AI。',
+    gatewayTitle: '何时使用 Gateway',
+    gatewayDescription:
+      '关闭本地模式并主动请求后，Vercel AI Gateway 和所选模型会收到文章正文、目标及选定的个人资料、知识和历史记录信号。使用 AI 创建资料时，发送的是您的回答。完整资料和原始笔记不会发送。',
+    profileExportTitle: '诊断摘要',
+    profileExportDescription:
+      '仅包含扩展版本和汇总数量。不包含个人资料内容、目标、主题、地址、文本或密钥。',
     exportProfile: '下载安全 JSON',
     deleteButton: '删除全部',
   },
@@ -208,9 +243,15 @@ const overrides: Partial<Record<UiLanguage, Partial<PrivacyCopy>>> = {
     done: 'تم',
     localTitle: 'محلي فقط',
     localDescription: 'يحظر جميع طلبات الذكاء الاصطناعي السحابية',
-    localOn: 'مفعّل: تبقى البيانات على هذا الجهاز.',
-    localOff: 'معطّل: يسمح بالسحابة بعد إجراء منك.',
-    profileExportTitle: 'ملف التشخيص',
+    localOn:
+      'مفعّل: الذكاء الاصطناعي السحابي محظور. تظل الخدمات المتصلة متاحة عند طلبك.',
+    localOff: 'معطّل: الذكاء الاصطناعي السحابي متاح بعد إجراء منك.',
+    gatewayTitle: 'متى تُستخدم Gateway',
+    gatewayDescription:
+      'بطلب منك ومع إيقاف الوضع المحلي، تتلقى Vercel AI Gateway والنموذج المختار نص المقال وهدفك وإشارات مختارة من الملف والمعرفة وسجل التصفح. عند إنشاء الملف بالذكاء الاصطناعي تُرسل إجاباتك بدلاً من ذلك. لا يُرسل الملف الكامل أو الملاحظات الأصلية.',
+    profileExportTitle: 'ملخص التشخيص',
+    profileExportDescription:
+      'إصدار الإضافة والأعداد الإجمالية فقط. لا محتوى الملف أو الأهداف أو المواضيع أو العناوين أو النصوص أو المفاتيح.',
     exportProfile: 'تنزيل JSON آمن',
     deleteButton: 'حذف الكل',
   },
@@ -221,9 +262,15 @@ const overrides: Partial<Record<UiLanguage, Partial<PrivacyCopy>>> = {
     done: 'पूर्ण',
     localTitle: 'केवल लोकल',
     localDescription: 'सभी क्लाउड AI अनुरोधों को रोकता है',
-    localOn: 'चालू: डेटा इसी डिवाइस पर रहता है।',
-    localOff: 'बंद: आपकी कार्रवाई के बाद क्लाउड की अनुमति है।',
-    profileExportTitle: 'डायग्नोस्टिक प्रोफ़ाइल',
+    localOn:
+      'चालू: क्लाउड AI अवरुद्ध है। जुड़ी हुई सेवाएँ आपके अनुरोध पर उपलब्ध रहती हैं।',
+    localOff: 'बंद: आपकी कार्रवाई के बाद क्लाउड AI उपलब्ध है।',
+    gatewayTitle: 'Gateway का उपयोग कब होता है',
+    gatewayDescription:
+      'आपके अनुरोध पर, लोकल मोड बंद होने पर, Vercel AI Gateway और चुने गए मॉडल को लेख, आपका लक्ष्य और प्रोफ़ाइल, ज्ञान तथा इतिहास के चुने हुए संकेत मिलते हैं। AI से प्रोफ़ाइल बनाने पर आपके उत्तर भेजे जाते हैं। पूरी प्रोफ़ाइल और मूल नोट्स नहीं भेजे जाते।',
+    profileExportTitle: 'डायग्नोस्टिक सारांश',
+    profileExportDescription:
+      'केवल एक्सटेंशन का संस्करण और कुल संख्याएँ। प्रोफ़ाइल की सामग्री, लक्ष्य, विषय, पते, पाठ या कुंजियाँ शामिल नहीं हैं।',
     exportProfile: 'सुरक्षित JSON डाउनलोड करें',
     deleteButton: 'सब हटाएँ',
   },
@@ -364,7 +411,9 @@ export class PrivacyController {
   }
 
   private async copyDiagnostics(): Promise<void> {
+    const operation = await beginDataOperation();
     const entries = await loadDiagnostics();
+    await assertDataOperationCurrent(operation);
     await navigator.clipboard.writeText(diagnosticsExport(entries));
     setPopupStatus(
       this.options.status,
@@ -381,7 +430,9 @@ export class PrivacyController {
   private async exportDiagnosticProfile(): Promise<void> {
     const copy = copyFor(this.options.getLanguage());
     try {
+      const operation = await beginDataOperation();
       const snapshot = await createDiagnosticProfileExport();
+      await assertDataOperationCurrent(operation);
       const filename = diagnosticProfileFilename();
       downloadDiagnosticProfile(snapshot, filename);
       setPopupStatus(
@@ -397,9 +448,6 @@ export class PrivacyController {
   private async deleteAll(): Promise<void> {
     const copy = copyFor(this.options.getLanguage());
     if (!window.confirm(copy.deleteConfirm)) return;
-    await chrome.runtime
-      .sendMessage({ type: NOTION_DISCONNECT_TYPE })
-      .catch(() => undefined);
     await deleteAllAttentionData();
     await chrome.permissions
       .remove({ permissions: ['history'] })

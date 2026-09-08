@@ -1,3 +1,4 @@
+import { privateStorage } from '../../vault/storage';
 import type { UiLanguage } from '../../i18n/ui';
 import { invalidateMaterialEvaluations } from '../../memory/material-memory';
 import {
@@ -348,11 +349,12 @@ export class ReadwiseController {
     if (!window.confirm(copy.disconnectConfirm)) return;
     this.setBusy(true);
     try {
-      await Promise.all([
-        clearReadwiseConnection(),
-        chrome.storage.local.remove(LATEST_EVALUATION_KEY),
-        invalidateMaterialEvaluations(),
-      ]);
+      await clearReadwiseConnection(() =>
+        Promise.all([
+          privateStorage.remove(LATEST_EVALUATION_KEY),
+          invalidateMaterialEvaluations(),
+        ]),
+      );
       await this.refresh();
       this.options.onEvidenceChanged();
       setPopupStatus(this.options.status, 'success', copy.disconnectedSuccess);

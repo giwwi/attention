@@ -1,3 +1,4 @@
+import { privateStorage } from '../vault/storage';
 import {
   READWISE_EVIDENCE_KEY,
   READWISE_SETTINGS_KEY,
@@ -12,6 +13,7 @@ import {
   measuredStorageRemove,
   measuredStorageSet,
 } from '../storage/measured-storage';
+import { cancelSyncOperation } from '../privacy/data-operations';
 
 interface StoredReadwiseToken {
   token: string;
@@ -36,24 +38,20 @@ function isSettings(value: unknown): value is ReadwiseSettings {
 
 export async function loadReadwiseEvidence(): Promise<ReadwiseEvidence | null> {
   const stored = await measuredStorageGet(
-    chrome.storage.local,
+    privateStorage,
     'readwise-evidence',
     READWISE_EVIDENCE_KEY,
   );
   const value: unknown = stored[READWISE_EVIDENCE_KEY];
   if (!isReadwiseEvidence(value)) return null;
-  const indexed = ensureReadwiseSearchIndex(value);
-  if (indexed !== value) {
-    await measuredStorageSet(chrome.storage.local, 'readwise-index-migration', {
-      [READWISE_EVIDENCE_KEY]: indexed,
-    });
-  }
-  return indexed;
+  // Upgrade the in-memory view only. A delayed read must not resurrect an
+  // erased library; the next explicit sync persists the current index.
+  return ensureReadwiseSearchIndex(value);
 }
 
 export async function loadReadwiseSettings(): Promise<ReadwiseSettings> {
   const stored = await measuredStorageGet(
-    chrome.storage.local,
+    privateStorage,
     'readwise-settings',
     READWISE_SETTINGS_KEY,
   );
@@ -76,7 +74,7 @@ export async function loadReadwiseSettings(): Promise<ReadwiseSettings> {
 
 export async function loadReadwiseToken(): Promise<string | null> {
   const stored = await measuredStorageGet(
-    chrome.storage.local,
+    privateStorage,
     'readwise-token',
     READWISE_TOKEN_KEY,
   );
@@ -100,7 +98,7 @@ export async function saveReadwiseConnection(
     noteCount: evidence.noteCount,
     excludedSourceCount: evidence.excludedSourceCount,
   };
-  await measuredStorageSet(chrome.storage.local, 'readwise', {
+  await measuredStorageSet(privateStorage, 'readwise', {
     [READWISE_TOKEN_KEY]: {
       token,
       updatedAt: new Date().toISOString(),
@@ -123,16 +121,21 @@ export async function saveReadwiseEvidence(
     noteCount: evidence.noteCount,
     excludedSourceCount: evidence.excludedSourceCount,
   };
-  await measuredStorageSet(chrome.storage.local, 'readwise', {
+  await measuredStorageSet(privateStorage, 'readwise', {
     [READWISE_EVIDENCE_KEY]: evidence,
     [READWISE_SETTINGS_KEY]: settings,
   });
 }
 
-export async function clearReadwiseConnection(): Promise<void> {
-  await measuredStorageRemove(chrome.storage.local, 'readwise', [
-    READWISE_TOKEN_KEY,
-    READWISE_EVIDENCE_KEY,
-    READWISE_SETTINGS_KEY,
-  ]);
+export async function clearReadwiseConnection(
+  additionalClear?: () => Promise<unknown>,
+): Promise<void> {
+  await cancelSyncOperation('readwise', async () => {
+    await measuredStorageRemove(privateStorage, 'readwise', [
+      READWISE_TOKEN_KEY,
+      READWISE_EVIDENCE_KEY,
+      READWISE_SETTINGS_KEY,
+    ]);
+    await additionalClear?.();
+  });
 }

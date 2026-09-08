@@ -69,7 +69,8 @@ export function createEvaluationCacheVersion(
   sources: EvaluationSourceVersions,
 ): EvaluationCacheVersion {
   return {
-    schemaVersion: 4,
+    // Revision 6 adds factual guards and versioned raw/display calibration.
+    schemaVersion: 6,
     ...sources,
     articleText: features.articleTextFingerprint,
     analysisContext: analysisContextFingerprint(context),
@@ -82,7 +83,7 @@ function sameSources(
   context: AnalysisContext,
 ): boolean {
   return Boolean(
-    stored?.schemaVersion === 4 &&
+    stored?.schemaVersion === 6 &&
     stored.profile === sources.profile &&
     stored.history === sources.history &&
     stored.readwise === sources.readwise &&

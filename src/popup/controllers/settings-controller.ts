@@ -1,3 +1,4 @@
+import { privateStorage } from '../../vault/storage';
 import {
   DEFAULT_UI_LANGUAGE,
   UI_LANGUAGE_KEY,
@@ -6,7 +7,12 @@ import {
   type UiLanguage,
   type UiTextKey,
 } from '../../i18n/ui';
-import type { FirstValueSelection } from '../../onboarding/first-value';
+import { popupText, translatePopup } from '../../i18n/popup';
+import {
+  beginDataOperation,
+  commitDataOperation,
+  type DataOperation,
+} from '../../privacy/data-operations';
 import {
   changeScenario,
   contextFromScenarioState,
@@ -35,6 +41,7 @@ export interface SettingsControllerOptions {
   onEvaluationInvalidated: () => void;
   onTranslated: (language: UiLanguage) => void;
   onLanguageChanged: () => Promise<void> | void;
+  onContextChanged?: (operation: DataOperation) => Promise<void> | void;
 }
 
 export class SettingsController {
@@ -45,6 +52,8 @@ export class SettingsController {
     getElement<HTMLSpanElement>('intent-label-text');
   private readonly scenarioSelect =
     getElement<HTMLSelectElement>('scenario-select');
+  private readonly availableMinutesSelect =
+    getElement<HTMLSelectElement>('available-minutes');
   private readonly relaxContext = getElement<HTMLElement>('relax-context');
   private readonly relaxIntentSelect =
     getElement<HTMLSelectElement>('relax-intent');
@@ -69,23 +78,34 @@ export class SettingsController {
     return this.scenarioState.scenario;
   }
 
+  resetAfterErasure(): void {
+    if (this.intentSaveTimer !== null)
+      window.clearTimeout(this.intentSaveTimer);
+    this.intentSaveTimer = null;
+    this.intentInput.value = '';
+    this.scenarioState = createDefaultScenarioState();
+    this.availableMinutesSelect.value = '15';
+  }
+
   currentContext(): AnalysisContext {
     return contextFromScenarioState(
       this.scenarioState,
       this.intentInput.value.trim(),
-      15,
+      normalizeAnalysisContext({
+        availableMinutes: this.availableMinutesSelect.value,
+      }).availableMinutes,
     );
   }
 
   async initializeLanguage(): Promise<void> {
-    const stored = await chrome.storage.local.get(UI_LANGUAGE_KEY);
+    const stored = await privateStorage.get(UI_LANGUAGE_KEY);
     this.translate(normalizeUiLanguage(stored[UI_LANGUAGE_KEY]));
   }
 
   async initializeScenario(): Promise<void> {
     const [scenarioState, stored] = await Promise.all([
       loadScenarioState(),
-      chrome.storage.local.get(NOVEL_PASSAGE_HIGHLIGHTS_KEY),
+      privateStorage.get(NOVEL_PASSAGE_HIGHLIGHTS_KEY),
     ]);
     this.scenarioState = scenarioState;
     this.novelPassageHighlights.checked = novelPassageHighlightsEnabled(
@@ -98,35 +118,38 @@ export class SettingsController {
   applyContext(context: AnalysisContext): void {
     const normalized = normalizeAnalysisContext(context);
     this.intentInput.value = normalized.intent;
+    this.availableMinutesSelect.value = String(normalized.availableMinutes);
     this.renderScenarioControls();
   }
 
-  async applyFirstValue(selection: FirstValueSelection): Promise<void> {
-    this.scenarioState = changeScenario(
-      createDefaultScenarioState(),
-      selection.scenario,
-    );
-    this.intentInput.value = selection.interest;
-    await saveScenarioState(this.scenarioState);
-    await chrome.storage.local.set({
-      [ANALYSIS_CONTEXT_KEY]: this.currentContext(),
-    });
-  }
-
   private bindEvents(): void {
+    this.availableMinutesSelect.addEventListener('change', () => {
+      this.options.onEvaluationInvalidated();
+      void this.persistContext().catch(() => {
+        setPopupStatus(
+          this.options.status,
+          'error',
+          popupText(this.language, 'settingsFailed'),
+        );
+      });
+    });
     this.intentInput.addEventListener('input', () => {
       this.options.onEvaluationInvalidated();
+      const operation = beginDataOperation();
+      void operation.catch(() => undefined);
       if (this.intentSaveTimer !== null) {
         window.clearTimeout(this.intentSaveTimer);
       }
       this.intentSaveTimer = window.setTimeout(() => {
-        void this.persistContext().catch(() => {
-          setPopupStatus(
-            this.options.status,
-            'error',
-            'Не удалось сохранить настройки.',
-          );
-        });
+        void operation
+          .then((value) => this.persistContext(value))
+          .catch(() => {
+            setPopupStatus(
+              this.options.status,
+              'error',
+              popupText(this.language, 'settingsFailed'),
+            );
+          });
       }, 250);
     });
 
@@ -137,7 +160,7 @@ export class SettingsController {
         setPopupStatus(
           this.options.status,
           'error',
-          'Не удалось сменить сценарий.',
+          popupText(this.language, 'settingsFailed'),
         );
       });
     });
@@ -147,7 +170,7 @@ export class SettingsController {
         setPopupStatus(
           this.options.status,
           'error',
-          'Не удалось обновить контекст отдыха.',
+          popupText(this.language, 'settingsFailed'),
         );
       });
     });
@@ -156,7 +179,7 @@ export class SettingsController {
         setPopupStatus(
           this.options.status,
           'error',
-          'Не удалось обновить желаемое усилие.',
+          popupText(this.language, 'settingsFailed'),
         );
       });
     });
@@ -167,13 +190,13 @@ export class SettingsController {
         setPopupStatus(
           this.options.status,
           'error',
-          'Не удалось сохранить язык интерфейса.',
+          popupText(this.language, 'settingsFailed'),
         );
       });
     });
 
     this.novelPassageHighlights.addEventListener('change', () => {
-      void chrome.storage.local
+      void privateStorage
         .set({
           [NOVEL_PASSAGE_HIGHLIGHTS_KEY]: this.novelPassageHighlights.checked,
         })
@@ -183,7 +206,7 @@ export class SettingsController {
           setPopupStatus(
             this.options.status,
             'error',
-            'Не удалось сохранить настройку.',
+            popupText(this.language, 'settingsFailed'),
           );
         });
     });
@@ -213,20 +236,44 @@ export class SettingsController {
       const key = element.dataset.i18nPlaceholder as UiTextKey | undefined;
       if (key) element.placeholder = uiText(language, key);
     }
+    this.scenarioSelect.setAttribute(
+      'aria-label',
+      uiText(language, 'scenario'),
+    );
+    this.availableMinutesSelect.setAttribute(
+      'aria-label',
+      uiText(language, 'availableTime'),
+    );
+    for (const option of this.availableMinutesSelect.options) {
+      option.textContent = uiText(language, 'minutesShort', {
+        count: option.value,
+      });
+    }
+    translatePopup(language);
     this.renderScenarioControls();
     this.options.onTranslated(language);
   }
 
   private async selectLanguage(language: UiLanguage): Promise<void> {
+    const operation = await beginDataOperation();
     this.translate(language);
-    await chrome.storage.local.set({ [UI_LANGUAGE_KEY]: language });
+    await commitDataOperation(operation, () =>
+      privateStorage.set({ [UI_LANGUAGE_KEY]: language }),
+    );
     await this.options.onLanguageChanged();
   }
 
-  private async persistContext(): Promise<void> {
-    await chrome.storage.local.set({
-      [ANALYSIS_CONTEXT_KEY]: this.currentContext(),
+  private async persistContext(
+    suppliedOperation?: DataOperation,
+  ): Promise<void> {
+    const operation = suppliedOperation ?? (await beginDataOperation());
+    await commitDataOperation(operation, async () => {
+      await saveScenarioState(this.scenarioState);
+      await privateStorage.set({
+        [ANALYSIS_CONTEXT_KEY]: this.currentContext(),
+      });
     });
+    await this.options.onContextChanged?.(operation);
   }
 
   private renderScenarioControls(): void {
@@ -259,7 +306,7 @@ export class SettingsController {
   }
 
   private async restoreContext(): Promise<void> {
-    const stored = await chrome.storage.local.get(ANALYSIS_CONTEXT_KEY);
+    const stored = await privateStorage.get(ANALYSIS_CONTEXT_KEY);
     const value: unknown = stored[ANALYSIS_CONTEXT_KEY];
     if (!isAnalysisContext(value)) {
       this.renderScenarioControls();
@@ -270,7 +317,6 @@ export class SettingsController {
 
   private async selectScenario(scenario: AttentionScenario): Promise<void> {
     this.scenarioState = changeScenario(this.scenarioState, scenario);
-    await saveScenarioState(this.scenarioState);
     this.renderScenarioControls();
     this.options.onEvaluationInvalidated();
     await this.persistContext();
@@ -285,7 +331,6 @@ export class SettingsController {
       scenarioUpdatedAt: new Date().toISOString(),
       scenarioSource: 'manual',
     };
-    await saveScenarioState(this.scenarioState);
     this.options.onEvaluationInvalidated();
     await this.persistContext();
   }

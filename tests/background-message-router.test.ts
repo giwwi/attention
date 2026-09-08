@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   ATTENTION_OUTCOME_PROMPT_SHOWN_TYPE,
   ATTENTION_OUTCOME_SUBMIT_TYPE,
@@ -16,6 +16,23 @@ import {
 import { BROWSER_HISTORY_IMPORT_TYPE } from '../src/history/messages';
 import { READWISE_CONNECT_TYPE } from '../src/readwise/messages';
 import { NOVEL_PASSAGE_FEEDBACK_TYPE } from '../src/novelty/messages';
+import {
+  DATA_GENERATION_KEY,
+  commitDataOperation,
+} from '../src/privacy/data-operations';
+import { deleteAllAttentionData } from '../src/privacy/data-erasure';
+import { recordHoverPreviewEvent } from '../src/memory/material-memory';
+import { DataTestStorage, installDataLocks } from './helpers/data-locks';
+
+let local: DataTestStorage;
+beforeEach(() => {
+  installDataLocks();
+  local = new DataTestStorage();
+  vi.stubGlobal('chrome', {
+    storage: { local, session: new DataTestStorage() },
+  });
+});
+afterEach(() => vi.unstubAllGlobals());
 
 const capture: PageCapture = {
   title: 'Useful article',
@@ -225,7 +242,10 @@ describe('background message router', () => {
 
     expect(route(message, sender, sendResponse)).toBe(true);
     await vi.waitFor(() => {
-      expect(handleNovelPassageMessage).toHaveBeenCalledWith(message);
+      expect(handleNovelPassageMessage).toHaveBeenCalledWith(message, {
+        generation: 'initial',
+        vaultEpoch: 'business-unit-test-vault-epoch',
+      });
       expect(sendResponse).toHaveBeenCalledWith({ ok: true });
     });
 
@@ -400,5 +420,155 @@ describe('background message router', () => {
       expect(outcomeResponse).toHaveBeenCalledWith({ ok: true });
       expect(recordHoverPreviewEvent).toHaveBeenCalledTimes(1);
     });
+  });
+
+  it('drops accepted hover, progress and prompt writes that were waiting when data was erased', async () => {
+    let release!: () => void;
+    const storageReady = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const dependencies = createDependencies({
+      storageReady,
+      recordHoverPreviewEvent: vi.fn(recordHoverPreviewEvent),
+    });
+    const route = createBackgroundMessageRouter(dependencies);
+    const hover = {
+      type: HOVER_PREVIEW_EVENT_TYPE,
+      event: 'shown',
+      scenario: 'work',
+      url: capture.url,
+      title: capture.title,
+      verdict: 'read',
+      recommendedAction: 'open',
+      source: 'full-analysis',
+      signalIds: [],
+      occurredAt: '2026-08-27T08:03:00.000Z',
+    } as const;
+    route(hover, sender, vi.fn());
+    route(
+      {
+        type: ATTENTION_OUTCOME_PROMPT_SHOWN_TYPE,
+        sessionId: 'session-1',
+        url: capture.url,
+      },
+      sender,
+      vi.fn(),
+    );
+    route(
+      {
+        type: ATTENTION_SESSION_PROGRESS_TYPE,
+        sessionId: 'session-1',
+        url: capture.url,
+        visibleSeconds: 10,
+        maxScrollDepth: 25,
+        ended: false,
+        recordedAt: hover.occurredAt,
+      },
+      sender,
+      vi.fn(),
+    );
+    await deleteAllAttentionData(
+      local.area,
+      new DataTestStorage().area,
+      async () => undefined,
+    );
+    release();
+    // A fresh event behind the cancelled event proves that the queue drained.
+    route(
+      { ...hover, url: 'https://example.com/new', title: 'New article' },
+      sender,
+      vi.fn(),
+    );
+    await vi.waitFor(() =>
+      expect(dependencies.recordHoverPreviewEvent).toHaveBeenCalledTimes(1),
+    );
+    expect(dependencies.applyAttentionProgress).not.toHaveBeenCalled();
+    expect(dependencies.markOutcomePromptShown).not.toHaveBeenCalled();
+    expect(JSON.stringify(local.data)).not.toContain(capture.url);
+  });
+
+  it('retains the accepted generation for a passage action queued behind a pending request', async () => {
+    let release!: () => void;
+    const pending = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    let calls = 0;
+    const dependencies = createDependencies({
+      handleNovelPassageMessage: async (_message, operation) => {
+        if (++calls === 1) await pending;
+        await commitDataOperation(operation!, () =>
+          local.set({ novelPassageFeedback: [capture.url] }),
+        );
+        return { ok: true };
+      },
+    });
+    const route = createBackgroundMessageRouter(dependencies);
+    const message = {
+      type: NOVEL_PASSAGE_FEEDBACK_TYPE,
+      url: capture.url,
+      title: capture.title,
+      claim: 'A sufficiently long claim for the feedback contract.',
+      excerpt:
+        'The exact source passage selected by the user is stored locally.',
+      value: 'new',
+    } as const;
+    const firstResponse = vi.fn();
+    const secondResponse = vi.fn();
+    route(message, sender, firstResponse);
+    await vi.waitFor(() => expect(calls).toBe(1));
+    route(message, sender, secondResponse);
+    await deleteAllAttentionData(
+      local.area,
+      new DataTestStorage().area,
+      async () => undefined,
+    );
+    release();
+    await vi.waitFor(() =>
+      expect(secondResponse).toHaveBeenCalledWith({
+        ok: false,
+        error: 'request_failed',
+      }),
+    );
+    expect(Object.keys(local.data)).toEqual([DATA_GENERATION_KEY]);
+    expect(firstResponse).toHaveBeenCalledWith({
+      ok: false,
+      error: 'request_failed',
+    });
+  });
+
+  it('erases the active save and cancels the next save accepted before deletion', async () => {
+    let release!: () => void;
+    const pending = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const saveMaterialFromCard = vi.fn(async () => {
+      await pending;
+      await local.set({ savedMaterials: [capture] });
+      return { ok: true as const, savedCount: 1 };
+    });
+    const route = createBackgroundMessageRouter(
+      createDependencies({ saveMaterialFromCard }),
+    );
+    const firstResponse = vi.fn();
+    const secondResponse = vi.fn();
+    const message = { type: SAVE_MATERIAL_REQUEST_TYPE, capture };
+    route(message, sender, firstResponse);
+    await vi.waitFor(() =>
+      expect(saveMaterialFromCard).toHaveBeenCalledTimes(1),
+    );
+    route(message, sender, secondResponse);
+    const erase = deleteAllAttentionData(
+      local.area,
+      new DataTestStorage().area,
+      async () => undefined,
+    );
+    release();
+    await erase;
+    await vi.waitFor(() =>
+      expect(secondResponse).toHaveBeenCalledWith({ ok: false }),
+    );
+    expect(firstResponse).toHaveBeenCalledWith({ ok: true, savedCount: 1 });
+    expect(saveMaterialFromCard).toHaveBeenCalledTimes(1);
+    expect(Object.keys(local.data)).toEqual([DATA_GENERATION_KEY]);
   });
 });

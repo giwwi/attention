@@ -1,3 +1,4 @@
+import { createRawUtilityPrediction } from '../src/utility/prediction';
 import { describe, expect, it } from 'vitest';
 import {
   buildUtilityCalibration,
@@ -17,6 +18,11 @@ function feedback(
     url: `https://example.com/${index}`,
     title: `Article ${index}`,
     predictedUtility,
+    prediction: createRawUtilityPrediction(
+      predictedUtility,
+      scenario,
+      'test-analyzer-v1',
+    ),
     actualUtility,
     components: {
       relevance: 70,

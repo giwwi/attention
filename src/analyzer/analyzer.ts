@@ -11,5 +11,6 @@ export interface Analyzer {
     material: PageCapture,
     context: AnalysisContext,
     profileContext?: RelevantProfileContext | null,
+    signal?: AbortSignal,
   ): Promise<MaterialEvaluation>;
 }

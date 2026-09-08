@@ -1,4 +1,17 @@
+import { privateStorage } from '../../vault/storage';
+import { evaluationPrediction } from '../../utility/prediction';
 import { createAnalyzer } from '../../analyzer';
+import { popupText, type PopupTextKey } from '../../i18n/popup';
+import { uiText, type UiLanguage } from '../../i18n/ui';
+import { readingPlanText } from '../../i18n/reading-plan';
+import {
+  beginDataOperation,
+  observeDataOperation,
+  assertDataOperationCurrent,
+  commitDataOperation,
+  DataOperationCancelledError,
+  type DataOperation,
+} from '../../privacy/data-operations';
 import type { AiAnalyzerSettings } from '../../analyzer/settings';
 import { recordDiagnostic } from '../../diagnostics/diagnostics';
 import {
@@ -23,11 +36,11 @@ import {
 import { buildMaterialFeatures } from '../../analyzer/material-features';
 import { loadNovelPassageFeedback } from '../../novelty/feedback';
 import { calibrateMaterialEvaluation } from '../../utility/calibration';
+import { buildReadingPlan } from '../../attention/reading-plan';
 import { loadUtilityCalibration } from '../../utility/storage';
 import type {
   AnalysisContext,
   AttentionScenario,
-  MaterialDecision,
   MaterialEvaluation,
   PageCapture,
   PersonalizationSignal,
@@ -37,7 +50,6 @@ import type {
 import { getElement, setPopupStatus } from '../dom';
 import { isStoredEvaluation } from '../guards';
 import {
-  ANALYSIS_CONTEXT_KEY,
   EVALUATION_VERDICTS_KEY,
   LATEST_EVALUATION_KEY,
 } from '../storage-keys';
@@ -46,37 +58,27 @@ export interface EvaluationControllerOptions {
   status: HTMLParagraphElement;
   decisionButtons: HTMLButtonElement[];
   getCapture: () => PageCapture | null;
+  getCaptureOperation?: () => DataOperation | null;
   getContext: () => AnalysisContext;
   getScenario: () => AttentionScenario;
+  getLanguage: () => UiLanguage;
   getAiSettings: () => AiAnalyzerSettings | null;
   refreshAiSettings: () => Promise<AiAnalyzerSettings | null>;
   applyContext: (context: AnalysisContext) => void;
   refreshProfile: () => Promise<void> | void;
+  onSectionSelected: (heading: string, button: HTMLButtonElement) => void;
+  onHighlightSections: (headings: string[], button: HTMLButtonElement) => void;
 }
 
-const recommendationLabels: Record<MaterialDecision, string> = {
-  read: 'READ',
-  skim: 'SKIM',
-  save: 'SAVE',
-  skip: 'SKIP',
-};
-
-const signalKindLabels: Record<PersonalizationSignal['kind'], string> = {
-  interest: 'Интерес',
-  goal: 'Активная цель',
-  expertise: 'Широкая экспертиза',
-  learningArea: 'Что изучаете',
-  leisurePreference: 'Предпочтение для отдыха',
-  lowValueTopic: 'Малоценная тема',
-  contentPreference: 'Предпочтение',
-  historyTopic: 'Недавняя тема',
-  historySource: 'Знакомый источник',
-};
-
-function confidenceLabel(value: number): string {
-  if (value < 0.55) return 'Низкая уверенность';
-  if (value < 0.7) return 'Средняя уверенность';
-  return 'Уверенность выше средней';
+function confidenceLabel(language: UiLanguage, value: number): string {
+  return popupText(
+    language,
+    value < 0.55
+      ? 'confidenceLow'
+      : value < 0.7
+        ? 'confidenceMedium'
+        : 'confidenceHigh',
+  );
 }
 
 function isAiEvaluation(evaluation: MaterialEvaluation): boolean {
@@ -130,6 +132,16 @@ export class EvaluationController {
   private readonly qualityLimitation =
     getElement<HTMLParagraphElement>('quality-limitation');
   private readonly confidence = getElement<HTMLSpanElement>('confidence');
+  private readonly readingPlan = getElement<HTMLElement>('reading-plan');
+  private readonly readingPlanTitle =
+    getElement<HTMLHeadingElement>('reading-plan-title');
+  private readonly readingPlanNote =
+    getElement<HTMLParagraphElement>('reading-plan-note');
+  private readonly readingPlanSections = getElement<HTMLOListElement>(
+    'reading-plan-sections',
+  );
+  private readonly highlightSectionsButton =
+    getElement<HTMLButtonElement>('highlight-sections');
   private readonly reason = getElement<HTMLParagraphElement>('reason');
   private readonly expectedValue =
     getElement<HTMLParagraphElement>('expected-value');
@@ -154,6 +166,8 @@ export class EvaluationController {
     'evaluation-not-useful',
   );
   private activeEvaluation: MaterialEvaluation | null = null;
+  private activeOperation: DataOperation | null = null;
+  private revision = 0;
 
   constructor(private readonly options: EvaluationControllerOptions) {
     this.analyzeButton.addEventListener('click', () => void this.analyze());
@@ -169,6 +183,17 @@ export class EvaluationController {
       'click',
       () => void this.recordVerdict(false),
     );
+    this.highlightSectionsButton.addEventListener('click', () => {
+      const headings = Array.from(
+        this.readingPlanSections.querySelectorAll<HTMLElement>(
+          '[data-section-heading]',
+        ),
+      ).map((element) => element.dataset.sectionHeading ?? '');
+      this.options.onHighlightSections(
+        headings.filter(Boolean),
+        this.highlightSectionsButton,
+      );
+    });
   }
 
   get current(): MaterialEvaluation | null {
@@ -176,11 +201,22 @@ export class EvaluationController {
   }
 
   clear(): void {
+    this.revision += 1;
+    this.analyzeButton.disabled = false;
+    this.analyzeButton.textContent = uiText(
+      this.options.getLanguage(),
+      'checkWithAi',
+    );
     this.activeEvaluation = null;
+    this.activeOperation = null;
     this.panel.hidden = true;
+    this.readingPlan.hidden = true;
     this.assessmentInsights.hidden = true;
     this.wrongButton.disabled = false;
-    this.wrongButton.textContent = 'Рекомендация была неверной';
+    this.wrongButton.textContent = popupText(
+      this.options.getLanguage(),
+      'opinionUnhelpful',
+    );
     this.usefulButton.removeAttribute('data-selected');
     this.notUsefulButton.removeAttribute('data-selected');
     for (const button of this.options.decisionButtons) {
@@ -188,7 +224,8 @@ export class EvaluationController {
     }
   }
 
-  async restore(pageUrl: string): Promise<void> {
+  async restore(pageUrl: string, operation: DataOperation): Promise<void> {
+    const revision = this.revision;
     const capture = this.options.getCapture();
     if (!capture || capture.url !== pageUrl) return;
     const context = this.options.getContext();
@@ -207,77 +244,120 @@ export class EvaluationController {
         features,
       )
     ) {
+      if (revision !== this.revision) return;
       this.options.applyContext(remembered.storedEvaluation.context);
+      this.activeOperation = operation;
       this.render(remembered.storedEvaluation.evaluation);
       return;
     }
-    const stored = await chrome.storage.local.get(LATEST_EVALUATION_KEY);
+    const stored = await privateStorage.get(LATEST_EVALUATION_KEY);
     const value: unknown = stored[LATEST_EVALUATION_KEY];
     if (!isStoredEvaluation(value) || value.url !== pageUrl) return;
     if (!isEvaluationCacheCurrent(value, sourceVersions, context, features)) {
       return;
     }
 
+    if (revision !== this.revision) return;
     this.options.applyContext(value.context);
+    this.activeOperation = operation;
     this.render(value.evaluation);
   }
 
+  async evaluateLocal(operation?: DataOperation): Promise<void> {
+    await this.analyze(true, operation);
+  }
+
+  translate(): void {
+    if (this.activeEvaluation) {
+      this.render(this.activeEvaluation);
+      if (this.options.status.classList.contains('success')) {
+        setPopupStatus(
+          this.options.status,
+          'success',
+          popupText(this.options.getLanguage(), 'ready'),
+        );
+      }
+    }
+  }
+
   private render(evaluation: MaterialEvaluation): void {
+    const language = this.options.getLanguage();
     this.activeEvaluation = evaluation;
-    this.utilityScore.textContent = `${evaluation.utilityScore}%`;
-    this.recommendation.textContent =
-      recommendationLabels[evaluation.recommendedAction];
+    this.utilityScore.textContent = `${evaluation.utilityScore}/100`;
+    this.recommendation.textContent = readingPlanText(
+      language,
+      evaluation.recommendedAction,
+    );
     this.recommendation.dataset.action = evaluation.recommendedAction;
-    this.confidence.textContent = confidenceLabel(evaluation.confidence);
+    this.confidence.textContent = confidenceLabel(
+      language,
+      evaluation.confidence,
+    );
     this.usefulMinutes.textContent = evaluation.estimatedUsefulMinutes
-      ? `~${evaluation.estimatedUsefulMinutes} потенциально полезных мин`
-      : 'Полезное время пока нельзя оценить';
+      ? uiText(language, 'usefulMinutes', {
+          count: evaluation.estimatedUsefulMinutes,
+        })
+      : popupText(language, 'usefulUnknown');
+
+    this.renderReadingPlan(evaluation);
 
     const signals = evaluation.scenarioSignals;
-    const metrics: Record<AttentionScenario, Array<[string, number]>> = {
+    const metrics: Record<AttentionScenario, Array<[PopupTextKey, number]>> = {
       work: [
-        ['Релевантность', signals.relevance],
-        ['Практичность', signals.actionability],
-        ['Качество', signals.quality],
-        ['Новизна', signals.novelty],
+        ['relevance', signals.relevance],
+        ['actionability', signals.actionability],
+        ['quality', signals.quality],
+        ['novelty', signals.novelty],
       ],
       learn: [
-        ['Уровень', signals.knowledgeFit],
-        ['Новизна', signals.novelty],
-        ['Качество', signals.quality],
-        ['Усилие', signals.effortFit],
+        ['level', signals.knowledgeFit],
+        ['novelty', signals.novelty],
+        ['quality', signals.quality],
+        ['ease', signals.effortFit],
       ],
       explore: [
-        ['Открытие', signals.serendipity],
-        ['Новизна', signals.novelty],
-        ['Качество', signals.quality],
-        ['Связь', signals.relevance],
+        ['discovery', signals.serendipity],
+        ['novelty', signals.novelty],
+        ['quality', signals.quality],
+        ['relevance', signals.relevance],
       ],
       relax: [
-        ['По вкусу', signals.tasteFit],
-        ['Удовольствие', signals.enjoymentFit],
-        ['Лёгкость', signals.effortFit],
-        ['По времени', signals.timeFit],
+        ['taste', signals.tasteFit],
+        ['enjoyment', signals.enjoymentFit],
+        ['ease', signals.effortFit],
+        ['quality', signals.quality],
       ],
     };
     metrics[evaluation.scenario].forEach(([label, value], index) => {
-      this.metricLabels[index]!.textContent = label;
+      this.metricLabels[index]!.textContent = popupText(language, label);
       this.metricValues[index]!.textContent = String(value);
     });
 
     this.likelyNewClaims.replaceChildren();
     if (evaluation.insights && evaluation.scenario !== 'relax') {
       const insights = evaluation.insights;
-      this.noveltyConfidence.textContent = `уверенность ${Math.round(insights.noveltyConfidence * 100)}%`;
-      this.noveltySummary.textContent = insights.noveltySummary;
+      this.noveltyConfidence.textContent = popupText(
+        language,
+        'confidencePercent',
+        { count: Math.round(insights.noveltyConfidence * 100) },
+      );
+      this.noveltySummary.textContent = insights.likelyNewClaims.length
+        ? uiText(language, 'likelyNewIdea', {
+            count: insights.likelyNewClaims.length,
+          })
+        : uiText(language, 'noveltyUnclear');
       for (const claim of insights.likelyNewClaims.slice(0, 3)) {
         const item = document.createElement('li');
         item.textContent = claim;
         this.likelyNewClaims.append(item);
       }
       this.likelyNewBlock.hidden = insights.likelyNewClaims.length === 0;
-      this.qualityConfidence.textContent = `уверенность ${Math.round(insights.qualityConfidence * 100)}%`;
-      this.qualitySummary.textContent = insights.qualitySummary;
+      this.qualityConfidence.textContent = popupText(
+        language,
+        'confidencePercent',
+        { count: Math.round(insights.qualityConfidence * 100) },
+      );
+      this.qualitySummary.textContent = popupText(language, 'qualityCaution');
       this.qualityEvidence.textContent = String(
         insights.qualityBreakdown.evidence,
       );
@@ -290,17 +370,15 @@ export class EvaluationController {
       this.qualityCalibration.textContent = String(
         insights.qualityBreakdown.calibration,
       );
-      this.qualityLimitation.textContent = insights.qualityLimitations[0]
-        ? `Ограничение: ${insights.qualityLimitations[0]}`
-        : '';
-      this.qualityLimitation.hidden = !insights.qualityLimitations[0];
+      this.qualityLimitation.textContent = '';
+      this.qualityLimitation.hidden = true;
       this.assessmentInsights.hidden = false;
     } else {
       this.assessmentInsights.hidden = true;
     }
 
-    this.reason.textContent = evaluation.reason;
-    this.expectedValue.textContent = evaluation.expectedValue;
+    this.reason.textContent = this.localizedReason(evaluation);
+    this.expectedValue.textContent = this.localizedReason(evaluation);
     this.recommendedSections.replaceChildren();
     for (const section of evaluation.recommendedSections) {
       const item = document.createElement('li');
@@ -311,13 +389,10 @@ export class EvaluationController {
       evaluation.recommendedSections.length === 0;
     this.renderProfileSignals(evaluation.profileSignals ?? []);
     this.wrongButton.disabled = false;
-    this.wrongButton.textContent = 'Рекомендация была неверной';
-    const aiSettings = this.options.getAiSettings();
+    this.wrongButton.textContent = popupText(language, 'opinionUnhelpful');
     this.analyzerLabel.textContent = isAiEvaluation(evaluation)
-      ? `AI-анализ · ${aiSettings?.model ?? 'выбранная модель'} · через Vercel AI Gateway`
-      : aiSettings
-        ? 'Локальный fallback · AI был недоступен'
-        : 'Локальный анализ · без передачи данных';
+      ? uiText(language, 'aiAnalysisSource')
+      : uiText(language, 'localAnalysisSource');
 
     for (const button of this.options.decisionButtons) {
       if (button.dataset.decision === evaluation.recommendedAction) {
@@ -329,6 +404,100 @@ export class EvaluationController {
     this.panel.hidden = false;
   }
 
+  private localizedReason(evaluation: MaterialEvaluation): string {
+    const language = this.options.getLanguage();
+    const signals = evaluation.scenarioSignals;
+    if (evaluation.insights?.reliability?.weakExtraction)
+      return uiText(language, 'weakExtraction');
+    if (evaluation.scenario === 'relax')
+      return uiText(
+        language,
+        signals.effortFit < 40
+          ? 'harderThanWanted'
+          : signals.tasteFit >= 70
+            ? 'usualTaste'
+            : 'tasteUnclear',
+      );
+    if (evaluation.scenario === 'learn')
+      return uiText(
+        language,
+        signals.knowledgeFit < 42
+          ? 'levelMismatch'
+          : signals.knowledgeFit >= 70
+            ? 'learningNextStep'
+            : 'noveltyUnclear',
+      );
+    if (evaluation.scenario === 'explore')
+      return uiText(
+        language,
+        signals.serendipity >= 68
+          ? 'meaningfulConnection'
+          : 'noStrongConnection',
+      );
+    const topic = uiText(
+      language,
+      signals.relevance >= 70
+        ? 'topicFits'
+        : signals.relevance >= 45
+          ? 'topicPartlyFits'
+          : 'outsideInterests',
+    );
+    return signals.quality < 50
+      ? uiText(language, 'conclusionsNeedEvidence', { topic })
+      : topic;
+  }
+
+  private renderReadingPlan(evaluation: MaterialEvaluation): void {
+    const capture = this.options.getCapture();
+    const label = this.readingPlan.querySelector<HTMLElement>(
+      '.reading-plan-label',
+    );
+    if (label)
+      label.textContent = readingPlanText(
+        this.options.getLanguage(),
+        'planLabel',
+      );
+    this.highlightSectionsButton.textContent = readingPlanText(
+      this.options.getLanguage(),
+      'highlight',
+    );
+    const plan = capture
+      ? buildReadingPlan(capture, evaluation, this.options.getLanguage())
+      : null;
+    this.readingPlanSections.replaceChildren();
+    if (!plan) {
+      this.readingPlan.hidden = true;
+      return;
+    }
+    this.readingPlanTitle.textContent = plan.title;
+    this.readingPlanNote.textContent = plan.note ?? '';
+    this.readingPlanNote.hidden = !plan.note;
+    plan.sections.forEach((section, index) => {
+      const item = document.createElement('li');
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.dataset.sectionHeading = section.heading;
+      const number = document.createElement('span');
+      number.className = 'reading-plan-section-number';
+      number.textContent = String(index + 1);
+      const copy = document.createElement('span');
+      copy.className = 'reading-plan-section-copy';
+      const heading = document.createElement('strong');
+      heading.textContent = section.heading;
+      const reason = document.createElement('small');
+      reason.textContent = section.reason;
+      copy.append(heading, reason);
+      button.append(number, copy);
+      button.addEventListener('click', () => {
+        this.options.onSectionSelected(section.heading, button);
+      });
+      item.append(button);
+      this.readingPlanSections.append(item);
+    });
+    this.highlightSectionsButton.disabled = false;
+    this.readingPlan.hidden = false;
+  }
+
   private renderProfileSignals(signals: PersonalizationSignal[]): void {
     this.profileSignals.replaceChildren();
     for (const signal of signals) {
@@ -338,7 +507,7 @@ export class EvaluationController {
       const top = document.createElement('div');
       const kind = document.createElement('span');
       kind.className = 'profile-signal-kind';
-      kind.textContent = signalKindLabels[signal.kind];
+      kind.textContent = uiText(this.options.getLanguage(), 'personalProfile');
       const confidence = document.createElement('span');
       confidence.className = 'profile-signal-confidence';
       confidence.textContent = `${Math.round(signal.confidence * 100)}%`;
@@ -346,16 +515,16 @@ export class EvaluationController {
       const title = document.createElement('strong');
       title.textContent = signal.label;
       const explanation = document.createElement('p');
-      explanation.textContent = signal.explanation;
+      explanation.hidden = true;
       const correction = document.createElement('details');
       correction.className = 'profile-signal-correction';
       const summary = document.createElement('summary');
-      summary.textContent = 'Исправить контекст';
+      summary.textContent = uiText(this.options.getLanguage(), 'change');
       const actions = document.createElement('div');
       actions.className = 'profile-signal-actions';
       const affirm = document.createElement('button');
       affirm.type = 'button';
-      affirm.textContent = 'Это про меня';
+      affirm.textContent = uiText(this.options.getLanguage(), 'save');
       affirm.addEventListener('click', () => {
         void this.handleSignalFeedback(
           signal,
@@ -366,7 +535,7 @@ export class EvaluationController {
       });
       const ignore = document.createElement('button');
       ignore.type = 'button';
-      ignore.textContent = 'Не учитывать';
+      ignore.textContent = uiText(this.options.getLanguage(), 'delete');
       ignore.addEventListener('click', () => {
         void this.handleSignalFeedback(
           signal,
@@ -397,117 +566,154 @@ export class EvaluationController {
     explanation: HTMLParagraphElement,
   ): Promise<void> {
     const capture = this.options.getCapture();
-    if (!capture || !this.activeEvaluation) return;
+    if (!capture || !this.activeEvaluation || !this.activeOperation) return;
+    const operation = this.activeOperation;
     for (const button of card.querySelectorAll('button'))
       button.disabled = true;
     try {
+      const evaluation = this.activeEvaluation;
       const profile = await loadProfile();
-      if (profile) await applyAndStoreSignalFeedback(profile, signal, type);
-      await recordProfileFeedback({
-        type,
-        url: capture.url,
-        recommendedAction: this.activeEvaluation.recommendedAction,
-        signalId: signal.id,
-        profileEntryId: signal.profileEntryId,
+      await commitDataOperation(operation, async () => {
+        if (profile) await applyAndStoreSignalFeedback(profile, signal, type);
+        await recordProfileFeedback({
+          type,
+          url: capture.url,
+          recommendedAction: evaluation.recommendedAction,
+          signalId: signal.id,
+          profileEntryId: signal.profileEntryId,
+        });
       });
-      explanation.textContent =
-        type === 'affirmSignal'
-          ? 'Подтверждено вами. Уверенность этого пункта повышена.'
-          : 'Пункт удалён из профиля. Запустите оценку снова, чтобы обновить рекомендацию.';
+      explanation.hidden = false;
+      explanation.textContent = uiText(
+        this.options.getLanguage(),
+        'feedbackSaved',
+      );
       card.dataset.feedback = type;
       await this.options.refreshProfile();
       setPopupStatus(
         this.options.status,
         'success',
-        type === 'affirmSignal'
-          ? 'Профиль уточнён по вашей обратной связи.'
-          : 'Пункт больше не будет учитываться.',
+        uiText(this.options.getLanguage(), 'feedbackSaved'),
       );
-    } catch {
+    } catch (error) {
+      if (error instanceof DataOperationCancelledError) return;
       for (const button of card.querySelectorAll('button')) {
         button.disabled = false;
       }
       setPopupStatus(
         this.options.status,
         'error',
-        'Не удалось сохранить обратную связь.',
+        uiText(this.options.getLanguage(), 'outcomeError'),
       );
     }
   }
 
   private async markRecommendationWrong(): Promise<void> {
     const capture = this.options.getCapture();
-    if (!capture || !this.activeEvaluation) return;
+    if (!capture || !this.activeEvaluation || !this.activeOperation) return;
+    const operation = this.activeOperation;
     this.wrongButton.disabled = true;
     try {
-      await recordProfileFeedback({
-        type: 'wrongRecommendation',
-        url: capture.url,
-        recommendedAction: this.activeEvaluation.recommendedAction,
-        signalId: null,
-        profileEntryId: null,
-      });
-      this.wrongButton.textContent = 'Отметка сохранена';
+      const evaluation = this.activeEvaluation;
+      await commitDataOperation(operation, () =>
+        recordProfileFeedback({
+          type: 'wrongRecommendation',
+          url: capture.url,
+          recommendedAction: evaluation.recommendedAction,
+          signalId: null,
+          profileEntryId: null,
+        }),
+      );
+      this.wrongButton.textContent = uiText(
+        this.options.getLanguage(),
+        'feedbackSaved',
+      );
       setPopupStatus(
         this.options.status,
         'success',
-        'Спасибо. Ошибка рекомендации сохранена локально.',
+        uiText(this.options.getLanguage(), 'feedbackSaved'),
       );
-    } catch {
+    } catch (error) {
+      if (error instanceof DataOperationCancelledError) return;
       this.wrongButton.disabled = false;
       setPopupStatus(
         this.options.status,
         'error',
-        'Не удалось сохранить обратную связь.',
+        uiText(this.options.getLanguage(), 'outcomeError'),
       );
     }
   }
 
   private async recordVerdict(useful: boolean): Promise<void> {
     const capture = this.options.getCapture();
-    if (!capture || !this.activeEvaluation) return;
-    const stored = await chrome.storage.local.get(EVALUATION_VERDICTS_KEY);
-    const previous = Array.isArray(stored[EVALUATION_VERDICTS_KEY])
-      ? stored[EVALUATION_VERDICTS_KEY]
-      : [];
-    await chrome.storage.local.set({
-      [EVALUATION_VERDICTS_KEY]: [
-        {
-          url: capture.url,
-          scenario: this.activeEvaluation.scenario,
-          predictedUtility: this.activeEvaluation.utilityScore,
-          useful,
-          recordedAt: new Date().toISOString(),
-        },
-        ...previous,
-      ].slice(0, 200),
-    });
-    this.usefulButton.dataset.selected = String(useful);
-    this.notUsefulButton.dataset.selected = String(!useful);
-    setPopupStatus(
-      this.options.status,
-      'success',
-      'Оценка рекомендации сохранена локально.',
-    );
+    if (!capture || !this.activeEvaluation || !this.activeOperation) return;
+    const operation = this.activeOperation;
+    const evaluation = this.activeEvaluation;
+    try {
+      await commitDataOperation(operation, async () => {
+        const stored = await privateStorage.get(EVALUATION_VERDICTS_KEY);
+        const previous = Array.isArray(stored[EVALUATION_VERDICTS_KEY])
+          ? stored[EVALUATION_VERDICTS_KEY]
+          : [];
+        await privateStorage.set({
+          [EVALUATION_VERDICTS_KEY]: [
+            {
+              url: capture.url,
+              scenario: evaluation.scenario,
+              predictedUtility: evaluation.utilityScore,
+              prediction: evaluationPrediction(evaluation),
+              source: 'evaluation-verdict',
+              useful,
+              recordedAt: new Date().toISOString(),
+            },
+            ...previous,
+          ].slice(0, 200),
+        });
+      });
+      this.usefulButton.dataset.selected = String(useful);
+      this.notUsefulButton.dataset.selected = String(!useful);
+      setPopupStatus(
+        this.options.status,
+        'success',
+        uiText(this.options.getLanguage(), 'feedbackSaved'),
+      );
+    } catch (error) {
+      if (error instanceof DataOperationCancelledError) return;
+      setPopupStatus(
+        this.options.status,
+        'error',
+        uiText(this.options.getLanguage(), 'outcomeError'),
+      );
+    }
   }
 
-  private async analyze(): Promise<void> {
+  private async analyze(
+    localOnly = false,
+    suppliedOperation?: DataOperation,
+  ): Promise<void> {
     const capture = this.options.getCapture();
     if (!capture) return;
+    const revision = ++this.revision;
+    const context = this.options.getContext();
+    const language = this.options.getLanguage();
+    let operation: DataOperation | undefined;
     this.analyzeButton.disabled = true;
-    const originalLabel = this.analyzeButton.textContent;
-    this.analyzeButton.textContent = 'Оцениваем…';
+    this.analyzeButton.textContent = popupText(language, 'analyzing');
     setPopupStatus(
       this.options.status,
       'default',
-      this.options.getAiSettings()
-        ? 'AI сопоставляет материал с вашим контекстом…'
-        : 'Сопоставляем материал с вашим контекстом…',
+      popupText(language, 'analyzing'),
     );
 
     try {
-      const aiSettings = await this.options.refreshAiSettings();
-      const context = this.options.getContext();
+      const capturedOperation = this.options.getCaptureOperation?.();
+      if (this.options.getCaptureOperation && !capturedOperation) return;
+      operation =
+        suppliedOperation ?? capturedOperation ?? (await beginDataOperation());
+      const activeOperation = operation;
+      const aiSettings = localOnly
+        ? null
+        : await this.options.refreshAiSettings();
       const [profile, features] = await Promise.all([
         loadProfile(),
         buildMaterialFeatures(capture),
@@ -541,16 +747,31 @@ export class EvaluationController {
         features,
       );
       const analyzer = createAnalyzer(aiSettings, (error) =>
-        recordDiagnostic({
-          subsystem: 'ai',
-          operation: 'analyze-article',
-          code: 'AI_PRIMARY_FAILED_LOCAL_FALLBACK',
-          severity: 'warning',
-          error,
-        }),
+        commitDataOperation(activeOperation, () =>
+          recordDiagnostic({
+            subsystem: 'ai',
+            operation: 'analyze-article',
+            code: 'AI_PRIMARY_FAILED_LOCAL_FALLBACK',
+            severity: 'warning',
+            error,
+          }),
+        ),
       );
+      const cancellation = await observeDataOperation(activeOperation);
+      let rawEvaluation;
+      try {
+        await assertDataOperationCurrent(activeOperation);
+        rawEvaluation = await analyzer.analyze(
+          capture,
+          context,
+          relevantProfile,
+          cancellation.signal,
+        );
+      } finally {
+        cancellation.dispose();
+      }
       const evaluation = calibrateMaterialEvaluation(
-        await analyzer.analyze(capture, context, relevantProfile),
+        rawEvaluation,
         capture.readingTimeMinutes,
         utilityCalibration,
       );
@@ -564,37 +785,56 @@ export class EvaluationController {
           sourceVersions,
         ),
       };
-      await chrome.storage.local.set({
-        [ANALYSIS_CONTEXT_KEY]: context,
-        [LATEST_EVALUATION_KEY]: storedEvaluation,
+      if (revision !== this.revision || capture !== this.options.getCapture())
+        return;
+      await commitDataOperation(operation, async () => {
+        if (revision !== this.revision) return;
+        await privateStorage.set({
+          [LATEST_EVALUATION_KEY]: storedEvaluation,
+        });
+        await recordMaterialEvaluation(storedEvaluation, capture.title);
       });
-      await recordMaterialEvaluation(storedEvaluation, capture.title);
+      if (revision !== this.revision) return;
+      this.activeOperation = operation;
       this.render(evaluation);
-      this.panel.scrollIntoView({ block: 'start', behavior: 'smooth' });
       setPopupStatus(
         this.options.status,
         'success',
-        isAiEvaluation(evaluation)
-          ? 'AI-рекомендация готова.'
-          : aiSettings
-            ? 'AI недоступен — показана локальная рекомендация.'
-            : 'Предварительная рекомендация готова.',
+        popupText(this.options.getLanguage(), 'ready'),
       );
     } catch (error) {
-      await recordDiagnostic({
-        subsystem: 'popup',
-        operation: 'analyze-article',
-        code: 'ANALYSIS_FAILED',
-        error,
-      }).catch(() => undefined);
+      if (
+        error instanceof DataOperationCancelledError ||
+        revision !== this.revision
+      )
+        return;
+      if (operation) {
+        try {
+          await commitDataOperation(operation, () =>
+            recordDiagnostic({
+              subsystem: 'popup',
+              operation: 'analyze-article',
+              code: 'ANALYSIS_FAILED',
+              error,
+            }),
+          );
+        } catch {
+          return;
+        }
+      }
       setPopupStatus(
         this.options.status,
         'error',
-        'Не удалось оценить материал.',
+        popupText(this.options.getLanguage(), 'analysisFailed'),
       );
     } finally {
-      this.analyzeButton.disabled = false;
-      this.analyzeButton.textContent = originalLabel;
+      if (revision === this.revision) {
+        this.analyzeButton.disabled = false;
+        this.analyzeButton.textContent = uiText(
+          this.options.getLanguage(),
+          'checkWithAi',
+        );
+      }
     }
   }
 }

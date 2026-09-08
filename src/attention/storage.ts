@@ -1,3 +1,8 @@
+import { privateStorage } from '../vault/storage';
+import {
+  evaluationPrediction,
+  normalizeUtilityPrediction,
+} from '../utility/prediction';
 import type {
   AnalysisContext,
   AttentionScenario,
@@ -8,6 +13,7 @@ import type {
   MaterialOutcome,
   MaterialOutcomeReason,
   PageCapture,
+  UtilityOutcomeSource,
 } from '../shared/types';
 import {
   hasMeaningfulReadingEngagement,
@@ -87,7 +93,7 @@ function isAttentionSession(value: unknown): value is AttentionSessionRecord {
 }
 
 export async function loadAttentionSessions(
-  storage: StorageArea = chrome.storage.local,
+  storage: StorageArea = privateStorage,
 ): Promise<AttentionSessionRecord[]> {
   const stored = await measuredStorageGet(
     storage,
@@ -105,29 +111,31 @@ export async function loadAttentionSessions(
       relaxIntent: null,
       desiredEffort: null,
     },
+    outcomeSource:
+      session.outcomeSource ??
+      (session.outcome ? ('legacy-unknown' as const) : null),
     expected: {
       ...session.expected,
+      prediction:
+        session.expected.predictedUtility == null
+          ? null
+          : normalizeUtilityPrediction(
+              session.expected.prediction,
+              session.expected.predictedUtility,
+              session.scenario ?? 'work',
+              session.expected.analyzerId,
+            ),
       predictedUtility: session.expected.predictedUtility ?? null,
       components: session.expected.components ?? null,
     },
   }));
-  if (
-    value.some((item) => {
-      if (!item || typeof item !== 'object') return false;
-      const record = item as Record<string, unknown>;
-      return !record.scenario || !record.scenarioContext;
-    })
-  ) {
-    await measuredStorageSet(storage, 'attention', {
-      [ATTENTION_SESSIONS_KEY]: sessions,
-    });
-  }
+  // Normalize legacy provenance without writing an old snapshot after erasure.
   return sessions;
 }
 
 export async function getOpenAttentionSession(
   pageUrl: string,
-  storage: StorageArea = chrome.storage.local,
+  storage: StorageArea = privateStorage,
   scenario?: AttentionScenario,
 ): Promise<AttentionSessionRecord | null> {
   const canonical = canonicalUrl(pageUrl);
@@ -155,7 +163,7 @@ export async function createAttentionSession(
   capture: PageCapture,
   decision: Extract<MaterialDecision, 'read' | 'skim'>,
   evaluation: MaterialEvaluation | null,
-  storage: StorageArea = chrome.storage.local,
+  storage: StorageArea = privateStorage,
   now = new Date(),
   context?: AnalysisContext,
 ): Promise<AttentionSessionRecord> {
@@ -186,6 +194,7 @@ export async function createAttentionSession(
       profileSignalIds:
         evaluation?.profileSignals.map((signal) => signal.id) ?? [],
       predictedUtility: evaluation?.utilityScore ?? null,
+      prediction: evaluation ? evaluationPrediction(evaluation) : null,
       components: evaluation?.components ?? null,
     },
     estimatedReadingSeconds: Math.max(0, capture.readingTimeMinutes * 60),
@@ -203,6 +212,7 @@ export async function createAttentionSession(
     outcome: null,
     outcomeReason: null,
     outcomeAt: null,
+    outcomeSource: null,
   };
   const next = [
     session,
@@ -218,7 +228,7 @@ export async function createAttentionSession(
 
 export async function applyAttentionProgress(
   progress: AttentionSessionProgress,
-  storage: StorageArea = chrome.storage.local,
+  storage: StorageArea = privateStorage,
 ): Promise<void> {
   const sessions = await loadAttentionSessions(storage);
   const session = sessions.find((item) => item.id === progress.sessionId);
@@ -241,7 +251,7 @@ export async function applyAttentionProgress(
 
 export async function cancelAttentionSession(
   pageUrl: string,
-  storage: StorageArea = chrome.storage.local,
+  storage: StorageArea = privateStorage,
 ): Promise<void> {
   const canonical = canonicalUrl(pageUrl);
   const sessions = await loadAttentionSessions(storage);
@@ -280,7 +290,7 @@ export function isOutcomePromptEligible(
 
 export async function getEligibleOutcomeSession(
   pageUrl: string,
-  storage: StorageArea = chrome.storage.local,
+  storage: StorageArea = privateStorage,
   now = new Date(),
 ): Promise<AttentionSessionRecord | null> {
   const canonical = canonicalUrl(pageUrl);
@@ -296,7 +306,7 @@ export async function getEligibleOutcomeSession(
 
 export async function markOutcomePromptShown(
   sessionId: string,
-  storage: StorageArea = chrome.storage.local,
+  storage: StorageArea = privateStorage,
 ): Promise<void> {
   const sessions = await loadAttentionSessions(storage);
   const session = sessions.find((item) => item.id === sessionId);
@@ -310,13 +320,15 @@ export async function markOutcomePromptShown(
 export async function recordMaterialOutcome(
   sessionId: string,
   outcome: MaterialOutcome,
-  storage: StorageArea = chrome.storage.local,
+  storage: StorageArea = privateStorage,
   now = new Date(),
+  source: UtilityOutcomeSource = 'legacy-unknown',
 ): Promise<void> {
   const sessions = await loadAttentionSessions(storage);
   const session = sessions.find((item) => item.id === sessionId);
   if (!session) return;
   session.outcome = outcome;
+  session.outcomeSource = source;
   session.outcomeAt = now.toISOString();
   session.updatedAt = now.toISOString();
   await measuredStorageSet(storage, 'attention', {
@@ -327,7 +339,7 @@ export async function recordMaterialOutcome(
 export async function recordMaterialOutcomeReason(
   sessionId: string,
   reason: MaterialOutcomeReason,
-  storage: StorageArea = chrome.storage.local,
+  storage: StorageArea = privateStorage,
 ): Promise<void> {
   const sessions = await loadAttentionSessions(storage);
   const session = sessions.find((item) => item.id === sessionId);
@@ -346,7 +358,7 @@ export interface OutcomeStats {
 }
 
 export async function getOutcomeStats(
-  storage: StorageArea = chrome.storage.local,
+  storage: StorageArea = privateStorage,
 ): Promise<OutcomeStats> {
   const sessions = await loadAttentionSessions(storage);
   return sessions.reduce<OutcomeStats>(

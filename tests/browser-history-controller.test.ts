@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { BrowserHistoryController } from '../src/popup/controllers/browser-history-controller';
+import { DataTestStorage, installDataLocks } from './helpers/data-locks';
 
 function setupDom(): void {
   document.body.innerHTML = `
@@ -28,6 +29,7 @@ afterEach(() => {
 describe('browser history settings controller', () => {
   it('does not request the same Chrome permission again when it is already granted', async () => {
     setupDom();
+    installDataLocks();
     const contains = vi.fn().mockResolvedValue(true);
     const request = vi.fn().mockResolvedValue(true);
     const sendMessage = vi.fn().mockResolvedValue({
@@ -45,7 +47,7 @@ describe('browser history settings controller', () => {
       },
       runtime: { sendMessage },
       storage: {
-        local: { get: vi.fn().mockResolvedValue({}), remove: vi.fn() },
+        local: new DataTestStorage(),
       },
     });
 

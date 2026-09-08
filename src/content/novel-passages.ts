@@ -6,6 +6,7 @@ import {
 import type { KeyClaimAssessment, PageCapture } from '../shared/types';
 import { uiText, type UiLanguage } from '../i18n/ui';
 import { findCurrentArticleRoot } from './article-root';
+import { CONTENT_THEME_CSS } from './theme';
 
 const PASSAGE_SELECTOR = 'p, li, blockquote, dd, td';
 const EXCLUDED_SELECTOR = [
@@ -219,6 +220,7 @@ interface HighlightRegistry {
 }
 
 interface PassageView {
+  title: HTMLElement;
   host: HTMLDivElement;
   counter: HTMLSpanElement;
   excerpt: HTMLParagraphElement;
@@ -244,23 +246,24 @@ function installPassageView(): PassageView {
     bottom: '18px',
     zIndex: '2147483647',
   });
-  const shadow = host.attachShadow({ mode: 'open' });
+  const shadow = host.attachShadow({ mode: 'closed' });
   shadow.innerHTML = `
     <style>
-      .panel { box-sizing: border-box; width: min(360px, calc(100vw - 36px)); border: 1px solid #3fcf8e; border-radius: 14px; padding: 13px; color: #e8f8f0; background: #102a22; box-shadow: 0 16px 42px rgba(0,0,0,.34); font: 500 12px/1.4 Inter, ui-sans-serif, system-ui, sans-serif; }
+      ${CONTENT_THEME_CSS}
+      .panel { box-sizing: border-box; width: min(360px, calc(100vw - 36px)); border: 1px solid var(--attention-border); border-radius: 14px; padding: 13px; color: var(--attention-fg); background: var(--attention-bg); box-shadow: 0 16px 42px var(--attention-shadow); font: 500 12px/1.4 Inter, ui-sans-serif, system-ui, sans-serif; }
       .head, .nav, .actions { display: flex; align-items: center; gap: 8px; }
       .head { justify-content: space-between; }
       strong { font-size: 13px; }
       .close { border: 0; padding: 2px 4px; color: inherit; background: transparent; font-size: 18px; cursor: pointer; }
-      .excerpt { display: -webkit-box; overflow: hidden; margin: 10px 0; color: rgba(255,255,255,.82); -webkit-box-orient: vertical; -webkit-line-clamp: 3; }
-      button { border: 1px solid rgba(255,255,255,.24); border-radius: 8px; padding: 7px 9px; color: inherit; background: rgba(255,255,255,.07); font: 700 11px/1 ui-sans-serif, system-ui, sans-serif; cursor: pointer; }
-      button:hover { background: rgba(255,255,255,.14); }
-      button:focus-visible { outline: 2px solid #7ee2b8; outline-offset: 2px; }
+      .excerpt { display: -webkit-box; overflow: hidden; margin: 10px 0; color: var(--attention-secondary); -webkit-box-orient: vertical; -webkit-line-clamp: 3; }
+      button { border: 1px solid var(--attention-border); border-radius: 8px; padding: 7px 9px; color: inherit; background: var(--attention-control-bg); font: 700 11px/1 ui-sans-serif, system-ui, sans-serif; cursor: pointer; }
+      button:hover { background: var(--attention-control-hover); }
+      button:focus-visible { outline: 2px solid var(--attention-focus); outline-offset: 2px; }
       button:disabled { cursor: default; opacity: .55; }
       .nav { justify-content: space-between; }
       .actions { flex-wrap: wrap; margin-top: 10px; }
       .readwise { margin-left: auto; }
-      .status { min-height: 16px; margin-top: 8px; color: #b9d9cb; font-size: 10px; }
+      .status { min-height: 16px; margin-top: 8px; color: var(--attention-muted); font-size: 10px; }
     </style>
     <section class="panel" role="dialog" aria-live="polite">
       <div class="head"><strong></strong><button class="close" type="button">×</button></div>
@@ -272,6 +275,7 @@ function installPassageView(): PassageView {
   document.documentElement.append(host);
   return {
     host,
+    title: shadow.querySelector('strong') as HTMLElement,
     counter: shadow.querySelector('.counter') as HTMLSpanElement,
     excerpt: shadow.querySelector('.excerpt') as HTMLParagraphElement,
     previous: shadow.querySelector('.previous') as HTMLButtonElement,
@@ -309,9 +313,7 @@ export class NovelPassageController {
     this.index = 0;
     this.applyHighlights();
     this.view = installPassageView();
-    const shadow = this.view.host.shadowRoot;
-    const title = shadow?.querySelector('strong');
-    if (title) title.textContent = uiText(this.language, 'potentialNewTitle');
+    this.view.title.textContent = uiText(this.language, 'potentialNewTitle');
     this.view.previous.textContent = uiText(this.language, 'previousPassage');
     this.view.next.textContent = uiText(this.language, 'nextPassage');
     this.view.known.textContent = uiText(this.language, 'alreadyKnew');
@@ -387,9 +389,15 @@ export class NovelPassageController {
       this.index = Math.min(this.matches.length - 1, this.index + 1);
       this.render();
     });
-    this.view.known.addEventListener('click', () => this.sendFeedback('known'));
-    this.view.novel.addEventListener('click', () => this.sendFeedback('new'));
-    this.view.readwise.addEventListener('click', () => this.saveToReadwise());
+    this.view.known.addEventListener('click', (event) => {
+      if (event.isTrusted) this.sendFeedback('known');
+    });
+    this.view.novel.addEventListener('click', (event) => {
+      if (event.isTrusted) this.sendFeedback('new');
+    });
+    this.view.readwise.addEventListener('click', (event) => {
+      if (event.isTrusted) this.saveToReadwise();
+    });
     this.view.close.addEventListener('click', () => this.clear());
   }
 

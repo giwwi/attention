@@ -72,6 +72,88 @@ function feedback(value: 'known' | 'new'): NovelPassageFeedbackRecord {
 }
 
 describe('Claim Memory', () => {
+  it.each([
+    [
+      'The study found that structured review reduced errors by 90%.',
+      'The study found that structured review reduced errors by 10%.',
+    ],
+    [
+      'The study in 2024 found that structured review reduced errors.',
+      'The study in 2025 found that structured review reduced errors.',
+    ],
+    [
+      'The study found that structured review reduced errors.',
+      'The study found that structured review did not reduce errors.',
+    ],
+    [
+      'The recommended dose for adults was 10 mg per day.',
+      'The recommended dose for adults was 10 g per day.',
+    ],
+  ])(
+    'does not reuse direct knowledge for changed details: %s',
+    async (knownText, newText) => {
+      const record = {
+        ...feedback('known'),
+        claim: knownText,
+        excerpt: knownText,
+      };
+      const nextClaim = { ...claim, claim: newText, sourceExcerpt: newText };
+      const features = await buildMaterialFeatures({
+        ...material,
+        content: newText,
+      });
+      const evidence = selectRelevantClaimMemoryEvidence([record], features);
+      expect(evidence).not.toBeNull();
+      expect(applyClaimMemoryToClaim(nextClaim, evidence!)).toEqual(nextClaim);
+    },
+  );
+
+  it('does not let a shared source excerpt override a contradictory claim', async () => {
+    const knownText =
+      'Structured review reduced decision errors by 90 percent.';
+    const newText = knownText.replace('90', '10');
+    const record = {
+      ...feedback('known'),
+      claim: knownText,
+      excerpt: knownText,
+    };
+    const nextClaim = { ...claim, claim: newText, sourceExcerpt: knownText };
+    const evidence = selectRelevantClaimMemoryEvidence(
+      [record],
+      await buildMaterialFeatures(material),
+    );
+    expect(applyClaimMemoryToClaim(nextClaim, evidence!)).toEqual(nextClaim);
+  });
+
+  it('preserves raw numerical feedback and separate claims in a shared passage', async () => {
+    const storage =
+      new MemoryStorage() as unknown as chrome.storage.StorageArea;
+    const excerpt =
+      'In 2024, 10% of adults improved; in 2025, 90% of adults improved.';
+    for (const text of [
+      'In 2024, 10% of adults improved.',
+      'In 2025, 90% of adults improved.',
+    ]) {
+      await recordNovelPassageFeedback(
+        {
+          type: NOVEL_PASSAGE_FEEDBACK_TYPE,
+          url: material.url,
+          title: material.title,
+          claim: text,
+          excerpt,
+          value: 'known',
+        },
+        storage,
+      );
+    }
+    const records = await loadNovelPassageFeedback(storage);
+    expect(records).toHaveLength(2);
+    expect(records.map((record) => record.claim)).toEqual([
+      'In 2025, 90% of adults improved.',
+      'In 2024, 10% of adults improved.',
+    ]);
+    expect(records.every((record) => record.excerpt === excerpt)).toBe(true);
+  });
   it('updates its revision whenever the user records a novelty answer', async () => {
     const memory = new MemoryStorage();
     const storage = memory as unknown as chrome.storage.StorageArea;

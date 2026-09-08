@@ -1,5 +1,12 @@
 import {
+  privateStorage,
+  privateStorageChanges,
+  getVaultStatus,
+} from '../vault/storage';
+import { installVaultMessages } from './vault';
+import {
   applyAttentionProgress,
+  cancelAttentionSession,
   createAttentionSession,
   getOpenAttentionSession,
   loadAttentionSessions,
@@ -25,6 +32,7 @@ import {
   type MaterialFeatures,
 } from '../analyzer/material-features';
 import { loadProfile } from '../profile/storage';
+import { isProfileReady } from '../profile/readiness';
 import { selectRelevantPersonalContext } from '../history/relevance';
 import { aggregateBrowserHistory } from '../history/evidence';
 import {
@@ -41,6 +49,7 @@ import {
   loadMaterialMemory,
   recordHoverPreviewEvent,
   recordMaterialEvaluation,
+  recordMaterialDecision,
   invalidateMaterialEvaluations,
 } from '../memory/material-memory';
 import {
@@ -80,7 +89,6 @@ import {
   loadNotionAuth,
   loadNotionSettings,
   saveNotionAuth,
-  saveNotionConnection,
 } from '../notion/storage';
 import {
   NOTION_CONFIG_TYPE,
@@ -128,27 +136,50 @@ import {
 import { EXTENSION_RUNTIME_VERSION } from '../shared/version';
 import { messageSenderMatchesPage } from './message-sender';
 import {
-  loadScenarioState,
-  normalizeAnalysisContext,
-} from '../scenario/scenario';
+  cardContextDto,
+  createCardContextMessageHandler,
+  loadCardContext,
+} from './card-context';
 import { upsertSavedMaterial } from '../popup/saved-materials';
 import { isPageCapture } from './message-guards';
 import { createBackgroundMessageRouter } from './message-router';
 import { recordDiagnostic } from '../diagnostics/diagnostics';
 import { loadPrivacySettings } from '../privacy/settings';
+import {
+  beginDataOperation,
+  beginSyncOperation,
+  cancelSyncOperation,
+  observeDataOperation,
+  commitDataOperation,
+  DataOperationCancelledError,
+  assertDataOperationCurrent,
+  type DataOperation,
+} from '../privacy/data-operations';
+import {
+  ATTENTION_INPUTS_INVALIDATED_TYPE,
+  changedInputKeys,
+} from './input-invalidation';
+import {
+  ATTENTION_MATERIAL_DECIDE_TYPE,
+  type AttentionMaterialDecideMessage,
+  type AttentionMaterialDecideResponse,
+} from '../attention/decision-messages';
+import { STORAGE_RETENTION_LIMITS } from '../storage/limits';
+import { DECISIONS_KEY } from '../popup/storage-keys';
+import type { DecisionRecord } from '../shared/types';
 
-const storageReady = chrome.storage.local.setAccessLevel({
+const storageReady = privateStorage.setAccessLevel({
   accessLevel: 'TRUSTED_CONTEXTS',
 });
+installVaultMessages();
 const LATEST_EVALUATION_KEY = 'latestEvaluation';
-const ANALYSIS_CONTEXT_KEY = 'analysisContext';
 const SAVED_MATERIALS_KEY = 'savedMaterials';
 let openTabsRefreshQueue: Promise<void> = Promise.resolve();
 const lifecycleRefreshQueue = new Map<number, Promise<void>>();
 
 async function loadInterfaceLanguage(): Promise<UiLanguage> {
   await storageReady;
-  const stored = await chrome.storage.local.get(UI_LANGUAGE_KEY);
+  const stored = await privateStorage.get(UI_LANGUAGE_KEY);
   return normalizeUiLanguage(stored[UI_LANGUAGE_KEY]);
 }
 
@@ -157,6 +188,7 @@ async function storeLifecycleDiagnostic(
   summary: ContentScriptReinjectionSummary,
 ): Promise<void> {
   await storageReady;
+  if ((await getVaultStatus()) !== 'unlocked') return;
   const diagnostic: ContentScriptLifecycleDiagnostic = {
     ...summary,
     firstError:
@@ -165,7 +197,7 @@ async function storeLifecycleDiagnostic(
     version: EXTENSION_RUNTIME_VERSION,
     checkedAt: new Date().toISOString(),
   };
-  await chrome.storage.local.set({
+  await privateStorage.set({
     [CONTENT_SCRIPT_LIFECYCLE_DIAGNOSTIC_KEY]: diagnostic,
   });
 }
@@ -178,7 +210,6 @@ async function refreshOpenWebTabs(
 ): Promise<void> {
   const summary = await ensureContentScriptInOpenWebTabs();
   await storeLifecycleDiagnostic(trigger, summary);
-  console.info('[attention:lifecycle] open tabs checked', summary);
 }
 
 function queueOpenWebTabsRefresh(
@@ -221,7 +252,6 @@ async function refreshWebTab(
   const result = await ensureContentScriptInTab(tab);
   const summary = summarizeContentScriptResults([result]);
   await storeLifecycleDiagnostic(trigger, summary);
-  console.info('[attention:lifecycle] tab checked', summary);
 }
 
 function queueWebTabRefresh(
@@ -301,7 +331,7 @@ function isSavedMaterial(value: unknown): value is SavedMaterial {
 }
 
 async function loadSavedMaterials(): Promise<SavedMaterial[]> {
-  const stored = await chrome.storage.local.get(SAVED_MATERIALS_KEY);
+  const stored = await privateStorage.get(SAVED_MATERIALS_KEY);
   const value: unknown = stored[SAVED_MATERIALS_KEY];
   return Array.isArray(value) ? value.filter(isSavedMaterial) : [];
 }
@@ -323,15 +353,78 @@ async function saveMaterialFromCard(
     request.capture,
     new Date().toISOString(),
   );
-  while (next.length > 0) {
-    try {
-      await chrome.storage.local.set({ [SAVED_MATERIALS_KEY]: next });
-      return { ok: true, savedCount: next.length };
-    } catch {
-      next.pop();
-    }
+  try {
+    await privateStorage.set({ [SAVED_MATERIALS_KEY]: next });
+    return { ok: true, savedCount: next.length };
+  } catch {
+    // A vault/IO failure is not evidence that existing articles should be lost.
+    return { ok: false };
   }
-  return { ok: false };
+}
+
+async function decideMaterial(
+  message: AttentionMaterialDecideMessage,
+): Promise<AttentionMaterialDecideResponse> {
+  const operation = await beginDataOperation();
+  await storageReady;
+  const context = await loadCurrentAnalysisContext();
+  const remembered = await findMaterialMemory(message.capture.url);
+  const preparation = await prepareLocalEvaluation(message.capture);
+  const evaluation = isEvaluationCacheCurrent(
+    remembered?.storedEvaluation,
+    preparation.sourceVersions,
+    context,
+    preparation.features,
+  )
+    ? remembered!.storedEvaluation!.evaluation
+    : (
+        await createAndStoreLocalEvaluation(
+          message.capture,
+          message.capture.title,
+          context,
+          preparation,
+          operation,
+        )
+      ).evaluation;
+  return commitDataOperation(operation, async () => {
+    if (message.decision === 'save') {
+      const saved = await saveMaterialFromCard({
+        type: 'ATTENTION_MATERIAL/SAVE',
+        capture: message.capture,
+      });
+      if (!saved.ok) return { ok: false };
+    }
+    const record: DecisionRecord = {
+      url: message.capture.url,
+      title: message.capture.title,
+      decision: message.decision,
+      decidedAt: new Date().toISOString(),
+    };
+    const stored = await privateStorage.get(DECISIONS_KEY);
+    const previous = Array.isArray(stored[DECISIONS_KEY])
+      ? (stored[DECISIONS_KEY] as DecisionRecord[])
+      : [];
+    await privateStorage.set({
+      [DECISIONS_KEY]: [
+        record,
+        ...previous.filter((item) => !canonicalMatch(item.url, record.url)),
+      ].slice(0, STORAGE_RETENTION_LIMITS.decisions),
+    });
+    await recordMaterialDecision(record);
+    if (message.decision === 'read' || message.decision === 'skim') {
+      const session = await createAttentionSession(
+        message.capture,
+        message.decision,
+        evaluation,
+        privateStorage,
+        new Date(),
+        context,
+      );
+      return { ok: true, session: sessionDescriptor(session) };
+    }
+    await cancelAttentionSession(message.capture.url);
+    return { ok: true };
+  });
 }
 
 function canonicalMatch(left: string, right: string): boolean {
@@ -354,12 +447,14 @@ function sessionDescriptor(
 async function autoStartSession(
   message: AttentionSessionAutoStartMessage,
 ): Promise<AttentionSessionAutoStartResponse | undefined> {
+  const operation = await beginDataOperation();
   await storageReady;
   if (!message.capture.isArticle || message.capture.wordCount < 80) {
     return undefined;
   }
   const context = await loadCurrentAnalysisContext();
   const preparation = await prepareLocalEvaluation(message.capture);
+  if (!isProfileReady(preparation.profile)) return undefined;
   const remembered = await findMaterialMemory(message.capture.url);
   const cachedEvaluation = remembered?.storedEvaluation;
   const matchingEvaluation = isEvaluationCacheCurrent(
@@ -378,24 +473,27 @@ async function autoStartSession(
         message.capture.title,
         context,
         preparation,
+        operation,
       )
     ).evaluation;
-  const existing = await getOpenAttentionSession(
-    message.capture.url,
-    chrome.storage.local,
-    context.scenario,
-  );
-  const session =
-    existing ??
-    (await createAttentionSession(
-      message.capture,
-      'read',
-      evaluation,
-      chrome.storage.local,
-      new Date(),
-      context,
-    ));
-  return { ok: true, session: sessionDescriptor(session) };
+  return commitDataOperation(operation, async () => {
+    const existing = await getOpenAttentionSession(
+      message.capture.url,
+      privateStorage,
+      context.scenario,
+    );
+    const session =
+      existing ??
+      (await createAttentionSession(
+        message.capture,
+        'read',
+        evaluation,
+        privateStorage,
+        new Date(),
+        context,
+      ));
+    return { ok: true, session: sessionDescriptor(session) };
+  });
 }
 
 interface LocalEvaluationPreparation {
@@ -423,6 +521,7 @@ async function createAndStoreLocalEvaluation(
   title: string,
   suppliedContext?: AnalysisContext,
   suppliedPreparation?: LocalEvaluationPreparation,
+  operation?: DataOperation,
 ): Promise<StoredEvaluation> {
   return createAndStoreEvaluation(
     capture,
@@ -430,6 +529,7 @@ async function createAndStoreLocalEvaluation(
     new LocalAnalyzer(),
     suppliedContext,
     suppliedPreparation,
+    operation,
   );
 }
 
@@ -439,7 +539,9 @@ async function createAndStoreEvaluation(
   analyzer: Analyzer,
   suppliedContext?: AnalysisContext,
   suppliedPreparation?: LocalEvaluationPreparation,
+  startedOperation?: DataOperation,
 ): Promise<StoredEvaluation> {
+  const operation = startedOperation ?? (await beginDataOperation());
   const context = suppliedContext ?? (await loadCurrentAnalysisContext());
   const preparation =
     suppliedPreparation ?? (await prepareLocalEvaluation(capture));
@@ -469,8 +571,21 @@ async function createAndStoreEvaluation(
     claimMemory,
     preparation.features,
   );
+  const cancellation = await observeDataOperation(operation);
+  let rawEvaluation;
+  try {
+    await assertDataOperationCurrent(operation);
+    rawEvaluation = await analyzer.analyze(
+      capture,
+      context,
+      relevantProfile,
+      cancellation.signal,
+    );
+  } finally {
+    cancellation.dispose();
+  }
   const evaluation = calibrateMaterialEvaluation(
-    await analyzer.analyze(capture, context, relevantProfile),
+    rawEvaluation,
     capture.readingTimeMinutes,
     utilityCalibration,
   );
@@ -484,7 +599,9 @@ async function createAndStoreEvaluation(
       preparation.sourceVersions,
     ),
   };
-  await recordMaterialEvaluation(storedEvaluation, title);
+  await commitDataOperation(operation, () =>
+    recordMaterialEvaluation(storedEvaluation, title),
+  );
   return storedEvaluation;
 }
 
@@ -495,21 +612,14 @@ function evaluationAnalysisSource(
 }
 
 async function loadCurrentAnalysisContext(): Promise<AnalysisContext> {
-  const stored = await chrome.storage.local.get(ANALYSIS_CONTEXT_KEY);
-  const base = normalizeAnalysisContext(stored[ANALYSIS_CONTEXT_KEY]);
-  const scenarioState = await loadScenarioState();
-  return {
-    ...base,
-    scenario: scenarioState.scenario,
-    relaxIntent: scenarioState.relaxIntent,
-    desiredEffort: scenarioState.desiredEffort,
-    leisureFormats: scenarioState.leisureFormats,
-  };
+  return loadCardContext();
 }
 
 async function saveQuickOutcome(
   message: AttentionOutcomeSubmitMessage,
+  startedOperation?: DataOperation,
 ): Promise<AttentionOutcomeSubmitResponse> {
+  const operation = startedOperation ?? (await beginDataOperation());
   await storageReady;
   const sessions = await loadAttentionSessions();
   const session = sessions.find(
@@ -525,17 +635,22 @@ async function saveQuickOutcome(
     return { ok: false };
   }
   const now = new Date();
-  await recordQuickOutcome(session, message.outcome, chrome.storage.local, now);
+  await commitDataOperation(operation, () =>
+    recordQuickOutcome(session, message.outcome, privateStorage, now),
+  );
   return { ok: true };
 }
 
 async function hoverPreviewResponse(
   request: HoverPreviewRequest,
-): Promise<HoverPreviewResponse> {
+): Promise<HoverPreviewResponse | undefined> {
+  const operation = await beginDataOperation();
   await storageReady;
+  const profile = await loadProfile();
+  if (!isProfileReady(profile)) return undefined;
   const pageCapabilities = request.capture
     ? await Promise.all([
-        chrome.storage.local.get(NOVEL_PASSAGE_HIGHLIGHTS_KEY),
+        privateStorage.get(NOVEL_PASSAGE_HIGHLIGHTS_KEY),
         loadReadwiseSettings(),
         loadAiAnalyzerSettings(),
         loadPrivacySettings(),
@@ -571,7 +686,6 @@ async function hoverPreviewResponse(
     aiState: pageCapabilities.aiState,
   };
   const context = await loadCurrentAnalysisContext();
-  const profile = await loadProfile();
   const [features, sourceVersions] = await Promise.all([
     request.capture ? buildMaterialFeatures(request.capture) : null,
     loadEvaluationSourceVersions(profile),
@@ -584,9 +698,11 @@ async function hoverPreviewResponse(
         request.title,
         context,
         preparation ?? undefined,
+        operation,
       );
       return {
         ok: true,
+        context: cardContextDto(localEvaluation.context),
         preview: createFullAnalysisHoverPreview(localEvaluation.evaluation),
         analysisSource: 'local',
         saved: await isMaterialSaved(request.url),
@@ -603,29 +719,36 @@ async function hoverPreviewResponse(
         ),
         context,
         preparation ?? undefined,
+        operation,
       );
       return {
         ok: true,
+        context: cardContextDto(aiEvaluation.context),
         preview: createFullAnalysisHoverPreview(aiEvaluation.evaluation),
         analysisSource: 'ai',
         saved: await isMaterialSaved(request.url),
         ...capabilities,
       };
     } catch (error) {
-      await recordDiagnostic({
-        subsystem: 'background',
-        operation: 'hover-preview-ai-analysis',
-        code: 'HOVER_PREVIEW_AI_FAILED',
-        error,
-      }).catch(() => undefined);
+      if (error instanceof DataOperationCancelledError) throw error;
+      await commitDataOperation(operation, () =>
+        recordDiagnostic({
+          subsystem: 'background',
+          operation: 'hover-preview-ai-analysis',
+          code: 'HOVER_PREVIEW_AI_FAILED',
+          error,
+        }),
+      ).catch(() => undefined);
       const localEvaluation = await createAndStoreLocalEvaluation(
         request.capture,
         request.title,
         context,
         preparation ?? undefined,
+        operation,
       );
       return {
         ok: true,
+        context: cardContextDto(localEvaluation.context),
         preview: createFullAnalysisHoverPreview(localEvaluation.evaluation),
         analysisSource: 'local',
         saved: await isMaterialSaved(request.url),
@@ -647,6 +770,7 @@ async function hoverPreviewResponse(
   ) {
     return {
       ok: true,
+      context: cardContextDto(remembered.storedEvaluation.context),
       preview: createFullAnalysisHoverPreview(
         remembered.storedEvaluation.evaluation,
       ),
@@ -657,7 +781,7 @@ async function hoverPreviewResponse(
       ...capabilities,
     };
   }
-  const stored = await chrome.storage.local.get(LATEST_EVALUATION_KEY);
+  const stored = await privateStorage.get(LATEST_EVALUATION_KEY);
   const latest = stored[LATEST_EVALUATION_KEY] as StoredEvaluation | undefined;
   if (
     latest?.evaluation &&
@@ -674,6 +798,7 @@ async function hoverPreviewResponse(
   ) {
     return {
       ok: true,
+      context: cardContextDto(latest.context),
       preview: createFullAnalysisHoverPreview(latest.evaluation),
       analysisSource: evaluationAnalysisSource(latest.evaluation),
       saved: await isMaterialSaved(request.url),
@@ -686,9 +811,11 @@ async function hoverPreviewResponse(
       request.title,
       context,
       preparation ?? undefined,
+      operation,
     );
     return {
       ok: true,
+      context: cardContextDto(storedEvaluation.context),
       preview: createFullAnalysisHoverPreview(storedEvaluation.evaluation),
       analysisSource: evaluationAnalysisSource(storedEvaluation.evaluation),
       saved: await isMaterialSaved(request.url),
@@ -703,6 +830,7 @@ async function hoverPreviewResponse(
   ]);
   return {
     ok: true,
+    context,
     preview: await createHoverPreview(
       request,
       profile,
@@ -719,15 +847,20 @@ async function hoverPreviewResponse(
 
 async function handleNovelPassageMessage(
   message: NovelPassageMessage,
+  startedOperation?: DataOperation,
 ): Promise<NovelPassageActionResponse> {
+  const operation = startedOperation ?? (await beginDataOperation());
   await storageReady;
   try {
     if (message.type === NOVEL_PASSAGE_FEEDBACK_TYPE) {
-      await recordNovelPassageFeedback(message);
+      await commitDataOperation(operation, () =>
+        recordNovelPassageFeedback(message),
+      );
       return { ok: true };
     }
     const token = await loadReadwiseToken();
     if (!token) return { ok: false, error: 'not_connected' };
+    await assertDataOperationCurrent(operation);
     await saveReadwiseHighlight(token, {
       text: message.excerpt,
       title: message.title,
@@ -736,16 +869,20 @@ async function handleNovelPassageMessage(
     });
     return { ok: true };
   } catch (error) {
+    if (error instanceof DataOperationCancelledError)
+      return { ok: false, error: 'operation_cancelled' };
     const code =
       error && typeof error === 'object' && 'code' in error
         ? String((error as { code: unknown }).code)
         : 'request_failed';
-    await recordDiagnostic({
-      subsystem: 'background',
-      operation: 'novel-passage-action',
-      code: `NOVEL_PASSAGE_${code.toUpperCase()}`,
-      error,
-    }).catch(() => undefined);
+    await commitDataOperation(operation, () =>
+      recordDiagnostic({
+        subsystem: 'background',
+        operation: 'novel-passage-action',
+        code: `NOVEL_PASSAGE_${code.toUpperCase()}`,
+        error,
+      }),
+    ).catch(() => undefined);
     return { ok: false, error: code };
   }
 }
@@ -763,11 +900,36 @@ function senderIsTrustedExtensionPage(
 async function importBrowserHistory(
   message: BrowserHistoryImportRequest,
 ): Promise<BrowserHistoryImportResponse> {
+  let operation: DataOperation;
+  try {
+    operation = await beginSyncOperation(
+      'history',
+      message.generation === undefined
+        ? undefined
+        : {
+            generation: message.generation,
+            vaultEpoch: message.vaultEpoch,
+            ...(message.syncRevision
+              ? {
+                  sync: {
+                    source: 'history' as const,
+                    revision: message.syncRevision,
+                  },
+                }
+              : {}),
+          },
+    );
+  } catch (error) {
+    if (error instanceof DataOperationCancelledError)
+      return { ok: false, error: 'operation_cancelled' };
+    throw error;
+  }
   await storageReady;
   const endTime = Date.now();
   let response: BrowserHistoryImportResponse | null = null;
   let permissionRevoked = false;
   try {
+    await assertDataOperationCurrent(operation);
     const items = await chrome.history.search({
       text: '',
       startTime: endTime - message.lookbackDays * 86_400_000,
@@ -779,32 +941,40 @@ async function importBrowserHistory(
       message.lookbackDays,
       new Date(endTime),
     );
-    await saveBrowserHistoryEvidence(evidence, message.lookbackDays, false);
+    await commitDataOperation(operation, () =>
+      saveBrowserHistoryEvidence(evidence, message.lookbackDays, false),
+    );
     response = {
       ok: true,
       processedUrlCount: evidence.processedUrlCount,
       totalVisitCount: evidence.totalVisitCount,
       excludedUrlCount: evidence.excludedUrlCount,
     };
+  } catch (error) {
+    if (!(error instanceof DataOperationCancelledError)) throw error;
+    response = { ok: false, error: 'operation_cancelled' };
   } finally {
-    permissionRevoked = await chrome.permissions
-      .remove({ permissions: ['history'] })
-      .catch(() => false);
-    const evidence = await loadBrowserHistoryEvidence().catch(() => null);
-    if (evidence) {
-      await saveBrowserHistoryEvidence(
-        evidence,
-        message.lookbackDays,
-        !permissionRevoked,
-      ).catch(() => undefined);
-    }
+    await commitDataOperation(operation, async () => {
+      // Only the current importer owns the temporary permission. An older
+      // response must not revoke access granted to a replacement import.
+      permissionRevoked = await chrome.permissions
+        .remove({ permissions: ['history'] })
+        .catch(() => false);
+      const evidence = await loadBrowserHistoryEvidence();
+      if (evidence)
+        await saveBrowserHistoryEvidence(
+          evidence,
+          message.lookbackDays,
+          !permissionRevoked,
+        );
+    }).catch(() => undefined);
   }
   return { ...(response ?? { ok: false }), permissionRevoked };
 }
 
 async function invalidateAnalysisCaches(): Promise<void> {
   await Promise.all([
-    chrome.storage.local.remove(LATEST_EVALUATION_KEY),
+    privateStorage.remove(LATEST_EVALUATION_KEY),
     invalidateMaterialEvaluations(),
   ]);
 }
@@ -812,13 +982,16 @@ async function invalidateAnalysisCaches(): Promise<void> {
 async function handleReadwiseRequest(
   message: ReadwiseRequest,
 ): Promise<ReadwiseSyncResponse> {
+  const operation = await beginSyncOperation('readwise');
   await storageReady;
   const rawToken =
     message.type === 'attention:readwise-connect'
       ? message.token
       : await loadReadwiseToken();
   if (!rawToken) return { ok: false, error: 'not_connected' };
+  let observation: Awaited<ReturnType<typeof observeDataOperation>> | undefined;
   try {
+    observation = await observeDataOperation(operation);
     const isConnect = message.type === 'attention:readwise-connect';
     const [previousEvidence, previousSettings] = isConnect
       ? [null, null]
@@ -830,15 +1003,17 @@ async function handleReadwiseRequest(
       new Date(syncedAt),
       previousEvidence,
       previousSettings?.lastSyncedAt ?? null,
+      observation.signal,
     );
-    if (message.type === 'attention:readwise-connect') {
-      await saveReadwiseConnection(token, evidence, syncedAt);
-    } else {
-      await saveReadwiseEvidence(evidence, syncedAt);
-    }
-    if (isConnect || evidence.generatedAt !== previousEvidence?.generatedAt) {
-      await invalidateAnalysisCaches();
-    }
+    await commitDataOperation(operation, async () => {
+      if (message.type === 'attention:readwise-connect') {
+        await saveReadwiseConnection(token, evidence, syncedAt);
+      } else {
+        await saveReadwiseEvidence(evidence, syncedAt);
+      }
+      if (isConnect || evidence.generatedAt !== previousEvidence?.generatedAt)
+        await invalidateAnalysisCaches();
+    });
     return {
       ok: true,
       sourceCount: evidence.sourceCount,
@@ -847,87 +1022,149 @@ async function handleReadwiseRequest(
       excludedSourceCount: evidence.excludedSourceCount,
     };
   } catch (error) {
+    if (
+      error instanceof DataOperationCancelledError ||
+      observation?.signal.aborted
+    )
+      return { ok: false, error: 'operation_cancelled' };
     const code =
       error && typeof error === 'object' && 'code' in error
         ? String((error as { code: unknown }).code)
         : 'sync_failed';
-    await recordDiagnostic({
-      subsystem: 'background',
-      operation: 'sync-readwise',
-      code: `READWISE_${code.toUpperCase()}`,
-      error,
-    }).catch(() => undefined);
+    await commitDataOperation(operation, () =>
+      recordDiagnostic({
+        subsystem: 'background',
+        operation: 'sync-readwise',
+        code: `READWISE_${code.toUpperCase()}`,
+        error,
+      }),
+    ).catch(() => undefined);
     return { ok: false, error: code };
+  } finally {
+    observation?.dispose();
   }
 }
 
 async function handleNotionRequest(
   message: NotionRequest,
 ): Promise<NotionResponse> {
-  await storageReady;
   if (message.type === NOTION_CONFIG_TYPE) {
+    const operation = await beginDataOperation();
+    const observation = await observeDataOperation(operation);
+    await storageReady;
     try {
-      return { ok: true, clientId: await loadNotionOAuthClientId() };
+      return {
+        ok: true,
+        clientId: await loadNotionOAuthClientId(observation.signal),
+      };
     } catch (error) {
       const code =
         error && typeof error === 'object' && 'code' in error
           ? String((error as { code: unknown }).code)
           : 'oauth_not_configured';
       return { ok: false, error: code };
+    } finally {
+      observation.dispose();
     }
   }
   if (message.type === NOTION_DISCONNECT_TYPE) {
-    const auth = await loadNotionAuth();
-    if (auth) {
-      await revokeNotionToken(auth.accessToken).catch((error) =>
-        recordDiagnostic({
-          subsystem: 'background',
-          operation: 'revoke-notion',
-          code: 'NOTION_REVOKE_FAILED',
-          error,
-        }),
-      );
-    }
-    await Promise.all([clearNotionConnection(), clearNotionDatabase()]);
-    await invalidateAnalysisCaches();
+    const auth = await cancelSyncOperation('notion', async () => {
+      await storageReady;
+      const current = await loadNotionAuth();
+      await Promise.all([clearNotionConnection(), clearNotionDatabase()]);
+      await invalidateAnalysisCaches();
+      return current;
+    });
+    if (auth) void revokeNotionToken(auth.accessToken).catch(() => undefined);
     return { ok: true };
   }
 
+  let operation: DataOperation;
   try {
+    operation = await beginSyncOperation(
+      'notion',
+      message.type === NOTION_CONNECT_TYPE && message.generation !== undefined
+        ? {
+            generation: message.generation,
+            vaultEpoch: message.vaultEpoch,
+            ...(message.syncRevision
+              ? {
+                  sync: {
+                    source: 'notion' as const,
+                    revision: message.syncRevision,
+                  },
+                }
+              : {}),
+          }
+        : undefined,
+    );
+  } catch (error) {
+    if (error instanceof DataOperationCancelledError)
+      return { ok: false, error: 'operation_cancelled' };
+    throw error;
+  }
+  await storageReady;
+  let observation: Awaited<ReturnType<typeof observeDataOperation>> | undefined;
+  try {
+    observation = await observeDataOperation(operation);
+    await assertDataOperationCurrent(operation);
     const previousSettings = await loadNotionSettings();
     const previousAuth =
       message.type === NOTION_CONNECT_TYPE ? await loadNotionAuth() : null;
     const auth =
       message.type === NOTION_CONNECT_TYPE
-        ? await exchangeNotionCode(message.code, message.redirectUri)
+        ? await exchangeNotionCode(
+            message.code,
+            message.redirectUri,
+            observation.signal,
+          )
         : await loadNotionAuth();
     if (!auth) return { ok: false, error: 'not_connected' };
-    const client = new NotionApiClient(auth, async (current) => {
-      if (!current.refreshToken) return null;
-      const refreshed = await refreshNotionToken(current.refreshToken);
-      await saveNotionAuth(refreshed);
-      return refreshed;
-    });
+    const client = new NotionApiClient(
+      auth,
+      async (current) => {
+        if (!current.refreshToken) return null;
+        const refreshed = await refreshNotionToken(
+          current.refreshToken,
+          observation?.signal,
+        );
+        await commitDataOperation(operation, async () => {
+          // A new workspace's credentials stay provisional until its index
+          // commits. Refresh only the already persisted connection in place.
+          const stored = await loadNotionAuth();
+          if (stored?.accessToken === current.accessToken)
+            await saveNotionAuth(refreshed);
+        });
+        return refreshed;
+      },
+      {
+        signal: observation.signal,
+        assertCurrent: () => assertDataOperationCurrent(operation),
+      },
+    );
     const result = await syncNotionWorkspace({
       auth,
       sourceMode: message.sourceMode,
       client,
+      operation,
     });
-    await saveNotionConnection(result.auth, result.settings);
+    await commitDataOperation(operation, async () => {
+      if (
+        result.settings.evidenceUpdatedAt !== previousSettings.evidenceUpdatedAt
+      )
+        await invalidateAnalysisCaches();
+    });
     if (previousAuth && previousAuth.accessToken !== result.auth.accessToken) {
       await revokeNotionToken(previousAuth.accessToken).catch((error) =>
-        recordDiagnostic({
-          subsystem: 'background',
-          operation: 'revoke-replaced-notion-token',
-          code: 'NOTION_REPLACED_TOKEN_REVOKE_FAILED',
-          error,
-        }),
+        commitDataOperation(operation, () =>
+          recordDiagnostic({
+            subsystem: 'background',
+            operation: 'revoke-replaced-notion-token',
+            code: 'NOTION_REPLACED_TOKEN_REVOKE_FAILED',
+            error,
+          }),
+        ).catch(() => undefined),
       );
-    }
-    if (
-      result.settings.evidenceUpdatedAt !== previousSettings.evidenceUpdatedAt
-    ) {
-      await invalidateAnalysisCaches();
     }
     return {
       ok: true,
@@ -937,19 +1174,32 @@ async function handleNotionRequest(
       workspaceName: result.settings.workspaceName,
     };
   } catch (error) {
+    if (
+      error instanceof DataOperationCancelledError ||
+      observation?.signal.aborted
+    )
+      return { ok: false, error: 'operation_cancelled' };
     const code =
       error && typeof error === 'object' && 'code' in error
         ? String((error as { code: unknown }).code)
         : 'sync_failed';
-    await recordDiagnostic({
-      subsystem: 'background',
-      operation: 'sync-notion',
-      code: `NOTION_${code.toUpperCase()}`,
-      error,
-    }).catch(() => undefined);
+    await commitDataOperation(operation, () =>
+      recordDiagnostic({
+        subsystem: 'background',
+        operation: 'sync-notion',
+        code: `NOTION_${code.toUpperCase()}`,
+        error,
+      }),
+    ).catch(() => undefined);
     return { ok: false, error: code };
+  } finally {
+    observation?.dispose();
   }
 }
+
+chrome.runtime.onMessage.addListener(
+  createCardContextMessageHandler({ storageReady }),
+);
 
 chrome.runtime.onMessage.addListener(
   createBackgroundMessageRouter({
@@ -978,7 +1228,55 @@ chrome.runtime.onMessage.addListener(
   }),
 );
 
-chrome.storage.onChanged.addListener((changes, areaName) => {
+chrome.runtime.onMessage.addListener(
+  (message: unknown, sender, sendResponse) => {
+    if (!message || typeof message !== 'object') return;
+    const input = message as Record<string, unknown>;
+    if (input.type !== ATTENTION_MATERIAL_DECIDE_TYPE) return;
+    if (
+      !isPageCapture(input.capture) ||
+      !['read', 'skim', 'save', 'skip'].includes(String(input.decision)) ||
+      !messageSenderMatchesPage(sender, input.capture.url)
+    ) {
+      sendResponse({ ok: false });
+      return;
+    }
+    void decideMaterial(input as unknown as AttentionMaterialDecideMessage)
+      .then(sendResponse)
+      .catch(() => sendResponse({ ok: false }));
+    return true;
+  },
+);
+
+const pendingInputKeys = new Set<string>();
+let inputBroadcastTimer: ReturnType<typeof setTimeout> | undefined;
+privateStorageChanges.addListener((changes, areaName) => {
+  for (const key of changedInputKeys(changes, areaName))
+    pendingInputKeys.add(key);
+  if (pendingInputKeys.size === 0 || inputBroadcastTimer !== undefined) return;
+  inputBroadcastTimer = setTimeout(() => {
+    inputBroadcastTimer = undefined;
+    const changedKeys = [...pendingInputKeys];
+    pendingInputKeys.clear();
+    void chrome.tabs
+      .query({ url: ['http://*/*', 'https://*/*'] })
+      .then((tabs) =>
+        Promise.allSettled(
+          tabs
+            .filter((tab) => typeof tab.id === 'number')
+            .map((tab) =>
+              chrome.tabs.sendMessage(tab.id!, {
+                type: ATTENTION_INPUTS_INVALIDATED_TYPE,
+                changedKeys,
+              }),
+            ),
+        ),
+      )
+      .catch(() => undefined);
+  }, 50);
+});
+
+privateStorageChanges.addListener((changes, areaName) => {
   if (areaName !== 'local' || !changes[UI_LANGUAGE_KEY]) return;
   const language = normalizeUiLanguage(changes[UI_LANGUAGE_KEY].newValue);
   void chrome.tabs

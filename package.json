@@ -1,12 +1,13 @@
 {
   "name": "page-capture-extension",
-  "version": "0.21.12",
+  "version": "0.24.0",
   "private": true,
   "type": "module",
   "scripts": {
     "build": "node scripts/build.mjs",
     "check": "pnpm typecheck && pnpm lint && pnpm test && pnpm build",
     "check:real": "node scripts/check-real-materials.mjs",
+    "check:corpus": "node scripts/check-corpus.mjs",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "lint": "eslint . --max-warnings=0",

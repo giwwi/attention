@@ -1,3 +1,4 @@
+import { privateStorage } from '../vault/storage';
 import {
   EMPTY_NOTION_SETTINGS,
   NOTION_AUTH_KEY,
@@ -52,7 +53,7 @@ function isAuth(value: unknown): value is NotionAuth {
 
 export async function loadNotionSettings(): Promise<NotionSettings> {
   const stored = await measuredStorageGet(
-    chrome.storage.local,
+    privateStorage,
     'notion-settings',
     NOTION_SETTINGS_KEY,
   );
@@ -67,7 +68,7 @@ export async function loadNotionSettings(): Promise<NotionSettings> {
 
 export async function loadNotionAuth(): Promise<NotionAuth | null> {
   const stored = await measuredStorageGet(
-    chrome.storage.local,
+    privateStorage,
     'notion-auth',
     NOTION_AUTH_KEY,
   );
@@ -79,7 +80,7 @@ export async function saveNotionConnection(
   auth: NotionAuth,
   settings: NotionSettings,
 ): Promise<void> {
-  await measuredStorageSet(chrome.storage.local, 'notion-connection', {
+  await measuredStorageSet(privateStorage, 'notion-connection', {
     [NOTION_AUTH_KEY]: auth,
     [NOTION_SETTINGS_KEY]: settings,
   });
@@ -88,19 +89,19 @@ export async function saveNotionConnection(
 export async function saveNotionSettings(
   settings: NotionSettings,
 ): Promise<void> {
-  await measuredStorageSet(chrome.storage.local, 'notion-settings', {
+  await measuredStorageSet(privateStorage, 'notion-settings', {
     [NOTION_SETTINGS_KEY]: settings,
   });
 }
 
 export async function saveNotionAuth(auth: NotionAuth): Promise<void> {
-  await measuredStorageSet(chrome.storage.local, 'notion-auth', {
+  await measuredStorageSet(privateStorage, 'notion-auth', {
     [NOTION_AUTH_KEY]: auth,
   });
 }
 
 export async function clearNotionConnection(): Promise<void> {
-  await measuredStorageRemove(chrome.storage.local, 'notion-connection', [
+  await measuredStorageRemove(privateStorage, 'notion-connection', [
     NOTION_AUTH_KEY,
     NOTION_SETTINGS_KEY,
   ]);

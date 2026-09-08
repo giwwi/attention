@@ -36,6 +36,36 @@ const article = [
 ].join('\n\n');
 
 describe('claim-level novelty and quality assessment', () => {
+  it('does not infer knowledge of new numbers from a conflicting known statement', () => {
+    const known =
+      'A field experiment found that review reduced decision errors by 90 percent.';
+    const next = known.replace('90', '10');
+    const profile: RelevantProfileContext = {
+      profileUpdatedAt: '2026-09-05T00:00:00Z',
+      signals: [],
+      knowledgeSignals: [
+        {
+          id: 'known',
+          profileEntryId: 'known',
+          kind: 'known',
+          topic: 'Decision errors',
+          statement: known,
+          evidenceType: 'demonstrated',
+          confidence: 1,
+          matchScore: 1,
+        },
+      ],
+    };
+    const assessed = (text: string) =>
+      buildLocalInsights(
+        material(text),
+        [{ claim: text, type: 'fact', importance: 'primary' }],
+        profile,
+      ).keyClaims[0]!;
+    expect(assessed(known).knownProbability).toBeGreaterThan(0.8);
+    expect(assessed(next).knownProbability).toBeLessThanOrEqual(0.5);
+    expect(assessed(next).novelty).not.toBe('known');
+  });
   it('extracts substantive claims and classifies empirical evidence', () => {
     const claims = extractKeyClaims(article, 'Продуктивность AI-агентов');
 

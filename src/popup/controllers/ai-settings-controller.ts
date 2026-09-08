@@ -6,8 +6,14 @@ import {
   type AiAnalyzerSettings,
 } from '../../analyzer/settings';
 import { uiText, type UiLanguage } from '../../i18n/ui';
+import { popupText } from '../../i18n/popup';
 import { getElement, setPopupStatus } from '../dom';
 import { saveLocalOnlyMode } from '../../privacy/settings';
+import {
+  beginDataOperation,
+  commitDataOperation,
+  DataOperationCancelledError,
+} from '../../privacy/data-operations';
 
 export interface AiSettingsControllerOptions {
   status: HTMLParagraphElement;
@@ -38,8 +44,6 @@ export class AiSettingsController {
     getElement<HTMLButtonElement>('save-ai-settings');
   private readonly disconnectButton =
     getElement<HTMLButtonElement>('disconnect-ai');
-  private readonly analysisNote =
-    getElement<HTMLParagraphElement>('analysis-note');
   private settings: AiAnalyzerSettings | null = null;
 
   constructor(private readonly options: AiSettingsControllerOptions) {
@@ -48,6 +52,12 @@ export class AiSettingsController {
 
   get current(): AiAnalyzerSettings | null {
     return this.settings;
+  }
+
+  resetAfterErasure(): void {
+    this.settings = null;
+    this.keyInput.value = '';
+    this.modelInput.value = '';
   }
 
   get isVisible(): boolean {
@@ -74,16 +84,13 @@ export class AiSettingsController {
       : uiText(language, 'localEvaluation');
     this.disconnectButton.hidden = !connected;
     this.settingsStatus.textContent = connected
-      ? `AI подключён: ${model}. Чтобы заменить модель или ключ, измените нужное поле.`
-      : 'Без ключа Attention продолжает использовать локальную оценку.';
+      ? uiText(language, 'connectedModel', { model })
+      : uiText(language, 'localEvaluation');
     this.modelInput.value = model;
     this.keyInput.value = '';
     this.keyInput.placeholder = connected
       ? uiText(language, 'savedLocally')
       : uiText(language, 'pasteKey');
-    this.analysisNote.textContent = connected
-      ? 'AI анализирует только после нажатия. При ошибке используется локальный fallback.'
-      : 'Используется прозрачная локальная оценка без AI.';
   }
 
   hide(): void {
@@ -99,7 +106,7 @@ export class AiSettingsController {
           setPopupStatus(
             this.options.status,
             'error',
-            'Не удалось открыть настройки AI.',
+            popupText(this.options.getLanguage(), 'settingsFailed'),
           );
         });
       } else {
@@ -129,25 +136,31 @@ export class AiSettingsController {
   private async connect(): Promise<void> {
     this.saveButton.disabled = true;
     try {
-      this.settings = await saveAiAnalyzerSettings(
-        this.keyInput.value,
-        this.modelInput.value,
-      );
-      // Connecting cloud AI is an explicit user action, so it may disable the
-      // fail-closed local-only default without changing how the key is stored.
-      await saveLocalOnlyMode(false);
+      const operation = await beginDataOperation();
+      await commitDataOperation(operation, async () => {
+        this.settings = await saveAiAnalyzerSettings(
+          this.keyInput.value,
+          this.modelInput.value,
+        );
+        // Connecting cloud AI is an explicit user action, so it may disable the
+        // fail-closed local-only default without changing how the key is stored.
+        await saveLocalOnlyMode(false);
+      });
       this.renderState();
       this.options.onSettingsChanged();
       setPopupStatus(
         this.options.status,
         'success',
-        'AI подключён. Следующая оценка будет выполнена моделью.',
+        uiText(this.options.getLanguage(), 'connectedModel', {
+          model: this.settings?.model ?? '',
+        }),
       );
     } catch (error) {
-      this.settingsStatus.textContent =
-        error instanceof Error
-          ? error.message
-          : 'Не удалось сохранить настройки AI.';
+      if (error instanceof DataOperationCancelledError) return;
+      this.settingsStatus.textContent = popupText(
+        this.options.getLanguage(),
+        'settingsFailed',
+      );
     } finally {
       this.saveButton.disabled = false;
     }
@@ -156,17 +169,22 @@ export class AiSettingsController {
   private async disconnect(): Promise<void> {
     this.disconnectButton.disabled = true;
     try {
-      await clearAiAnalyzerSettings();
+      const operation = await beginDataOperation();
+      await commitDataOperation(operation, () => clearAiAnalyzerSettings());
       this.settings = null;
       this.renderState();
       this.options.onSettingsChanged();
       setPopupStatus(
         this.options.status,
         'success',
-        'AI отключён. Используется локальная оценка.',
+        uiText(this.options.getLanguage(), 'localEvaluation'),
       );
-    } catch {
-      this.settingsStatus.textContent = 'Не удалось удалить ключ AI.';
+    } catch (error) {
+      if (error instanceof DataOperationCancelledError) return;
+      this.settingsStatus.textContent = popupText(
+        this.options.getLanguage(),
+        'settingsFailed',
+      );
     } finally {
       this.disconnectButton.disabled = false;
     }

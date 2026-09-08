@@ -1,4 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
+vi.mock('../src/content/user-interaction', () => ({
+  isTrustedUserInteraction: () => true,
+}));
 import { installOutcomePrompt } from '../src/content/outcome-prompt';
 
 describe('on-page outcome prompt', () => {

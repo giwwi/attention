@@ -1,4 +1,6 @@
 import { describe, expect, it } from 'vitest';
+import { LocalAnalyzer } from '../src/analyzer/local-analyzer';
+import { buildMaterialFeatures } from '../src/analyzer/material-features';
 import { applySignalFeedback } from '../src/profile/feedback';
 import { normalizePortableProfile } from '../src/profile/normalize';
 import { selectRelevantProfileContext } from '../src/profile/relevance';
@@ -57,6 +59,83 @@ function profile(value: Partial<PortableProfile>) {
 }
 
 describe('relevant profile selection', () => {
+  it('does not turn the current intent into evidence about an unrelated article', async () => {
+    const goal = 'Optimize PostgreSQL database indexes';
+    const personalProfile = profile({
+      goals: [{ goal, priority: 'high', status: 'active', confidence: 1 }],
+      learningAreas: [
+        { topic: 'PostgreSQL indexes', focus: null, confidence: 1 },
+      ],
+    });
+    const pottery = material({
+      title: 'Ancient ceramic pottery',
+      excerpt: 'Pottery fragments from an ancient village.',
+      content:
+        'Archaeologists examine ceramic vessels from an ancient village. '.repeat(
+          100,
+        ),
+      headings: ['Vessels and fragments'],
+      language: 'en',
+    });
+    const context = {
+      intent: goal,
+      availableMinutes: 15,
+      scenario: 'work',
+    } as const;
+    const baseline = await new LocalAnalyzer().analyze(pottery, context, null);
+
+    for (const features of [undefined, await buildMaterialFeatures(pottery)]) {
+      const selected = selectRelevantProfileContext(
+        personalProfile,
+        pottery,
+        context,
+        features,
+      );
+      expect(selected?.signals ?? []).toEqual([]);
+      expect(selected?.knowledgeSignals ?? []).toEqual([]);
+      const result = await new LocalAnalyzer().analyze(
+        pottery,
+        context,
+        selected,
+      );
+      expect(result.utilityScore).toBe(baseline.utilityScore);
+      expect(result.components).toEqual(baseline.components);
+      expect(result.recommendedAction).not.toBe('read');
+    }
+  });
+
+  it('still selects a goal supported by the article when an intent is supplied', async () => {
+    const goal = 'Optimize PostgreSQL database indexes';
+    const personalProfile = profile({
+      goals: [{ goal, priority: 'high', status: 'active', confidence: 1 }],
+    });
+    const article = material({
+      title: 'Optimize PostgreSQL database indexes',
+      excerpt: 'Practical indexing methods and query plans in PostgreSQL.',
+      content:
+        'Use PostgreSQL indexes to improve database query plans. '.repeat(100),
+      headings: ['Database indexes'],
+      language: 'en',
+    });
+    const selected = selectRelevantProfileContext(
+      personalProfile,
+      article,
+      {
+        intent: goal,
+        availableMinutes: 15,
+        scenario: 'work',
+      },
+      await buildMaterialFeatures(article),
+    );
+    expect(selected?.signals).toContainEqual(
+      expect.objectContaining({
+        kind: 'goal',
+        label: goal,
+        matchScore: 1,
+      }),
+    );
+  });
+
   it('selects matching active goals and interests but excludes unrelated data', () => {
     const personalProfile = profile({
       interests: [

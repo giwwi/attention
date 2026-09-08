@@ -1,0 +1,180 @@
+{
+  "schemaVersion": 1,
+  "id": "attention-authored-challenge-v1",
+  "provenance": "Original synthetic examples authored during implementation; labels are provisional and have not been independently reviewed by human annotators.",
+  "split": "development-challenge-only",
+  "novelty": [
+    {
+      "id": "n01",
+      "language": "en",
+      "prior": "The measured cache hit rate increased by 90% in the controlled benchmark.",
+      "claim": "The measured cache hit rate increased by 10% in the controlled benchmark.",
+      "label": "different",
+      "rationale": "Changed magnitude; topic overlap does not establish knowledge of the new result."
+    },
+    {
+      "id": "n02",
+      "language": "ru",
+      "prior": "В эксперименте доля успешных запросов выросла на 90 процентов после изменения кэша.",
+      "claim": "В эксперименте доля успешных запросов выросла на 10 процентов после изменения кэша.",
+      "label": "different",
+      "rationale": "Different numerical results in otherwise identical Russian statements."
+    },
+    {
+      "id": "n03",
+      "language": "en",
+      "prior": "The measured cache hit rate increased by 90% in the controlled benchmark.",
+      "claim": "The measured cache hit rate increased by 90% in the controlled benchmark.",
+      "label": "same",
+      "rationale": "Exact positive control."
+    },
+    {
+      "id": "n04",
+      "language": "ru",
+      "prior": "В эксперименте доля успешных запросов выросла на 90 процентов после изменения кэша.",
+      "claim": "В эксперименте доля успешных запросов выросла на 90 процентов после изменения кэша.",
+      "label": "same",
+      "rationale": "Exact Russian positive control."
+    },
+    {
+      "id": "n05",
+      "language": "en",
+      "prior": "The client request timeout is configured to 10 ms by default.",
+      "claim": "The client request timeout is configured to 10 s by default.",
+      "label": "different",
+      "rationale": "Same number, different time unit."
+    },
+    {
+      "id": "n06",
+      "language": "en",
+      "prior": "The document retention policy became effective in 2024 for all projects.",
+      "claim": "The document retention policy became effective in 2025 for all projects.",
+      "label": "different",
+      "rationale": "Changed year."
+    },
+    {
+      "id": "n07",
+      "language": "en",
+      "prior": "The database transaction guarantees atomic updates across all affected rows.",
+      "claim": "The database transaction does not guarantee atomic updates across all affected rows.",
+      "label": "different",
+      "rationale": "Explicit negation reverses the guarantee."
+    },
+    {
+      "id": "n08",
+      "language": "ru",
+      "prior": "Система сохраняет изменения документа после завершения фоновой синхронизации.",
+      "claim": "Система не сохраняет изменения документа после завершения фоновой синхронизации.",
+      "label": "different",
+      "rationale": "Russian negation changes the claim."
+    },
+    {
+      "id": "n09",
+      "language": "en",
+      "prior": "In the benchmark, throughput increased after enabling the worker pool.",
+      "claim": "In the benchmark, throughput decreased after enabling the worker pool.",
+      "label": "different",
+      "rationale": "Opposite direction of the measured effect."
+    },
+    {
+      "id": "n10",
+      "language": "en",
+      "prior": "The sample contained 12 requests per client and 40 clients per group.",
+      "claim": "The sample contained 40 requests per client and 12 clients per group.",
+      "label": "different",
+      "rationale": "The same set of numbers is assigned to different quantities."
+    },
+    {
+      "id": "n11",
+      "language": "en",
+      "prior": "The signed temperature change was +5 degrees during the experiment.",
+      "claim": "The signed temperature change was -5 degrees during the experiment.",
+      "label": "different",
+      "rationale": "Numeric sign is meaningful."
+    },
+    {
+      "id": "n12",
+      "language": "en",
+      "prior": "The system guarantees delivery within 20 seconds for every accepted request.",
+      "claim": "The system may deliver within 20 seconds for some accepted requests.",
+      "label": "different",
+      "rationale": "Universal guarantee versus uncertain partial outcome."
+    },
+    {
+      "id": "n13",
+      "language": "en",
+      "prior": "The index stores records in sorted key order.",
+      "claim": "Records in the index are stored in sorted key order.",
+      "label": "same",
+      "rationale": "Meaning-preserving reordering with no changed actor or quantity."
+    },
+    {
+      "id": "n14",
+      "language": "ru",
+      "prior": "The database transaction guarantees atomic updates across all affected rows.",
+      "claim": "Транзакция базы данных гарантирует атомарное обновление всех затронутых строк.",
+      "label": "same",
+      "rationale": "Cross-language equivalence; abstention is acceptable but must be reported as limited recall."
+    },
+    {
+      "id": "n15",
+      "language": "en",
+      "prior": "The cache policy improves request throughput under repeated reads.",
+      "claim": "The cache policy improves request throughput by 18% under repeated reads.",
+      "label": "different",
+      "rationale": "A familiar general observation does not establish knowledge of a specific result."
+    },
+    {
+      "id": "n16",
+      "language": "en",
+      "prior": "The cache eviction policy uses a bounded queue.",
+      "claim": "The queue stores encrypted user credentials for remote authentication.",
+      "label": "different",
+      "rationale": "Shared vocabulary is insufficient evidence of a shared claim."
+    }
+  ],
+  "qualityPairs": [
+    {
+      "id": "q01",
+      "language": "en",
+      "stronger": "We compared the same request trace before and after enabling the cache. The baseline completed 120 requests per second; the cached version completed 138. We repeated the run five times and kept hardware and concurrency fixed. The trace mostly repeats the same keys, so this result does not establish an improvement for unique-key workloads. Test a representative trace before changing production settings.",
+      "weaker": "Our cache is revolutionary and transforms every application. It is the ultimate performance solution. Every serious team should enable it immediately. There is no reason to measure anything because the benefits are obvious. The result is guaranteed for all workloads.",
+      "rationale": "Method, comparison and limits versus an unsupported universal claim."
+    },
+    {
+      "id": "q02",
+      "language": "en",
+      "stronger": "Suppose two workers read the same counter value and each writes that value plus one. The final counter can increase only once even though two increments were requested. Serializing the read-modify-write operation prevents that interleaving. This reasoning applies to shared mutable counters, but does not imply that every read-only operation needs a lock.",
+      "weaker": "Concurrency is easy. Use locks and your software will always be safe. Research, studies, benchmarks, evidence, data, sources, references and experiments all prove it. A confident engineering team needs no further explanation.",
+      "rationale": "Valid concrete reasoning without citations should outrank a pile of evidence-related keywords."
+    },
+    {
+      "id": "q03",
+      "language": "ru",
+      "stronger": "Два обработчика могут одновременно прочитать одинаковое значение счётчика. Если каждый запишет прочитанное значение плюс один, итог увеличится только на единицу. Последовательное выполнение всей операции чтения и записи исключает такой порядок. Это объяснение относится к общему изменяемому счётчику и не требует блокировать независимые операции чтения.",
+      "weaker": "Наша технология полностью устраняет все ошибки параллельных программ. Она всегда безопасна и подходит любой системе. Исследования и данные подтверждают абсолютное превосходство. Внедрите её сразу, проверка не нужна.",
+      "rationale": "Russian reasoning chain and scope versus universal unsupported assertions."
+    },
+    {
+      "id": "q04",
+      "language": "en",
+      "stronger": "A request timeout limits how long the client waits. It does not prove that the server stopped processing the request. Retrying a payment after a timeout can therefore duplicate the effect unless the operation is idempotent. Reuse a request identifier and verify the server contract before enabling retries for writes.",
+      "weaker": "Set the timeout to one second. A timed-out request has definitely stopped on the server, so retry all writes immediately. This is a universal rule and has no exceptions.",
+      "rationale": "Separates observation from inference and supplies a bounded recommendation."
+    },
+    {
+      "id": "q05",
+      "language": "en",
+      "stronger": "We observed lower median latency on a local synthetic workload. We did not measure tail latency, memory pressure or behavior during failures. The observation supports a follow-up test using the production workload; it is not enough to recommend migration. Keep the current implementation until those costs have been measured.",
+      "weaker": "The new implementation has a lower median on one local run, which proves it is faster for every user. Migrate all production traffic now. Memory and failure behavior are irrelevant to the decision.",
+      "rationale": "Appropriate uncertainty versus an unjustified generalization from the same evidence."
+    },
+    {
+      "id": "q06",
+      "language": "ru",
+      "stronger": "Клиент получил только первые три страницы ответа. Отсутствие записи в этой выборке не доказывает её удаление. Следует сохранить прежнюю запись до получения полного списка или явного подтверждения удаления. Такой подход может временно оставить устаревшие сведения, зато неполный ответ не уничтожит ещё существующие данные.",
+      "weaker": "Если запись не попала в первые три страницы поиска, её больше не существует. Немедленно удалите все отсутствующие записи. Количество страниц и ограничения поиска не имеют значения.",
+      "rationale": "Recognizes incomplete evidence and an explicit tradeoff."
+    }
+  ]
+}

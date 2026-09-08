@@ -1,4 +1,9 @@
 import {
+  initializeVaultPage,
+  installVaultLockControl,
+} from '../vault/page-guard';
+import { privateStorage } from '../vault/storage';
+import {
   UI_LANGUAGE_KEY,
   normalizeUiLanguage,
   type UiLanguage,
@@ -8,12 +13,17 @@ import { LATEST_EVALUATION_KEY } from '../popup/storage-keys';
 import {
   clearObsidianDatabase,
   loadVaultHandle,
-  saveVaultHandle,
   type PersistedDirectoryHandle,
 } from './database';
 import { indexObsidianVault } from './indexer';
 import { clearObsidianSettings, loadObsidianSettings } from './storage';
 import type { ObsidianSettings } from './types';
+import {
+  beginSyncOperation,
+  cancelSyncOperation,
+  commitDataOperation,
+  type DataOperation,
+} from '../privacy/data-operations';
 
 interface DirectoryPickerOptions {
   id?: string;
@@ -225,6 +235,8 @@ function pageCopyFor(language: UiLanguage): PageCopy {
   return { ...en, ...overrides[language] };
 }
 
+await initializeVaultPage();
+
 function element<T extends HTMLElement>(id: string): T {
   const item = document.getElementById(id);
   if (!item) throw new Error(`Missing #${id}`);
@@ -300,21 +312,29 @@ async function permission(
   return (await handle.requestPermission({ mode: 'read' })) === 'granted';
 }
 
-async function index(handle: PersistedDirectoryHandle): Promise<void> {
+async function index(
+  handle: PersistedDirectoryHandle,
+  startedOperation?: DataOperation,
+): Promise<void> {
   setBusy(true);
   try {
+    const operation = await beginSyncOperation('obsidian', startedOperation);
     const previousSettings = await loadObsidianSettings();
-    const result = await indexObsidianVault(handle, (progress) => {
-      status.textContent =
-        progress.phase === 'scanning'
-          ? copy.scanning
-          : progress.phase === 'saving'
-            ? copy.saving
-            : copy.reading
-                .replace('{current}', String(progress.processed))
-                .replace('{total}', String(progress.total));
-    });
-    await saveVaultHandle(handle);
+    const result = await indexObsidianVault(
+      handle,
+      (progress) => {
+        status.textContent =
+          progress.phase === 'scanning'
+            ? copy.scanning
+            : progress.phase === 'saving'
+              ? copy.saving
+              : copy.reading
+                  .replace('{current}', String(progress.processed))
+                  .replace('{total}', String(progress.total));
+      },
+      new Date(),
+      operation,
+    );
     currentHandle = handle;
     render(result.settings);
     status.textContent = copy.success
@@ -323,13 +343,15 @@ async function index(handle: PersistedDirectoryHandle): Promise<void> {
     if (
       result.settings.evidenceUpdatedAt !== previousSettings.evidenceUpdatedAt
     ) {
-      await Promise.all([
-        chrome.storage.local.remove(LATEST_EVALUATION_KEY),
-        invalidateMaterialEvaluations(),
-      ]);
+      await commitDataOperation(operation, () =>
+        Promise.all([
+          privateStorage.remove(LATEST_EVALUATION_KEY),
+          invalidateMaterialEvaluations(),
+        ]),
+      );
     }
-  } catch (error) {
-    console.warn('[attention:obsidian] indexing failed', error);
+  } catch {
+    console.warn('[attention:obsidian] indexing failed');
     status.textContent = copy.failed;
   } finally {
     setBusy(false);
@@ -344,41 +366,47 @@ async function chooseVault(): Promise<void> {
   }
   status.textContent = copy.selecting;
   try {
+    const operation = await beginSyncOperation('obsidian');
     const handle = await pickerWindow.showDirectoryPicker({
       id: 'attention-obsidian-vault',
       mode: 'read',
     });
-    await index(handle);
+    await index(handle, operation);
   } catch (error) {
     if (error instanceof DOMException && error.name === 'AbortError') {
       render(await loadObsidianSettings());
       return;
     }
-    console.warn('[attention:obsidian] picker failed', error);
+    console.warn('[attention:obsidian] picker failed');
     status.textContent = copy.failed;
   }
 }
 
 async function refreshVault(): Promise<void> {
-  const handle = currentHandle ?? (await loadVaultHandle());
+  const operation = await beginSyncOperation('obsidian');
+  // Another extension page may have erased the persisted connection while
+  // this settings page remained open. Never reuse its old in-memory handle.
+  const handle = await loadVaultHandle();
   if (!handle) {
     await chooseVault();
     return;
   }
   if (!(await permission(handle, true))) return;
-  await index(handle);
+  await index(handle, operation);
 }
 
 async function disconnect(): Promise<void> {
   if (!window.confirm(copy.disconnectConfirm)) return;
   setBusy(true);
   try {
-    await Promise.all([
-      clearObsidianDatabase(),
-      clearObsidianSettings(),
-      chrome.storage.local.remove(LATEST_EVALUATION_KEY),
-      invalidateMaterialEvaluations(),
-    ]);
+    await cancelSyncOperation('obsidian', () =>
+      Promise.all([
+        clearObsidianDatabase(),
+        clearObsidianSettings(),
+        privateStorage.remove(LATEST_EVALUATION_KEY),
+        invalidateMaterialEvaluations(),
+      ]),
+    );
     currentHandle = null;
     render(await loadObsidianSettings());
   } finally {
@@ -396,7 +424,7 @@ async function closePage(): Promise<void> {
 }
 
 async function initialize(): Promise<void> {
-  const stored = await chrome.storage.local.get(UI_LANGUAGE_KEY);
+  const stored = await privateStorage.get(UI_LANGUAGE_KEY);
   const language = normalizeUiLanguage(stored[UI_LANGUAGE_KEY]);
   copy = pageCopyFor(language);
   document.documentElement.lang = language;
@@ -416,7 +444,9 @@ async function initialize(): Promise<void> {
   );
 }
 
-void initialize().catch((error) => {
-  console.warn('[attention:obsidian] initialization failed', error);
-  status.textContent = copy.failed;
-});
+void initialize()
+  .then(installVaultLockControl)
+  .catch(() => {
+    console.warn('[attention:obsidian] initialization failed');
+    status.textContent = copy.failed;
+  });

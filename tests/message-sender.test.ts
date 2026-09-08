@@ -2,6 +2,27 @@ import { describe, expect, it } from 'vitest';
 import { messageSenderMatchesPage } from '../src/background/message-sender';
 
 describe('page message sender validation', () => {
+  it('rejects the old SPA route even if the document sender still names it', () => {
+    expect(
+      messageSenderMatchesPage(
+        {
+          frameId: 0,
+          url: 'https://example.com/old',
+          tab: { id: 42, url: 'https://example.com/new' },
+        },
+        'https://example.com/old',
+      ),
+    ).toBe(false);
+  });
+
+  it('uses the document URL only when the browser does not provide a tab URL', () => {
+    expect(
+      messageSenderMatchesPage(
+        { frameId: 0, url: 'https://example.com/article', tab: { id: 42 } },
+        'https://example.com/article',
+      ),
+    ).toBe(true);
+  });
   it('accepts an SPA article when the document URL is stale but the tab URL is current', () => {
     expect(
       messageSenderMatchesPage(

@@ -1,3 +1,14 @@
+import { isTrustedUserInteraction } from './user-interaction';
+import { installCardHost } from './card-view';
+import { isInHoverRegion } from './hover-region';
+import { CardContextControl } from './card-context';
+import { cardText, type CardTextKey } from '../i18n/card';
+import {
+  ATTENTION_CONTEXT_UPDATE_TYPE,
+  isAnalysisContextDto,
+  type CardOpenResponse,
+  type ContextResponse,
+} from '../shared/card-messages';
 import {
   HOVER_PREVIEW_EVENT_TYPE,
   HOVER_PREVIEW_REQUEST_TYPE,
@@ -6,6 +17,8 @@ import {
   type HoverPreviewEventMessage,
   type HoverPreviewResponse,
   type HoverPreviewVerdict,
+  type MaterialDecision,
+  type AnalysisContext,
   type PageCapture,
 } from '../shared/types';
 import { EXTENSION_RUNTIME_VERSION } from '../shared/version';
@@ -16,6 +29,8 @@ import {
   uiText,
   type UiLanguage,
 } from '../i18n/ui';
+import { readingPlanText } from '../i18n/reading-plan';
+import { ATTENTION_INPUTS_INVALIDATED_TYPE } from '../background/input-invalidation';
 import {
   findCurrentArticleRoot,
   findCurrentArticleTitleElement,
@@ -35,6 +50,7 @@ import {
   potentialNewKeyClaims,
   type NovelPassageMatch,
 } from './novel-passages';
+import { highlightRecommendedSections, scrollToHeading } from './headings';
 
 interface HoverPreviewGlobal {
   __attentionHoverPreviewInstalled?: boolean;
@@ -44,9 +60,7 @@ interface HoverPreviewGlobal {
 
 const hoverGlobal = globalThis as typeof globalThis & HoverPreviewGlobal;
 const HOVER_CONTRACT_VERSION =
-  'feed-compact-current-title-expanded-actionable-value-spa-v13';
-const SCENARIO_STATE_STORAGE_KEY = 'attentionScenario';
-const ANALYSIS_CONTEXT_STORAGE_KEY = 'analysisContext';
+  'feed-compact-current-title-attention-plan-spa-v16';
 const MATERIAL_TITLE_SELECTOR = [
   'h1',
   'h2',
@@ -91,6 +105,12 @@ export function previewVerdict(preview: HoverPreview): HoverPreviewVerdict {
   return 'maybe';
 }
 
+export function fullCardDecision(preview: HoverPreview): MaterialDecision {
+  if (preview.recommendedAction === 'open') return 'read';
+  if (preview.recommendedAction === 'maybe') return 'skim';
+  return preview.recommendedAction;
+}
+
 function normalizedText(value: string | null | undefined): string {
   return (value ?? '').replace(/\s+/g, ' ').trim();
 }
@@ -113,28 +133,30 @@ const NON_CONTENT_APPLICATION_PATH =
   /^\/(?:earnings|billing|settings?|accounts?|dashboard|payments?|wallet|profile|contracts?|referrals?|notifications?|analytics|reports?|login|sign-?in|sign-?up|admin)(?:\/|$)/iu;
 
 function isNonContentApplicationPath(pathname: string): boolean {
-  const path = decodeURIComponent(pathname).toLocaleLowerCase();
+  let path = pathname.toLocaleLowerCase();
+  try {
+    path = decodeURIComponent(path).toLocaleLowerCase();
+  } catch {
+    /* Literal malformed path. */
+  }
   return NON_CONTENT_APPLICATION_PATH.test(path);
 }
 
-function suppressApplicationUiPreview(
-  targetUrl: string,
-  currentPageHeading: HTMLElement | null,
-): boolean {
+function suppressApplicationUiPreview(targetUrl: string): boolean {
+  // Account pages contain linked headings and promotional cards too. Their
+  // destination may be an unrecognized route or another origin, so suppress
+  // automatic previews based on the current page before checking the link.
+  if (isNonContentApplicationPath(window.location.pathname)) return true;
   let target: URL;
   try {
     target = new URL(targetUrl, window.location.href);
   } catch {
     return true;
   }
-  const currentIsApplicationUi = isNonContentApplicationPath(
-    window.location.pathname,
-  );
-  const targetIsApplicationUi =
+  return (
     target.origin === window.location.origin &&
-    isNonContentApplicationPath(target.pathname);
-  if (currentPageHeading && currentIsApplicationUi) return true;
-  return targetIsApplicationUi;
+    isNonContentApplicationPath(target.pathname)
+  );
 }
 
 function canonicalPageUrl(value: string): string {
@@ -201,8 +223,28 @@ function extractedCurrentPageTitle(): string {
   return currentPageCapture()?.title ?? '';
 }
 
+/** URL hints help during hydration; semantic articles also work with ordinary slugs. */
+function isCurrentArticleDocument(): boolean {
+  if (isNonContentApplicationPath(window.location.pathname)) return false;
+  if (isArticlePagePath(window.location.pathname)) return true;
+  const root = findCurrentArticleRoot(document);
+  const title =
+    findCurrentArticleTitleElement(document) ?? root?.querySelector('h1');
+  return Boolean(
+    root &&
+    title &&
+    !title.closest('nav, aside, footer') &&
+    root.querySelectorAll('article, [role="article"]').length <= 1 &&
+    Array.from(root.querySelectorAll('p')).reduce(
+      (length, paragraph) =>
+        length + normalizedText(paragraph.textContent).length,
+      0,
+    ) >= 600,
+  );
+}
+
 function currentPageCapture(): PageCapture | null {
-  if (!isArticlePagePath(window.location.pathname)) return null;
+  if (!isCurrentArticleDocument()) return null;
   const matchedTitle = findCurrentArticleTitleElement(document);
   const articleRoot =
     document.querySelector<HTMLElement>(
@@ -523,7 +565,7 @@ function resolveCurrentArticleLeadDetails(
   element: Element,
   point: HoverPoint | undefined,
 ): HoverTargetDetails | null {
-  if (!isArticlePagePath(window.location.pathname)) return null;
+  if (!isCurrentArticleDocument()) return null;
   const capture = currentPageCapture();
   if (!capture?.isArticle || capture.wordCount < 80 || !capture.title) {
     return null;
@@ -564,7 +606,7 @@ function isCurrentArticleTitleDecoration(
   element: Element,
   point: HoverPoint | undefined,
 ): boolean {
-  if (!isArticlePagePath(window.location.pathname)) return false;
+  if (!isCurrentArticleDocument()) return false;
   const capture = currentPageCapture();
   if (!capture?.isArticle || capture.wordCount < 80 || !capture.title) {
     return false;
@@ -769,7 +811,7 @@ function isLikelyMaterialAnchor(
   const href = httpUrl(anchor);
   if (!href) return false;
   const url = new URL(href);
-  const path = decodeURIComponent(url.pathname).toLocaleLowerCase();
+  const path = url.pathname.toLocaleLowerCase();
   if (isArticlePagePath(path)) {
     return true;
   }
@@ -795,7 +837,7 @@ export function resolveHoverTargetDetails(
   const geometricHeading = headingAtPoint(point);
   const directHeading =
     geometricHeading ?? element.closest<HTMLElement>(MATERIAL_TITLE_SELECTOR);
-  const currentRoute = isArticlePagePath(window.location.pathname);
+  const currentRoute = isCurrentArticleDocument();
   const currentDocumentAnchor = directHref
     ? isCurrentDocumentUrl(directHref)
     : false;
@@ -881,7 +923,7 @@ export function resolveHoverTargetDetails(
     currentPageHeading?.closest<HTMLElement>('article, main');
 
   if ((!anchor && !currentPageHeading) || !url) return null;
-  if (suppressApplicationUiPreview(url, currentPageHeading)) return null;
+  if (suppressApplicationUiPreview(url)) return null;
 
   const cardHeading = card?.querySelector<HTMLElement>(MATERIAL_TITLE_SELECTOR);
   const sameUrlTitleLink = card
@@ -1024,109 +1066,46 @@ function isPreviewInsights(value: unknown): boolean {
   );
 }
 
-function installCardHost(): {
-  host: HTMLDivElement;
-  card: HTMLDivElement;
-  verdict: HTMLDivElement;
-  score: HTMLDivElement;
-  decisionSummary: HTMLDivElement;
-  usefulTime: HTMLDivElement;
-  reliabilityNote: HTMLDivElement;
-  analysisSource: HTMLSpanElement;
-  aiButton: HTMLButtonElement;
-  saveButton: HTMLButtonElement;
-  passagesButton: HTMLButtonElement;
-} {
-  const host = document.createElement('div');
-  host.dataset.attentionPreview = 'true';
-  host.setAttribute('role', 'status');
-  host.setAttribute('aria-live', 'polite');
-  Object.assign(host.style, {
-    all: 'initial',
-    display: 'none',
-    position: 'fixed',
-    zIndex: '2147483647',
-    pointerEvents: 'none',
-  });
-  const shadow = host.attachShadow({ mode: 'closed' });
-  const style = document.createElement('style');
-  style.textContent = `
-    .card { display: flex; min-width: 164px; align-items: center; justify-content: center; gap: 7px; border: 1px solid #3fcf8e; border-radius: 10px; padding: 10px 12px; color: #dff9ec; background: #0d2d23; box-shadow: 0 10px 28px rgba(0,0,0,.24), 0 0 0 1px rgba(63,207,142,.12); font: 800 12px/1.2 Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; letter-spacing: .035em; text-align: center; }
-    .card::before { width: 7px; height: 7px; flex: 0 0 auto; border-radius: 50%; background: #42d392; box-shadow: 0 0 0 3px rgba(66,211,146,.14); content: ""; }
-    .card[data-verdict="maybe"] { border-color: #8b929a; color: #f0f2f4; background: #292d32; box-shadow: 0 10px 28px rgba(0,0,0,.24), 0 0 0 1px rgba(139,146,154,.12); }
-    .card[data-verdict="maybe"]::before { background: #a7adb4; box-shadow: 0 0 0 3px rgba(167,173,180,.14); }
-    .card[data-verdict="skip"] { border-color: #e85c5c; color: #ffe5e5; background: #35191c; box-shadow: 0 10px 28px rgba(0,0,0,.24), 0 0 0 1px rgba(232,92,92,.12); }
-    .card[data-verdict="skip"]::before { background: #ff6b6b; box-shadow: 0 0 0 3px rgba(255,107,107,.14); }
-    .score, .decision-summary, .useful-time, .reliability-note, .analysis-controls, .save-button, .passages-button { display: none; }
-    .card.expanded { display: block; box-sizing: border-box; width: min(350px, calc(100vw - 20px)); padding: 14px 15px; font-weight: 500; letter-spacing: 0; text-align: left; }
-    .card.expanded::before { display: inline-block; margin: 0 8px 1px 0; }
-    .card.expanded .verdict { display: inline; font-size: 12px; font-weight: 800; letter-spacing: .035em; }
-    .card.expanded .score { display: block; margin-top: 7px; color: inherit; font-size: 20px; font-weight: 850; line-height: 1.2; }
-    .card.expanded .decision-summary { display: block; margin-top: 8px; color: rgba(255,255,255,.82); font-size: 11px; font-weight: 650; line-height: 1.4; }
-    .card.expanded .useful-time { display: block; margin-top: 7px; color: rgba(255,255,255,.62); font-size: 10px; font-weight: 650; }
-    .card.expanded .reliability-note.has-warning { display: block; margin-top: 8px; border-top: 1px solid rgba(255,255,255,.14); padding-top: 7px; color: rgba(255,255,255,.72); font-size: 9px; font-weight: 650; line-height: 1.35; }
-    .card.expanded .analysis-controls { display: flex; align-items: center; justify-content: space-between; gap: 9px; margin-top: 11px; border-top: 1px solid rgba(255,255,255,.14); padding-top: 10px; }
-    .analysis-source { color: rgba(255,255,255,.62); font-size: 9px; font-weight: 700; line-height: 1.25; }
-    .card.expanded .ai-button, .card.expanded .save-button, .card.expanded .passages-button:not([hidden]) { display: inline-flex; align-items: center; justify-content: center; border: 1px solid rgba(255,255,255,.28); border-radius: 8px; padding: 7px 10px; color: inherit; background: rgba(255,255,255,.08); font: 750 10px/1 Inter, ui-sans-serif, system-ui, sans-serif; cursor: pointer; }
-    .card.expanded .save-button, .card.expanded .passages-button:not([hidden]) { margin-top: 9px; }
-    .card.expanded .passages-button:not([hidden]) { margin-right: 6px; border-color: rgba(126,226,184,.48); background: rgba(63,207,142,.12); }
-    .card.expanded .ai-button:not(:disabled) { border-color: rgba(126,226,184,.58); background: rgba(63,207,142,.14); }
-    .card.expanded .ai-button:hover, .card.expanded .save-button:hover, .card.expanded .passages-button:hover { background: rgba(255,255,255,.15); }
-    .card.expanded .ai-button:focus-visible, .card.expanded .save-button:focus-visible, .card.expanded .passages-button:focus-visible { outline: 2px solid currentColor; outline-offset: 2px; }
-    .card.expanded .ai-button:disabled, .card.expanded .save-button:disabled, .card.expanded .passages-button:disabled { cursor: default; opacity: .62; }
-  `;
-  const card = document.createElement('div');
-  card.className = 'card';
-  const verdict = document.createElement('div');
-  verdict.className = 'verdict';
-  const score = document.createElement('div');
-  score.className = 'score';
-  const decisionSummary = document.createElement('div');
-  decisionSummary.className = 'decision-summary';
-  const usefulTime = document.createElement('div');
-  usefulTime.className = 'useful-time';
-  const reliabilityNote = document.createElement('div');
-  reliabilityNote.className = 'reliability-note';
-  const analysisControls = document.createElement('div');
-  analysisControls.className = 'analysis-controls';
-  const analysisSource = document.createElement('span');
-  analysisSource.className = 'analysis-source';
-  const aiButton = document.createElement('button');
-  aiButton.className = 'ai-button';
-  aiButton.type = 'button';
-  analysisControls.append(analysisSource, aiButton);
-  const saveButton = document.createElement('button');
-  saveButton.className = 'save-button';
-  saveButton.type = 'button';
-  saveButton.textContent = 'Сохранить';
-  const passagesButton = document.createElement('button');
-  passagesButton.className = 'passages-button';
-  passagesButton.type = 'button';
-  passagesButton.hidden = true;
-  card.append(
-    verdict,
-    score,
-    decisionSummary,
-    usefulTime,
-    reliabilityNote,
-    analysisControls,
-    passagesButton,
-    saveButton,
+export interface HoverReadingPlan {
+  title: string;
+  headings: string[];
+}
+
+export function materialHoverReadingPlan(
+  preview: HoverPreview,
+  material: PageCapture,
+  language: UiLanguage = DEFAULT_UI_LANGUAGE,
+): HoverReadingPlan | null {
+  const availableHeadings = new Set(material.headings);
+  const headings = (preview.recommendedSections ?? [])
+    .filter((heading) => availableHeadings.has(heading))
+    .filter((heading, index, values) => values.indexOf(heading) === index)
+    .slice(0, 2);
+  if (headings.length === 0) return null;
+  const representedSections = Math.max(
+    headings.length,
+    material.headings.length,
   );
-  shadow.append(style, card);
-  document.documentElement.append(host);
+  const minutes = Math.max(
+    1,
+    Math.min(
+      material.readingTimeMinutes,
+      Math.round(
+        material.readingTimeMinutes * (headings.length / representedSections),
+      ),
+    ),
+  );
   return {
-    host,
-    card,
-    verdict,
-    score,
-    decisionSummary,
-    usefulTime,
-    reliabilityNote,
-    analysisSource,
-    aiButton,
-    saveButton,
-    passagesButton,
+    title: readingPlanText(
+      language,
+      headings.length === 1 ? 'titleSingle' : 'titlePlural',
+      {
+        total: material.readingTimeMinutes,
+        count: headings.length,
+        minutes,
+      },
+    ),
+    headings,
   };
 }
 
@@ -1270,8 +1249,13 @@ export function materialReadingInfo(
 function positionCard(host: HTMLElement, target: HTMLElement): void {
   const rect = target.getBoundingClientRect();
   const expanded = host.dataset.attentionExpanded === 'true';
-  const width = expanded ? 350 : 200;
-  const estimatedHeight = expanded ? 190 : 48;
+  const width = expanded ? 360 : 200;
+  const estimatedHeight = expanded
+    ? Math.min(
+        host.getBoundingClientRect().height || 320,
+        window.innerHeight - 20,
+      )
+    : 48;
   if (expanded && rect.right + 12 + width <= window.innerWidth - 10) {
     const top = Math.min(
       Math.max(10, rect.top),
@@ -1294,12 +1278,20 @@ function positionCard(host: HTMLElement, target: HTMLElement): void {
   host.style.top = `${Math.round(top)}px`;
 }
 
+export interface HoverPreviewController {
+  openCurrentArticle(): Promise<CardOpenResponse>;
+}
+
 export function installHoverPreview(
   options: {
     onCurrentPageEvaluation?: (capture: PageCapture) => void;
     getUiLanguage?: () => UiLanguage;
+    onDecision?: (
+      capture: PageCapture,
+      decision: MaterialDecision,
+    ) => Promise<boolean>;
   } = {},
-): void {
+): HoverPreviewController {
   // Always replace an existing runtime, even when its public version string is
   // identical. During local extension development Chrome can leave the old
   // content-script world alive in an already open SPA tab. Returning early in
@@ -1329,6 +1321,16 @@ export function installHoverPreview(
   let leaveTimer = 0;
   let mutationRetryTimer = 0;
   let requestVersion = 0;
+  let pendingCardOpen: {
+    url: string;
+    promise: Promise<CardOpenResponse>;
+    resolve: (response: CardOpenResponse) => void;
+  } | null = null;
+  const settlePendingCardOpen = (response: CardOpenResponse): void => {
+    const pending = pendingCardOpen;
+    pendingCardOpen = null;
+    pending?.resolve(response);
+  };
   let readingCandidateAnnouncedForUrl: string | null = null;
   let lastPointerMoveAt = 0;
   let lastPointerElement: Element | null = null;
@@ -1340,10 +1342,63 @@ export function installHoverPreview(
   let activeNovelCapture: PageCapture | null = null;
   let activeReadwiseConnected = false;
   let activeDetails: HoverTargetDetails | null = null;
+  let activeRecommendedHeadings: string[] = [];
   let restartHydrationObservation = (): void => undefined;
   let hydrationObservationRoot: HTMLElement | null = null;
+  let keyboardTrigger: HTMLButtonElement | null = null;
+  let keyboardTitle: HTMLElement | null = null;
+  let keyboardOpening = false;
+  let focusAfterRefresh: HTMLElement | null = null;
+  let primaryDecision: MaterialDecision = 'read';
+  let contextPending = false;
+  let decisionPending = false;
+  let refreshKeyboardTrigger = (): void => undefined;
+  const keyboardInteractionActive = (): boolean =>
+    (document.activeElement === view.host &&
+      view.host.style.display === 'block') ||
+    (keyboardOpening && document.activeElement === keyboardTrigger);
   view.host.dataset.attentionInstalledUrl = observedHoverUrl;
   view.host.dataset.attentionPointerEvents = '0';
+
+  const contextControl = new CardContextControl(
+    view.contextSlot,
+    async (context: AnalysisContext) => {
+      const details = activeDetails;
+      if (!details?.currentPage) throw new Error('No active article');
+      const pageUrl = window.location.href;
+      contextPending = true;
+      for (const button of view.decisionButtons.values())
+        button.disabled = true;
+      try {
+        const response: ContextResponse = await chrome.runtime.sendMessage({
+          type: ATTENTION_CONTEXT_UPDATE_TYPE,
+          url: pageUrl,
+          context,
+        });
+        if (
+          !response.ok ||
+          !isAnalysisContextDto(response.context) ||
+          listenerController.signal.aborted ||
+          pageUrl !== window.location.href
+        )
+          throw new Error('Context update failed');
+        handleRuntimeInvalidation({
+          type: ATTENTION_INPUTS_INVALIDATED_TYPE,
+          changedKeys: ['analysisContext', 'attentionScenario'],
+        });
+        return response.context;
+      } finally {
+        contextPending = false;
+        for (const [decision, button] of view.decisionButtons) {
+          button.disabled =
+            decisionPending ||
+            (decision === 'save' &&
+              view.host.dataset.attentionSaved === 'true');
+        }
+      }
+    },
+    listenerController.signal,
+  );
 
   const cacheKey = (details: HoverTargetDetails): string => {
     const capture = details.currentPage ? currentPageCapture() : null;
@@ -1373,9 +1428,12 @@ export function installHoverPreview(
     void chrome.runtime.sendMessage(message).catch(() => undefined);
   };
 
-  const hide = (): void => {
+  const hide = (options?: { keepPendingOpen?: boolean }): void => {
+    if (!options?.keepPendingOpen)
+      settlePendingCardOpen({ ok: false, reason: 'unavailable' });
     window.clearTimeout(hoverTimer);
     window.clearTimeout(leaveTimer);
+    leaveTimer = 0;
     activeTarget = null;
     activeCacheKey = null;
     activeSaveCapture = null;
@@ -1383,41 +1441,99 @@ export function installHoverPreview(
     activeNovelCapture = null;
     activeReadwiseConnected = false;
     activeDetails = null;
+    activeRecommendedHeadings = [];
     requestVersion += 1;
     view.host.style.display = 'none';
     view.host.style.pointerEvents = 'none';
+    keyboardTrigger?.setAttribute('aria-expanded', 'false');
   };
 
+  view.closeButton.addEventListener(
+    'click',
+    (event) => {
+      if (!isTrustedUserInteraction(event)) return;
+      event.preventDefault();
+      keyboardOpening = false;
+      hide();
+      keyboardTrigger?.focus({ preventScroll: true });
+    },
+    { signal: listenerController.signal },
+  );
+  for (const disclosure of [view.details, contextControl.details]) {
+    disclosure.addEventListener(
+      'toggle',
+      () => {
+        if (activeDetails && view.host.style.display === 'block')
+          positionCard(view.host, activeDetails.positionElement);
+      },
+      { signal: listenerController.signal },
+    );
+  }
+
   const scheduleHide = (): void => {
-    window.clearTimeout(leaveTimer);
-    leaveTimer = window.setTimeout(hide, 180);
+    if (leaveTimer) return;
+    leaveTimer = window.setTimeout(hide, 300);
   };
 
   const cancelScheduledHide = (): void => {
     window.clearTimeout(leaveTimer);
+    leaveTimer = 0;
+  };
+
+  const handleExpandedPointer = (point: HoverPoint): boolean => {
+    if (
+      !activeDetails ||
+      view.host.style.display !== 'block' ||
+      view.host.dataset.attentionExpanded !== 'true'
+    )
+      return false;
+    if (synchronizeHoverRoute()) return false;
+    if (
+      isInHoverRegion(
+        point,
+        activeDetails.positionElement.getBoundingClientRect(),
+        view.host.getBoundingClientRect(),
+      )
+    )
+      cancelScheduledHide();
+    else scheduleHide();
+    // A background pointerover/move in the gap must not resolve a new target
+    // and immediately hide the card, bypassing its leave timer.
+    return true;
   };
 
   view.host.addEventListener('pointerenter', cancelScheduledHide, {
     signal: listenerController.signal,
   });
-  view.host.addEventListener('pointerleave', hide, {
-    signal: listenerController.signal,
-  });
+  view.host.addEventListener(
+    'pointerleave',
+    () => {
+      if (!keyboardInteractionActive()) scheduleHide();
+    },
+    {
+      signal: listenerController.signal,
+    },
+  );
 
   view.saveButton.addEventListener(
     'click',
     (event) => {
+      if (!isTrustedUserInteraction(event)) return;
       event.preventDefault();
       event.stopPropagation();
       if (!activeSaveCapture || view.saveButton.disabled) return;
       const capture = activeSaveCapture;
+      view.host.focus({ preventScroll: true });
       view.saveButton.disabled = true;
       view.saveButton.textContent = uiText(currentLanguage(), 'saving');
-      void chrome.runtime
-        .sendMessage({
-          type: SAVE_MATERIAL_REQUEST_TYPE,
-          capture,
-        })
+      void (
+        options.onDecision
+          ? options.onDecision(capture, 'save').then((ok) => ({ ok }))
+          : chrome.runtime.sendMessage({
+              type: SAVE_MATERIAL_REQUEST_TYPE,
+              capture,
+            })
+      )
         .then((response: unknown) => {
           const ok =
             Boolean(response) &&
@@ -1425,6 +1541,7 @@ export function installHoverPreview(
             (response as Record<string, unknown>).ok === true;
           if (!ok) throw new Error('Save failed');
           savedUrls.add(canonicalPageUrl(capture.url));
+          if (activeSaveCapture?.url !== capture.url) return;
           view.host.dataset.attentionSaved = 'true';
           view.saveButton.textContent = uiText(currentLanguage(), 'saved');
         })
@@ -1441,9 +1558,66 @@ export function installHoverPreview(
     { signal: listenerController.signal },
   );
 
+  for (const decision of ['read', 'skim', 'skip'] as const) {
+    view.decisionButtons.get(decision)!.addEventListener(
+      'click',
+      (event) => {
+        if (!isTrustedUserInteraction(event)) return;
+        if (
+          !activeSaveCapture ||
+          !options.onDecision ||
+          decisionPending ||
+          contextPending
+        )
+          return;
+        const capture = activeSaveCapture;
+        const headings = activeRecommendedHeadings.slice();
+        decisionPending = true;
+        view.host.focus({ preventScroll: true });
+        for (const button of view.decisionButtons.values())
+          button.disabled = true;
+        void options
+          .onDecision(capture, decision)
+          .then((ok) => {
+            if (!ok) throw new Error('Decision was not saved');
+            if (
+              listenerController.signal.aborted ||
+              canonicalPageUrl(window.location.href) !==
+                canonicalPageUrl(capture.url)
+            )
+              return;
+            if (decision === 'skim' && headings.length > 0) {
+              highlightRecommendedSections(
+                document,
+                headings,
+                currentLanguage(),
+              );
+              scrollToHeading(document, headings[0]!);
+            }
+            hide();
+          })
+          .catch(() => {
+            if (activeSaveCapture?.url !== capture.url) return;
+            view.actionStatus.textContent = readingPlanText(
+              currentLanguage(),
+              'decisionFailed',
+            );
+            view.actionStatus.hidden = false;
+          })
+          .finally(() => {
+            decisionPending = false;
+            for (const button of view.decisionButtons.values())
+              button.disabled = false;
+          });
+      },
+      { signal: listenerController.signal },
+    );
+  }
+
   view.passagesButton.addEventListener(
     'click',
     (event) => {
+      if (!isTrustedUserInteraction(event)) return;
       event.preventDefault();
       event.stopPropagation();
       if (!activeNovelCapture || activeNovelMatches.length === 0) return;
@@ -1455,24 +1629,78 @@ export function installHoverPreview(
     { signal: listenerController.signal },
   );
 
-  const handleScenarioStorageChange = (
-    changes: Record<string, chrome.storage.StorageChange>,
-    areaName: string,
-  ): void => {
+  view.highlightSectionsButton.addEventListener(
+    'click',
+    (event) => {
+      if (!isTrustedUserInteraction(event)) return;
+      event.preventDefault();
+      event.stopPropagation();
+      if (activeRecommendedHeadings.length === 0) return;
+      highlightRecommendedSections(
+        document,
+        activeRecommendedHeadings,
+        currentLanguage(),
+      );
+      scrollToHeading(document, activeRecommendedHeadings[0]!);
+      hide();
+    },
+    { signal: listenerController.signal },
+  );
+
+  const runtimeChanges = chrome.runtime.onMessage;
+  const handleRuntimeInvalidation = (message: unknown): void => {
+    // Chrome may already have snapshotted this listener when the profile gate
+    // disposes the runtime earlier in the same broadcast.
+    if (listenerController.signal.aborted) return;
+    if (!message || typeof message !== 'object') return;
+    const type = (message as { type?: unknown }).type;
     if (
-      areaName !== 'local' ||
-      (!changes[SCENARIO_STATE_STORAGE_KEY] &&
-        !changes[ANALYSIS_CONTEXT_STORAGE_KEY] &&
-        !changes.novelPassageHighlightsEnabled)
+      type !== ATTENTION_INPUTS_INVALIDATED_TYPE &&
+      type !== 'ATTENTION_UI/LANGUAGE_CHANGED'
     )
       return;
+    const changedKeys = (message as { changedKeys?: unknown }).changedKeys;
+    const erased =
+      Array.isArray(changedKeys) &&
+      changedKeys.includes('attentionDataGeneration');
+    const onlyPassageFeedbackChanged =
+      type === ATTENTION_INPUTS_INVALIDATED_TYPE &&
+      Array.isArray(changedKeys) &&
+      changedKeys.length > 0 &&
+      changedKeys.every(
+        (key) =>
+          key === 'novelPassageFeedback' || key === 'claimMemoryRevision',
+      );
+    const previous = !erased ? activeDetails : null;
+    const restoreKeyboardFocus =
+      keyboardOpening || document.activeElement === view.host;
+    const focused = (view.card.getRootNode() as ShadowRoot).activeElement;
+    if (restoreKeyboardFocus && focused instanceof HTMLElement)
+      focusAfterRefresh = focused;
+    if (erased) {
+      contextControl.reset();
+      view.details.open = false;
+      focusAfterRefresh = null;
+    }
     cache.clear();
-    hide();
+    savedUrls.clear();
+    // Recompute the recommendation after feedback, but keep the passage the
+    // user selected available for the next action (for example, Readwise).
+    // Changes to privacy, connections, context or settings still close it.
+    if (!onlyPassageFeedbackChanged) novelPassages.clear();
+    if (restoreKeyboardFocus) keyboardTrigger?.focus();
+    hide({
+      keepPendingOpen: Boolean(previous?.element.isConnected && !erased),
+    });
+    refreshKeyboardTrigger();
+    if (previous?.element.isConnected) {
+      keyboardOpening = restoreKeyboardFocus;
+      schedulePreview(previous.element);
+    }
   };
-  const storageChanges = chrome.storage?.onChanged;
-  storageChanges?.addListener(handleScenarioStorageChange);
+  runtimeChanges?.addListener(handleRuntimeInvalidation);
   listenerController.signal.addEventListener('abort', () => {
-    storageChanges?.removeListener(handleScenarioStorageChange);
+    runtimeChanges?.removeListener(handleRuntimeInvalidation);
   });
 
   const synchronizeHoverRoute = (): boolean => {
@@ -1483,6 +1711,8 @@ export function installHoverPreview(
       if (hydrationObservationRoot && !hydrationObservationRoot.isConnected) {
         restartHydrationObservation();
       }
+      if (keyboardTrigger && !keyboardTrigger.isConnected)
+        refreshKeyboardTrigger();
       return false;
     }
     observedHoverUrl = currentUrl;
@@ -1490,9 +1720,13 @@ export function installHoverPreview(
     extractedPageCache.invalidate();
     cache.clear();
     novelPassages.clear();
+    contextControl.reset();
+    view.details.open = false;
+    focusAfterRefresh = null;
     readingCandidateAnnouncedForUrl = null;
     hide();
     restartHydrationObservation();
+    refreshKeyboardTrigger();
     return true;
   };
 
@@ -1532,7 +1766,13 @@ export function installHoverPreview(
         snippet: details.snippet,
         ...(pageCapture ? { capture: pageCapture } : {}),
       });
-      if (!isHoverPreviewResponse(response)) return;
+      if (!isHoverPreviewResponse(response)) {
+        if (version === requestVersion)
+          settlePendingCardOpen({ ok: false, reason: 'unavailable' });
+        return;
+      }
+      if (version !== requestVersion || activeTarget !== details.element)
+        return;
       cachedResponse = response;
       preview = response.preview;
       const canonicalUrl = canonicalPageUrl(details.url);
@@ -1557,6 +1797,7 @@ export function installHoverPreview(
     view.card.dir = language === 'ar' ? 'rtl' : 'ltr';
     const label = verdictLabel(language, verdict);
     const expanded = details.currentPage;
+    primaryDecision = fullCardDecision(preview);
     if (
       expanded &&
       pageCapture &&
@@ -1567,10 +1808,15 @@ export function installHoverPreview(
       readingCandidateAnnouncedForUrl = canonicalPageUrl(pageCapture.url);
       options.onCurrentPageEvaluation?.(pageCapture);
     }
-    view.verdict.textContent =
-      expanded && preview.utilityScore !== null
-        ? `${label} · ${preview.utilityScore}%`
-        : label;
+    const headlineKeys: Record<MaterialDecision, CardTextKey> = {
+      read: 'readHeadline',
+      skim: 'skimHeadline',
+      save: 'saveHeadline',
+      skip: 'skipHeadline',
+    };
+    view.verdict.textContent = expanded
+      ? cardText(language, headlineKeys[primaryDecision])
+      : label;
     view.card.classList.toggle('expanded', expanded);
     view.host.dataset.attentionExpanded = String(expanded);
     view.host.style.pointerEvents = expanded ? 'auto' : 'none';
@@ -1594,18 +1840,106 @@ export function installHoverPreview(
     });
     const isSaved = savedUrls.has(canonicalPageUrl(details.url));
     view.host.dataset.attentionSaved = String(isSaved);
-    view.saveButton.disabled = isSaved;
+    view.saveButton.disabled = isSaved || contextPending;
     view.saveButton.textContent = uiText(language, isSaved ? 'saved' : 'save');
-    const promise = expanded
-      ? personalValuePromise(preview, language, activeNovelMatches)
-      : '';
+    const promise = expanded ? personalValuePromise(preview, language) : '';
     const reason = expanded ? personalValueReason(preview, language) : '';
-    view.score.textContent = promise;
-    view.decisionSummary.textContent = reason;
-    view.usefulTime.textContent =
+    view.score.textContent = reason;
+    view.decisionSummary.textContent = promise;
+    view.detailsSummary.textContent = cardText(language, 'details');
+    view.closeButton.setAttribute('aria-label', cardText(language, 'close'));
+    view.closeButton.title = cardText(language, 'close');
+    view.scoreDetail.textContent =
+      preview.utilityScore === null
+        ? ''
+        : cardText(language, 'score', { score: preview.utilityScore });
+    if (expanded)
+      contextControl.render(
+        isAnalysisContextDto(cachedResponse?.context)
+          ? cachedResponse.context
+          : { scenario: preview.scenario, intent: '', availableMinutes: 15 },
+        language,
+      );
+    const readingPlan =
       expanded && pageCapture
-        ? materialReadingInfo(preview, pageCapture, language)
-        : '';
+        ? materialHoverReadingPlan(preview, pageCapture, language)
+        : null;
+    activeRecommendedHeadings = readingPlan?.headings ?? [];
+    const readingTime = pageCapture
+      ? uiText(language, 'readingDuration', {
+          count: Math.max(1, pageCapture.readingTimeMinutes),
+        })
+      : '';
+    const skimMinutes =
+      readingPlan && pageCapture
+        ? Math.max(
+            1,
+            Math.round(
+              (pageCapture.readingTimeMinutes * readingPlan.headings.length) /
+                Math.max(
+                  readingPlan.headings.length,
+                  pageCapture.headings.length,
+                ),
+            ),
+          )
+        : null;
+    view.usefulTime.textContent = expanded
+      ? primaryDecision === 'skim' &&
+        skimMinutes !== null &&
+        skimMinutes < (pageCapture?.readingTimeMinutes ?? 0)
+        ? `${readingPlanText(language, 'skim')} ~${uiText(language, 'minutesShort', { count: skimMinutes })} · ${readingTime}`
+        : readingTime
+      : '';
+    view.readingPlanSections.replaceChildren();
+    if (readingPlan) {
+      view.readingPlanTitle.textContent = cardText(language, 'sections');
+      readingPlan.headings.forEach((heading, index) => {
+        const item = document.createElement('li');
+        const button = document.createElement('button');
+        button.className = 'reading-plan-section';
+        button.type = 'button';
+        const number = document.createElement('span');
+        number.textContent = String(index + 1);
+        const label = document.createElement('span');
+        label.textContent = heading;
+        button.append(number, label);
+        button.addEventListener(
+          'click',
+          (event) => {
+            if (!isTrustedUserInteraction(event)) return;
+            event.preventDefault();
+            event.stopPropagation();
+            highlightRecommendedSections(
+              document,
+              readingPlan.headings,
+              currentLanguage(),
+            );
+            scrollToHeading(document, heading);
+            hide();
+          },
+          { signal: listenerController.signal },
+        );
+        item.append(button);
+        view.readingPlanSections.append(item);
+      });
+    }
+    view.readingPlan.hidden = !readingPlan;
+    view.highlightSectionsButton.textContent = readingPlanText(
+      language,
+      'highlight',
+    );
+    view.actionStatus.hidden = true;
+    for (const [decision, button] of view.decisionButtons) {
+      button.dataset.primary = String(decision === primaryDecision);
+      if (decision !== 'save') {
+        button.textContent = readingPlanText(language, decision);
+        button.disabled = decisionPending || contextPending;
+      }
+    }
+    const primaryButton = view.decisionButtons.get(primaryDecision)!;
+    if (view.decisionActions.firstElementChild !== primaryButton)
+      view.decisionActions.prepend(primaryButton);
+    view.host.dataset.attentionPlan = readingPlan?.title ?? '';
     const weakExtraction =
       expanded && preview.insights?.reliability?.weakExtraction === true;
     view.reliabilityNote.textContent = weakExtraction
@@ -1617,12 +1951,14 @@ export function installHoverPreview(
     const aiState = cachedResponse?.aiState ?? 'not-connected';
     view.analysisSource.textContent = uiText(
       language,
-      analysisSource === 'ai' ? 'aiAnalysisSource' : 'localAnalysisSource',
+      analysisSource === 'ai' ? 'checkedWithAi' : 'localAnalysisSource',
     );
+    view.analysisSource.dataset.source = analysisSource;
     view.aiButton.disabled =
       analysisSource === 'ai' ||
       aiState === 'local-only' ||
       aiState === 'not-connected';
+    view.aiButton.hidden = analysisSource === 'ai';
     view.aiButton.textContent = uiText(
       language,
       analysisSource === 'ai'
@@ -1639,25 +1975,44 @@ export function installHoverPreview(
     view.host.dataset.attentionAiState = aiState;
     view.card.dataset.verdict = verdict;
     view.host.dataset.attentionAction = preview.recommendedAction;
+    view.host.dataset.attentionScenario = preview.scenario;
     view.host.dataset.attentionVerdict = verdict;
     view.host.dataset.attentionSource = preview.source;
     view.host.dataset.attentionHeadline = view.verdict.textContent;
+    view.host.dataset.attentionScore = String(preview.utilityScore ?? '');
+    view.host.dataset.attentionDecision = primaryDecision;
     view.host.dataset.attentionReadingInfo = view.usefulTime.textContent;
     view.host.dataset.attentionPointerEvents = String(pointerEventCount);
-    view.host.setAttribute(
-      'aria-label',
-      expanded && preview.utilityScore !== null
-        ? `${label}, ${uiText(language, 'percentSpoken', { count: preview.utilityScore })}. ${promise}. ${reason}. ${view.usefulTime.textContent}. ${view.analysisSource.textContent}. ${view.reliabilityNote.textContent}.`.trim()
-        : label,
-    );
-    positionCard(view.host, details.positionElement);
+    view.host.setAttribute('role', expanded ? 'dialog' : 'status');
+    view.host.setAttribute('aria-label', expanded ? 'Attention' : label);
     view.host.style.display = 'block';
+    positionCard(view.host, details.positionElement);
+    keyboardTrigger?.setAttribute('aria-expanded', String(expanded));
+    if (keyboardOpening) {
+      keyboardOpening = false;
+      const focusTarget =
+        focusAfterRefresh?.isConnected &&
+        !focusAfterRefresh.closest('details:not([open])') &&
+        !focusAfterRefresh.matches(':disabled')
+          ? focusAfterRefresh
+          : primaryButton.disabled
+            ? view.decisionButtons.get('read')!
+            : primaryButton;
+      focusAfterRefresh = null;
+      focusTarget.focus({ preventScroll: true });
+    }
     emitPreviewEvent('shown', details, preview);
+    if (
+      details.currentPage &&
+      pendingCardOpen?.url === canonicalPageUrl(details.url)
+    )
+      settlePendingCardOpen({ ok: true });
   };
 
   view.aiButton.addEventListener(
     'click',
     (event) => {
+      if (!isTrustedUserInteraction(event)) return;
       event.preventDefault();
       event.stopPropagation();
       if (
@@ -1678,6 +2033,7 @@ export function installHoverPreview(
       };
       const key = activeCacheKey;
       const version = ++requestVersion;
+      view.host.focus({ preventScroll: true });
       view.aiButton.disabled = true;
       view.aiButton.textContent = uiText(currentLanguage(), 'checkingWithAi');
       void chrome.runtime
@@ -1719,6 +2075,7 @@ export function installHoverPreview(
   );
 
   const schedulePreview = (element: Element, point?: HoverPoint): void => {
+    if (listenerController.signal.aborted) return;
     synchronizeHoverRoute();
     const details = resolveHoverTargetDetails(element, point);
     if (!details) {
@@ -1728,20 +2085,26 @@ export function installHoverPreview(
     // Product contract has two page modes. Feed pages show compact verdicts
     // for material links. Once an article is open, all linked/body previews are
     // silent and only its exact title can show the expanded evaluation.
-    if (isArticlePagePath(window.location.pathname) && !details.currentPage) {
+    if (isCurrentArticleDocument() && !details.currentPage) {
       if (activeTarget) hide();
       return;
     }
     const key = cacheKey(details);
     if (activeTarget === details.element && activeCacheKey === key) return;
-    hide();
+    hide({
+      keepPendingOpen:
+        details.currentPage &&
+        pendingCardOpen?.url === canonicalPageUrl(details.url),
+    });
     activeTarget = details.element;
     activeDetails = details;
     activeCacheKey = key;
     const version = ++requestVersion;
     hoverTimer = window.setTimeout(
       () => {
-        void show(details, version).catch(hide);
+        void show(details, version).catch(() => {
+          if (version === requestVersion) hide();
+        });
       },
       details.currentPage
         ? HOVER_PREVIEW_CONFIG.currentPageDelayMs
@@ -1753,11 +2116,81 @@ export function installHoverPreview(
     pointerEventCount += 1;
   };
 
+  refreshKeyboardTrigger = (): void => {
+    if (listenerController.signal.aborted) return;
+    const capture = currentPageCapture();
+    const title =
+      capture?.isArticle && capture.wordCount >= 80
+        ? (exactDocumentTitleElement() ?? currentArticleTitleElement(capture))
+        : null;
+    if (title === keyboardTitle && keyboardTrigger?.isConnected) {
+      keyboardTrigger.setAttribute(
+        'aria-label',
+        readingPlanText(currentLanguage(), 'open'),
+      );
+      keyboardTrigger.title = readingPlanText(currentLanguage(), 'open');
+      return;
+    }
+    keyboardTrigger?.remove();
+    keyboardTrigger = null;
+    keyboardTitle = title;
+    if (!title) return;
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.dataset.attentionTrigger = 'true';
+    button.textContent = 'Attention';
+    button.setAttribute(
+      'aria-label',
+      readingPlanText(currentLanguage(), 'open'),
+    );
+    button.title = readingPlanText(currentLanguage(), 'open');
+    button.setAttribute('aria-controls', view.host.id);
+    button.setAttribute('aria-expanded', 'false');
+    Object.assign(button.style, {
+      display: 'inline-block',
+      margin: '8px 0',
+      padding: '6px 10px',
+      border: '1px solid #166b4f',
+      borderRadius: '7px',
+      color: '#166b4f',
+      background: '#effaf4',
+      font: '700 12px/1.4 system-ui, sans-serif',
+      cursor: 'pointer',
+    });
+    button.addEventListener(
+      'click',
+      (event) => {
+        if (!isTrustedUserInteraction(event)) return;
+        event.preventDefault();
+        event.stopPropagation();
+        keyboardOpening = true;
+        if (view.host.style.display === 'block' && activeDetails?.currentPage) {
+          keyboardOpening = false;
+          const primary = view.decisionButtons.get(primaryDecision)!;
+          (primary.disabled
+            ? view.decisionButtons.get('read')!
+            : primary
+          ).focus();
+        } else {
+          schedulePreview(title);
+        }
+      },
+      { signal: listenerController.signal },
+    );
+    title.insertAdjacentElement('afterend', button);
+    keyboardTrigger = button;
+  };
+
   document.addEventListener(
     'click',
     (event) => {
+      if (!isTrustedUserInteraction(event)) return;
       if (!(event.target instanceof Element)) return;
-      if (event.target === view.host) return;
+      if (
+        event.target === view.host ||
+        event.target.closest('[data-attention-trigger]')
+      )
+        return;
       const details = resolveHoverTargetDetails(event.target);
       if (!details) return;
       const preview = cache.get(cacheKey(details))?.preview;
@@ -1769,7 +2202,9 @@ export function installHoverPreview(
   document.addEventListener(
     'pointerover',
     (event) => {
+      if (keyboardInteractionActive()) return;
       if (!(event.target instanceof Element)) return;
+      if (event.target.closest('[data-attention-trigger]')) return;
       if (event.target === view.host) {
         cancelScheduledHide();
         return;
@@ -1777,6 +2212,7 @@ export function installHoverPreview(
       recordPointerEvent();
       lastPointerElement = event.target;
       lastPointerPoint = { x: event.clientX, y: event.clientY };
+      if (handleExpandedPointer(lastPointerPoint)) return;
       schedulePreview(event.target, lastPointerPoint);
     },
     { capture: true, signal: listenerController.signal },
@@ -1785,7 +2221,9 @@ export function installHoverPreview(
   document.addEventListener(
     'pointermove',
     (event) => {
+      if (keyboardInteractionActive()) return;
       if (!(event.target instanceof Element)) return;
+      if (event.target.closest('[data-attention-trigger]')) return;
       if (event.target === view.host) {
         cancelScheduledHide();
         return;
@@ -1793,6 +2231,7 @@ export function installHoverPreview(
       recordPointerEvent();
       lastPointerElement = event.target;
       lastPointerPoint = { x: event.clientX, y: event.clientY };
+      if (handleExpandedPointer(lastPointerPoint)) return;
       const now = performance.now();
       if (now - lastPointerMoveAt < HOVER_PREVIEW_CONFIG.pointerThrottleMs)
         return;
@@ -1814,6 +2253,7 @@ export function installHoverPreview(
     'focusin',
     (event) => {
       if (!(event.target instanceof Element)) return;
+      if (event.target.closest('[data-attention-trigger]')) return;
       if (event.target === view.host) {
         cancelScheduledHide();
         return;
@@ -1826,7 +2266,12 @@ export function installHoverPreview(
   document.addEventListener(
     'pointerout',
     (event) => {
+      if (keyboardInteractionActive()) return;
       const related = event.relatedTarget;
+      if (related === view.host || related === keyboardTrigger) {
+        cancelScheduledHide();
+        return;
+      }
       lastPointerElement = related instanceof Element ? related : null;
       if (!(related instanceof Element)) lastPointerPoint = undefined;
       if (!activeTarget) return;
@@ -1835,6 +2280,7 @@ export function installHoverPreview(
         return;
       }
       if (related instanceof Node && activeTarget.contains(related)) return;
+      if (handleExpandedPointer({ x: event.clientX, y: event.clientY })) return;
       if (event.target instanceof Node && activeTarget.contains(event.target)) {
         if (view.host.dataset.attentionExpanded === 'true') scheduleHide();
         else hide();
@@ -1847,6 +2293,12 @@ export function installHoverPreview(
     (event) => {
       if (!activeTarget) return;
       const related = event.relatedTarget;
+      if (related === view.host || related === keyboardTrigger) return;
+      if (event.target === view.host || event.target === keyboardTrigger) {
+        keyboardOpening = false;
+        hide();
+        return;
+      }
       if (related instanceof Node && activeTarget.contains(related)) return;
       if (event.target instanceof Node && activeTarget.contains(event.target)) {
         hide();
@@ -1859,9 +2311,28 @@ export function installHoverPreview(
     lastPointerPoint = undefined;
     hide();
   };
+  document.addEventListener(
+    'keydown',
+    (event) => {
+      if (
+        !isTrustedUserInteraction(event) ||
+        event.key !== 'Escape' ||
+        view.host.style.display !== 'block'
+      )
+        return;
+      event.preventDefault();
+      const restoreFocus = document.activeElement === view.host;
+      keyboardOpening = false;
+      hide();
+      if (restoreFocus) keyboardTrigger?.focus();
+    },
+    { capture: true, signal: listenerController.signal },
+  );
   document.documentElement.addEventListener(
     'pointerleave',
-    clearPointerAndHide,
+    () => {
+      if (!keyboardInteractionActive()) clearPointerAndHide();
+    },
     {
       signal: listenerController.signal,
     },
@@ -1869,7 +2340,27 @@ export function installHoverPreview(
   window.addEventListener('blur', clearPointerAndHide, {
     signal: listenerController.signal,
   });
-  subscribeToScroll(clearPointerAndHide, listenerController.signal);
+  window.addEventListener(
+    'resize',
+    () => {
+      if (activeDetails && view.host.style.display === 'block')
+        positionCard(view.host, activeDetails.positionElement);
+    },
+    { signal: listenerController.signal },
+  );
+  subscribeToScroll(() => {
+    lastPointerElement = null;
+    lastPointerPoint = undefined;
+    // Focus and section navigation can scroll after Enter has scheduled the
+    // card. Keep an explicit keyboard interaction alive through those events;
+    // pointer-only previews still disappear immediately when the page moves.
+    if (keyboardInteractionActive() && activeDetails) {
+      if (view.host.style.display === 'block')
+        positionCard(view.host, activeDetails.positionElement);
+      return;
+    }
+    hide();
+  }, listenerController.signal);
 
   // Substack and similar SPA readers publish the route before the article body
   // is hydrated. Observe only the article/main region, and only for a short
@@ -1888,7 +2379,7 @@ export function installHoverPreview(
   };
   restartHydrationObservation = (): void => {
     stopHydrationObservation();
-    if (!isArticlePagePath(window.location.pathname)) return;
+    if (!isCurrentArticleDocument()) return;
     const observationRoot =
       findCurrentArticleRoot(document) ??
       document.querySelector<HTMLElement>('article, main, [role="main"]') ??
@@ -1898,9 +2389,11 @@ export function installHoverPreview(
     hydrationObserver = new MutationObserver(() => {
       window.clearTimeout(mutationRetryTimer);
       mutationRetryTimer = window.setTimeout(() => {
+        refreshKeyboardTrigger();
         if (
-          view.host.style.display === 'block' &&
-          view.host.dataset.attentionExpanded === 'true'
+          keyboardInteractionActive() ||
+          (view.host.style.display === 'block' &&
+            view.host.dataset.attentionExpanded === 'true')
         ) {
           return;
         }
@@ -1928,8 +2421,55 @@ export function installHoverPreview(
     fallbackIntervalMs: HOVER_PREVIEW_CONFIG.routeWatchIntervalMs,
   });
   restartHydrationObservation();
+  refreshKeyboardTrigger();
   listenerController.signal.addEventListener('abort', () => {
+    hide();
+    keyboardTrigger?.remove();
+    view.host.remove();
     stopHydrationObservation();
     novelPassages.clear();
   });
+  return {
+    async openCurrentArticle(): Promise<CardOpenResponse> {
+      synchronizeHoverRoute();
+      const capture = currentPageCapture();
+      const root = capture && findCurrentArticleRoot(document, capture.title);
+      if (!capture?.isArticle || capture.wordCount < 80 || !root)
+        return { ok: false, reason: 'not_article' };
+      const url = canonicalPageUrl(window.location.href);
+      if (pendingCardOpen?.url === url) return pendingCardOpen.promise;
+      refreshKeyboardTrigger();
+      const title = keyboardTitle ?? root;
+      const resolved = resolveHoverTargetDetails(title);
+      const details: HoverTargetDetails = resolved?.currentPage
+        ? resolved
+        : {
+            element: title,
+            positionElement: title,
+            title: capture.title,
+            url: window.location.href,
+            snippet: capture.excerpt,
+            currentPage: true,
+          };
+      hide();
+      let resolve!: (response: CardOpenResponse) => void;
+      const opened = new Promise<CardOpenResponse>((complete) => {
+        resolve = complete;
+      });
+      pendingCardOpen = { url, promise: opened, resolve };
+      keyboardOpening = true;
+      focusAfterRefresh = null;
+      activeTarget = details.element;
+      activeDetails = details;
+      activeCacheKey = cacheKey(details);
+      const version = ++requestVersion;
+      // A settings broadcast can supersede this render while it is awaiting
+      // analysis. Keep OPEN attached to the fresh render already scheduled by
+      // invalidation; erasure, navigation and user dismissal cancel it in hide.
+      void show(details, version).catch(() => {
+        if (version === requestVersion) hide();
+      });
+      return opened;
+    },
+  };
 }

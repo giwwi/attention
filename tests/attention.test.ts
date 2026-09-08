@@ -388,7 +388,7 @@ describe('attention sessions', () => {
     ]);
   });
 
-  it('migrates pre-scenario reading sessions to Work without losing progress', async () => {
+  it('normalizes pre-scenario reading sessions without rewriting stored history', async () => {
     const storage = new MemoryStorage();
     await createAttentionSession(
       capture(),
@@ -419,8 +419,10 @@ describe('attention sessions', () => {
       },
       visibleSeconds: 75,
     });
-    expect(storage.data[ATTENTION_SESSIONS_KEY]).toEqual([
-      expect.objectContaining({ scenario: 'work', visibleSeconds: 75 }),
-    ]);
+    expect(storage.data[ATTENTION_SESSIONS_KEY]).toEqual(legacy);
+    expect(migrated?.expected.prediction).toMatchObject({
+      rawUtility: null,
+      provenance: 'legacy-display-only',
+    });
   });
 });

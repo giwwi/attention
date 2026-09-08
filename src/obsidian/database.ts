@@ -6,19 +6,20 @@ import {
   type LocalSearchDocument,
   type LocalSearchIndex,
 } from '../evidence/local-search-index';
-
-const DATABASE_NAME = 'attention-obsidian-v1';
-const DATABASE_VERSION = 2;
-const CONNECTION_STORE = 'connection';
-const NOTES_STORE = 'notes';
-const INDEX_STORE = 'search-index';
-const VAULT_HANDLE_KEY = 'vault';
-const SEARCH_INDEX_KEY = 'fragments';
+import { OBSIDIAN_DATA_KEY, type ObsidianVaultData } from '../vault/legacy';
+import { withSourceDataLock } from '../vault/source-lock';
+import {
+  getVaultEpoch,
+  onVaultStateChanged,
+  privateStorage,
+  VaultLockedError,
+} from '../vault/storage';
 
 interface PermissionDescriptor {
   mode: 'read';
 }
 
+/** Kept for API compatibility; directory handles are held only in process memory. */
 export interface PersistedDirectoryHandle extends FileSystemDirectoryHandle {
   queryPermission(descriptor?: PermissionDescriptor): Promise<PermissionState>;
   requestPermission(
@@ -26,119 +27,87 @@ export interface PersistedDirectoryHandle extends FileSystemDirectoryHandle {
   ): Promise<PermissionState>;
 }
 
-function requestResult<T>(request: IDBRequest<T>): Promise<T> {
-  return new Promise((resolve, reject) => {
-    request.addEventListener('success', () => resolve(request.result), {
-      once: true,
-    });
-    request.addEventListener(
-      'error',
-      () => reject(request.error ?? new Error('IndexedDB request failed.')),
-      { once: true },
-    );
-  });
+let vaultHandle: PersistedDirectoryHandle | null = null;
+let handleEpoch: string | null = null;
+let handleRevision = 0;
+let observingVault = false;
+
+function forgetVaultHandle(): void {
+  vaultHandle = null;
+  handleEpoch = null;
+  handleRevision++;
 }
 
-function transactionDone(transaction: IDBTransaction): Promise<void> {
-  return new Promise((resolve, reject) => {
-    transaction.addEventListener('complete', () => resolve(), { once: true });
-    transaction.addEventListener(
-      'abort',
-      () => reject(transaction.error ?? new Error('IndexedDB aborted.')),
-      { once: true },
-    );
-    transaction.addEventListener(
-      'error',
-      () => reject(transaction.error ?? new Error('IndexedDB failed.')),
-      { once: true },
-    );
-  });
+function observeVault(): void {
+  if (observingVault) return;
+  onVaultStateChanged(forgetVaultHandle);
+  observingVault = true;
 }
 
-async function openDatabase(): Promise<IDBDatabase> {
-  const request = indexedDB.open(DATABASE_NAME, DATABASE_VERSION);
-  request.addEventListener('upgradeneeded', () => {
-    const database = request.result;
-    if (!database.objectStoreNames.contains(CONNECTION_STORE)) {
-      database.createObjectStore(CONNECTION_STORE);
-    }
-    if (!database.objectStoreNames.contains(NOTES_STORE)) {
-      database.createObjectStore(NOTES_STORE, { keyPath: 'path' });
-    }
-    if (!database.objectStoreNames.contains(INDEX_STORE)) {
-      database.createObjectStore(INDEX_STORE);
-    }
-  });
-  return requestResult(request);
+async function currentHandleEpoch(): Promise<string> {
+  try {
+    return await getVaultEpoch();
+  } catch (error) {
+    forgetVaultHandle();
+    throw error;
+  }
 }
 
 export async function saveVaultHandle(
   handle: PersistedDirectoryHandle,
 ): Promise<void> {
-  const database = await openDatabase();
-  try {
-    const transaction = database.transaction(CONNECTION_STORE, 'readwrite');
-    const done = transactionDone(transaction);
-    transaction.objectStore(CONNECTION_STORE).put(handle, VAULT_HANDLE_KEY);
-    await done;
-  } finally {
-    database.close();
-  }
+  observeVault();
+  const revision = handleRevision;
+  const epoch = await currentHandleEpoch();
+  if (revision !== handleRevision) throw new VaultLockedError();
+  vaultHandle = handle;
+  handleEpoch = epoch;
 }
 
 export async function loadVaultHandle(): Promise<PersistedDirectoryHandle | null> {
-  const database = await openDatabase();
-  try {
-    const transaction = database.transaction(CONNECTION_STORE, 'readonly');
-    const done = transactionDone(transaction);
-    const value = await requestResult(
-      transaction.objectStore(CONNECTION_STORE).get(VAULT_HANDLE_KEY),
-    );
-    await done;
-    return value && typeof value === 'object'
-      ? (value as PersistedDirectoryHandle)
-      : null;
-  } finally {
-    database.close();
-  }
+  observeVault();
+  const epoch = await currentHandleEpoch();
+  if (handleEpoch !== epoch) forgetVaultHandle();
+  return vaultHandle;
+}
+
+async function loadObsidianData(): Promise<ObsidianVaultData> {
+  const stored = await privateStorage.get(OBSIDIAN_DATA_KEY);
+  return (
+    (stored[OBSIDIAN_DATA_KEY] as ObsidianVaultData | undefined) ?? {
+      notes: [],
+    }
+  );
 }
 
 export async function loadObsidianNotes(): Promise<ObsidianNoteRecord[]> {
-  const database = await openDatabase();
-  try {
-    const transaction = database.transaction(NOTES_STORE, 'readonly');
-    const done = transactionDone(transaction);
-    const notes = await requestResult(
-      transaction.objectStore(NOTES_STORE).getAll(),
-    );
-    await done;
-    return notes as ObsidianNoteRecord[];
-  } finally {
-    database.close();
-  }
+  return (await loadObsidianData()).notes;
+}
+
+function orderedNotes(
+  notes: Iterable<ObsidianNoteRecord>,
+): ObsidianNoteRecord[] {
+  // Preserve IndexedDB's unique path keys and stable key ordering.
+  return [
+    ...new Map([...notes].map((note) => [note.path, note])).values(),
+  ].sort((left, right) =>
+    left.path < right.path ? -1 : left.path > right.path ? 1 : 0,
+  );
 }
 
 export async function replaceObsidianNotes(
   notes: ObsidianNoteRecord[],
   generatedAt: string,
 ): Promise<void> {
-  const database = await openDatabase();
-  try {
-    const transaction = database.transaction(
-      [NOTES_STORE, INDEX_STORE],
-      'readwrite',
-    );
-    const done = transactionDone(transaction);
-    const store = transaction.objectStore(NOTES_STORE);
-    store.clear();
-    for (const note of notes) store.put(note);
-    transaction
-      .objectStore(INDEX_STORE)
-      .put(buildObsidianSearchIndex(notes, generatedAt), SEARCH_INDEX_KEY);
-    await done;
-  } finally {
-    database.close();
-  }
+  await withSourceDataLock('obsidian', async () => {
+    const nextNotes = orderedNotes(notes);
+    await privateStorage.set({
+      [OBSIDIAN_DATA_KEY]: {
+        notes: nextNotes,
+        searchIndex: buildObsidianSearchIndex(nextNotes, generatedAt),
+      } satisfies ObsidianVaultData,
+    });
+  });
 }
 
 function buildObsidianSearchIndex(
@@ -165,97 +134,58 @@ function obsidianSearchDocuments(
   );
 }
 
-async function loadStoredObsidianSearchIndex(): Promise<unknown> {
-  const database = await openDatabase();
-  try {
-    const transaction = database.transaction(INDEX_STORE, 'readonly');
-    const done = transactionDone(transaction);
-    const value = await requestResult(
-      transaction.objectStore(INDEX_STORE).get(SEARCH_INDEX_KEY),
-    );
-    await done;
-    return value;
-  } finally {
-    database.close();
-  }
-}
-
 export async function applyObsidianNoteChanges(input: {
   upserts: ObsidianNoteRecord[];
   removedPaths: string[];
   removedFragmentIds: string[];
   allNotes: ObsidianNoteRecord[];
   generatedAt: string;
+  vaultHandle?: PersistedDirectoryHandle;
 }): Promise<void> {
-  if (input.upserts.length === 0 && input.removedPaths.length === 0) return;
-  const storedIndex = await loadStoredObsidianSearchIndex();
-  const nextIndex = isLocalSearchIndex(storedIndex)
-    ? updateLocalSearchIndex(
-        storedIndex,
-        input.removedFragmentIds,
-        obsidianSearchDocuments(input.upserts),
-        input.generatedAt,
-      )
-    : buildObsidianSearchIndex(input.allNotes, input.generatedAt);
-  const database = await openDatabase();
-  try {
-    const transaction = database.transaction(
-      [NOTES_STORE, INDEX_STORE],
-      'readwrite',
-    );
-    const done = transactionDone(transaction);
-    const notesStore = transaction.objectStore(NOTES_STORE);
-    for (const path of input.removedPaths) notesStore.delete(path);
-    for (const note of input.upserts) notesStore.put(note);
-    transaction.objectStore(INDEX_STORE).put(nextIndex, SEARCH_INDEX_KEY);
-    await done;
-  } finally {
-    database.close();
-  }
-}
-
-async function saveObsidianSearchIndex(index: LocalSearchIndex): Promise<void> {
-  const database = await openDatabase();
-  try {
-    const transaction = database.transaction(INDEX_STORE, 'readwrite');
-    const done = transactionDone(transaction);
-    transaction.objectStore(INDEX_STORE).put(index, SEARCH_INDEX_KEY);
-    await done;
-  } finally {
-    database.close();
-  }
+  await withSourceDataLock('obsidian', async () => {
+    const stored = await loadObsidianData();
+    if (
+      input.upserts.length === 0 &&
+      input.removedPaths.length === 0 &&
+      !input.vaultHandle
+    )
+      return;
+    const byPath = new Map(stored.notes.map((note) => [note.path, note]));
+    const removedFragmentIds = new Set(input.removedFragmentIds);
+    for (const path of [
+      ...input.removedPaths,
+      ...input.upserts.map((note) => note.path),
+    ]) {
+      for (const fragment of byPath.get(path)?.fragments ?? [])
+        removedFragmentIds.add(fragment.id);
+    }
+    for (const path of input.removedPaths) byPath.delete(path);
+    for (const note of input.upserts) byPath.set(note.path, note);
+    const notes = orderedNotes(byPath.values());
+    const searchIndex = isLocalSearchIndex(stored.searchIndex)
+      ? updateLocalSearchIndex(
+          stored.searchIndex,
+          removedFragmentIds,
+          obsidianSearchDocuments(input.upserts),
+          input.generatedAt,
+        )
+      : buildObsidianSearchIndex(notes, input.generatedAt);
+    await privateStorage.set({
+      [OBSIDIAN_DATA_KEY]: { notes, searchIndex } satisfies ObsidianVaultData,
+    });
+    if (input.vaultHandle) await saveVaultHandle(input.vaultHandle);
+  });
 }
 
 export async function loadObsidianIndex(
   vaultName: string,
   generatedAt: string,
 ): Promise<ObsidianIndex | null> {
-  const database = await openDatabase();
-  let notes: ObsidianNoteRecord[];
-  let storedIndex: unknown;
-  try {
-    const transaction = database.transaction(
-      [NOTES_STORE, INDEX_STORE],
-      'readonly',
-    );
-    const done = transactionDone(transaction);
-    [notes, storedIndex] = await Promise.all([
-      requestResult(transaction.objectStore(NOTES_STORE).getAll()) as Promise<
-        ObsidianNoteRecord[]
-      >,
-      requestResult(transaction.objectStore(INDEX_STORE).get(SEARCH_INDEX_KEY)),
-    ]);
-    await done;
-  } finally {
-    database.close();
-  }
+  const { notes, searchIndex: storedIndex } = await loadObsidianData();
   if (notes.length === 0) return null;
   const searchIndex = isLocalSearchIndex(storedIndex, generatedAt)
     ? storedIndex
     : buildObsidianSearchIndex(notes, generatedAt);
-  if (searchIndex !== storedIndex) {
-    await saveObsidianSearchIndex(searchIndex);
-  }
   return {
     schemaVersion: 1,
     generatedAt,
@@ -266,18 +196,12 @@ export async function loadObsidianIndex(
 }
 
 export async function clearObsidianDatabase(): Promise<void> {
-  const database = await openDatabase();
-  try {
-    const transaction = database.transaction(
-      [CONNECTION_STORE, NOTES_STORE, INDEX_STORE],
-      'readwrite',
-    );
-    const done = transactionDone(transaction);
-    transaction.objectStore(CONNECTION_STORE).clear();
-    transaction.objectStore(NOTES_STORE).clear();
-    transaction.objectStore(INDEX_STORE).clear();
-    await done;
-  } finally {
-    database.close();
-  }
+  forgetVaultHandle();
+  await withSourceDataLock('obsidian', async () => {
+    try {
+      await privateStorage.remove(OBSIDIAN_DATA_KEY);
+    } finally {
+      forgetVaultHandle();
+    }
+  });
 }

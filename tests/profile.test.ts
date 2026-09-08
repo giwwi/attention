@@ -425,3 +425,23 @@ describe('profile merge', () => {
     expect(result.merged.interests).toEqual([]);
   });
 });
+
+it('normalizes a legacy profile without writing a possibly erased snapshot back', async () => {
+  const { loadProfile } = await import('../src/profile/storage');
+  const legacy = { ...createEmptyProfile(), schemaVersion: '1.0' };
+  const writes: unknown[] = [];
+  const storage = {
+    async get() {
+      return { personalProfile: legacy };
+    },
+    async set(items: Record<string, unknown>) {
+      writes.push(items);
+    },
+    async remove() {
+      /* read-only fixture */
+    },
+  };
+  const loaded = await loadProfile(storage);
+  expect(loaded?.schemaVersion).toBe('2.0');
+  expect(writes).toEqual([]);
+});

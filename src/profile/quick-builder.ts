@@ -270,6 +270,7 @@ export class AiQuickProfileBuilder {
   async build(
     answers: QuickProfileAnswers,
     now = new Date(),
+    signal?: AbortSignal,
   ): Promise<PersonalProfile> {
     if (
       !answers.internetUse.trim() &&
@@ -285,7 +286,9 @@ export class AiQuickProfileBuilder {
       output: Output.object({ schema: quickProfileSchema }),
       prompt: buildQuickProfilePrompt(answers),
       temperature: 0,
-      abortSignal: AbortSignal.timeout(25_000),
+      abortSignal: signal
+        ? AbortSignal.any([signal, AbortSignal.timeout(25_000)])
+        : AbortSignal.timeout(25_000),
     });
     return normalizePortableProfile(
       quickOutputToPortableProfile(result.output, now),

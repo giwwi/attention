@@ -8,6 +8,8 @@ import {
 } from '../../history/storage';
 import type { HistoryLookbackDays } from '../../history/evidence';
 import { getElement } from '../dom';
+import { captureProfileLabels, profileText as p } from '../../i18n/profile';
+import { beginSyncOperation } from '../../privacy/data-operations';
 
 type HistoryScreenOrigin = 'profile' | 'settings';
 
@@ -42,8 +44,21 @@ export class BrowserHistoryController {
     'browser-history-summary',
   );
   private origin: HistoryScreenOrigin = 'settings';
+  private readonly translateStatic = captureProfileLabels(this.root);
+  private statusSource: string | null = null;
 
   initialize(): void {
+    this.translateStatic();
+    new MutationObserver(() => {
+      if (!this.root.isConnected) return;
+      this.translateStatic();
+      this.updateImportLabel();
+      if (this.statusSource) this.status.textContent = p(this.statusSource);
+      void this.refresh();
+    }).observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ['lang'],
+    });
     this.sourceButton.addEventListener('click', () => this.open('profile'));
     this.closeButton.addEventListener('click', () => this.close());
     this.importButton.addEventListener('click', () => {
@@ -68,7 +83,22 @@ export class BrowserHistoryController {
       this.result.hidden = true;
       return;
     }
-    this.summary.textContent = `Использовано ${settings.processedUrlCount} страниц и ${settings.totalVisitCount} посещений за последние ${settings.lookbackDays} дней. Исключено чувствительных или служебных адресов: ${settings.excludedUrlCount}.${settings.permissionRetained ? ' Временное разрешение Chrome не удалось отозвать автоматически; удалите сигналы, чтобы повторить отзыв.' : ''}`;
+    this.summary.textContent =
+      p(
+        'Использовано {pages} страниц и {visits} посещений за {days} дней. Исключено адресов: {excluded}.',
+        {
+          pages: settings.processedUrlCount,
+          visits: settings.totalVisitCount,
+          days: settings.lookbackDays,
+          excluded: settings.excludedUrlCount,
+        },
+      ) +
+      (settings.permissionRetained
+        ? ' ' +
+          p(
+            'Временное разрешение не удалось отозвать. Удалите сигналы, чтобы повторить отзыв.',
+          )
+        : '');
     this.result.hidden = false;
     this.deleteButton.hidden = false;
     const selected = document.querySelector<HTMLInputElement>(
@@ -103,11 +133,15 @@ export class BrowserHistoryController {
   }
 
   private updateImportLabel(): void {
-    this.importButton.textContent = `Разрешить и обработать последние ${this.selectedLookback()} дней`;
+    this.importButton.textContent = p(
+      'Разрешить и обработать последние {count} дней',
+      { count: this.selectedLookback() },
+    );
   }
 
   private setStatus(message: string, state: 'default' | 'error' = 'default') {
-    this.status.textContent = message;
+    this.statusSource = message;
+    this.status.textContent = p(message);
     this.status.dataset.state = state;
   }
 
@@ -116,6 +150,7 @@ export class BrowserHistoryController {
     this.importButton.disabled = true;
     this.setStatus('Проверяем разрешение Chrome…');
     try {
+      const operation = await beginSyncOperation('history');
       const permission: chrome.permissions.Permissions = {
         permissions: ['history'],
       };
@@ -132,6 +167,9 @@ export class BrowserHistoryController {
       this.setStatus('Обрабатываем историю локально…');
       const response: unknown = await chrome.runtime.sendMessage({
         type: BROWSER_HISTORY_IMPORT_TYPE,
+        generation: operation.generation,
+        vaultEpoch: operation.vaultEpoch,
+        syncRevision: operation.sync?.revision,
         lookbackDays,
       });
       if (!isImportResponse(response) || !response.ok) {

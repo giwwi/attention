@@ -23,8 +23,9 @@ import {
 } from './utility';
 import { applyClaimMemoryToClaim } from '../novelty/claim-memory';
 import { applyUnifiedLocalEvidenceToClaim } from '../evidence/unified-evidence';
+import { claimsFactuallyCompatible } from './claim-match';
 
-const AI_ANALYZER_VERSION = 'v5-source-anchors';
+const AI_ANALYZER_VERSION = 'v6-factual-anchors';
 
 interface AiClaimOutput {
   claim: string;
@@ -334,18 +335,30 @@ function normalizeOutput(
     actionability: Math.min(100, Math.max(0, output.actionability)),
     keyClaims: output.keyClaims
       .slice(0, AI_ANALYSIS_LIMITS.claims)
-      .map((claim) => ({
-        claim: boundedText(claim.claim, 420),
-        sourceExcerpt: exactSourceExcerpt(
+      .map((claim) => {
+        const text = boundedText(claim.claim, 420);
+        const excerpt = exactSourceExcerpt(
           claim.sourceExcerpt,
           material.content,
-        ),
-        type: claim.type,
-        importance: claim.importance,
-        knownProbability: boundedProbability(claim.knownProbability),
-        noveltyReason: boundedText(claim.noveltyReason, 300),
-        confidence: boundedProbability(claim.confidence),
-      })),
+        );
+        const supported =
+          excerpt !== undefined && claimsFactuallyCompatible(text, excerpt);
+        return {
+          claim: text,
+          sourceExcerpt: supported ? excerpt : undefined,
+          type: claim.type,
+          importance: claim.importance,
+          knownProbability: supported
+            ? boundedProbability(claim.knownProbability)
+            : 0.5,
+          noveltyReason: supported
+            ? boundedText(claim.noveltyReason, 300)
+            : 'Не удалось подтвердить детали тезиса точной цитатой из материала; знакомость остаётся неопределённой.',
+          confidence: supported
+            ? boundedProbability(claim.confidence)
+            : Math.min(0.44, boundedProbability(claim.confidence)),
+        };
+      }),
     noveltySummary: boundedText(output.noveltySummary, 420),
     noveltyConfidence: boundedProbability(output.noveltyConfidence),
     qualityBreakdown: {
@@ -384,11 +397,13 @@ export class AiGatewayAnalyzer implements Analyzer {
     material: PageCapture,
     context: AnalysisContext,
     profileContext: RelevantProfileContext | null = null,
+    signal?: AbortSignal,
   ): Promise<MaterialEvaluation> {
     return measureAsync('analysis.ai', async () => {
       await assertExtensionCloudAiAllowed();
       const gateway = createGateway({ apiKey: this.apiKey });
       const result = await generateText({
+        abortSignal: signal,
         model: gateway(this.model),
         output: Output.object({ schema: evaluationSchema }),
         instructions:
@@ -397,27 +412,31 @@ export class AiGatewayAnalyzer implements Analyzer {
         timeout: { totalMs: AI_ANALYSIS_LIMITS.requestTimeoutMs },
       });
       const output = normalizeOutput(result.output, material);
-      const keyClaims: KeyClaimAssessment[] = output.keyClaims.map((claim) =>
-        applyClaimMemoryToClaim(
+      const keyClaims: KeyClaimAssessment[] = output.keyClaims.map((claim) => {
+        const assessment: KeyClaimAssessment = {
+          claim: claim.claim,
+          sourceExcerpt: claim.sourceExcerpt,
+          type: claim.type,
+          importance: claim.importance,
+          novelty: classifyClaimNovelty(
+            claim.knownProbability,
+            claim.confidence,
+          ),
+          knownProbability: claim.knownProbability,
+          reason: claim.noveltyReason,
+          confidence: claim.confidence,
+        };
+        // Local memory cannot turn an unsupported model claim back into a
+        // confident one after the source-anchor guard neutralized it.
+        if (!claim.sourceExcerpt) return assessment;
+        return applyClaimMemoryToClaim(
           applyUnifiedLocalEvidenceToClaim(
-            {
-              claim: claim.claim,
-              sourceExcerpt: claim.sourceExcerpt,
-              type: claim.type,
-              importance: claim.importance,
-              novelty: classifyClaimNovelty(
-                claim.knownProbability,
-                claim.confidence,
-              ),
-              knownProbability: claim.knownProbability,
-              reason: claim.noveltyReason,
-              confidence: claim.confidence,
-            },
+            assessment,
             profileContext?.unifiedLocalEvidence,
           ),
           profileContext?.claimMemoryEvidence,
-        ),
-      );
+        );
+      });
       const components = normalizeUtilityComponents({
         relevance: output.relevance,
         novelty: calculateNoveltyScore(keyClaims),
@@ -450,7 +469,11 @@ export class AiGatewayAnalyzer implements Analyzer {
             .slice(0, 2)
             .map((claim) => claim.claim),
           noveltySummary: output.noveltySummary,
-          noveltyConfidence: output.noveltyConfidence,
+          noveltyConfidence: Math.min(
+            output.noveltyConfidence,
+            keyClaims.reduce((sum, claim) => sum + claim.confidence, 0) /
+              Math.max(1, keyClaims.length),
+          ),
           qualityBreakdown: output.qualityBreakdown,
           qualitySummary: output.qualitySummary,
           qualityStrengths: output.qualityStrengths,

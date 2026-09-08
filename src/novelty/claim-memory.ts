@@ -1,6 +1,7 @@
 import { classifyClaimNovelty } from '../analyzer/evaluation';
 import type { MaterialFeatures } from '../analyzer/material-features';
 import { textTokens, tokenOverlap } from '../analyzer/text-match';
+import { claimsFactuallyCompatible } from '../analyzer/claim-match';
 import type {
   KeyClaimAssessment,
   RelevantClaimMemoryEvidence,
@@ -16,6 +17,7 @@ function normalized(value: string): string {
 }
 
 function relationScore(left: string, right: string): number {
+  if (!claimsFactuallyCompatible(left, right)) return 0;
   if (normalized(left) === normalized(right)) return 1;
   const leftTokens = textTokens(left);
   const rightTokens = textTokens(right);
@@ -93,13 +95,22 @@ export function applyClaimMemoryToClaim(
   evidence: RelevantClaimMemoryEvidence | undefined,
 ): KeyClaimAssessment {
   if (!evidence) return claim;
+  if (
+    claim.sourceExcerpt &&
+    !claimsFactuallyCompatible(claim.claim, claim.sourceExcerpt)
+  )
+    return claim;
   const strongest = evidence.matches
+    .filter(
+      (match) =>
+        claimsFactuallyCompatible(claim.claim, match.claim) &&
+        claimsFactuallyCompatible(claim.claim, match.excerpt),
+    )
     .map((match) => ({
       match,
-      relation: Math.max(
-        relationScore(claim.claim, match.claim),
-        relationScore(claim.sourceExcerpt ?? claim.claim, match.excerpt),
-      ),
+      // An identical surrounding excerpt cannot establish knowledge of a
+      // different claim. The claim itself must be the lexical match.
+      relation: relationScore(claim.claim, match.claim),
     }))
     .filter((item) => item.relation >= 0.3)
     .sort(

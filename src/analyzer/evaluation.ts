@@ -1,3 +1,4 @@
+import { createRawUtilityPrediction } from '../utility/prediction';
 import type {
   AnalysisContext,
   ClaimNovelty,
@@ -106,6 +107,14 @@ export function finalizeMaterialEvaluation({
     recommendedAction:
       recommendedActionOverride ?? utilityRecommendation(utilityScore),
     utilityScore,
+    prediction: createRawUtilityPrediction(
+      utilityScore,
+      context.scenario,
+      analyzerId,
+    ),
+    ...(recommendedActionOverride === 'skip'
+      ? { recommendationConstraint: 'skip' as const }
+      : {}),
     components,
     scenarioSignals,
     estimatedUsefulMinutes: estimateUsefulMinutes(

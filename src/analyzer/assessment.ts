@@ -17,6 +17,7 @@ import {
 } from './reliability';
 import { analyzeStructuralFeatures } from './structural-features';
 import { textMatchScore, textTokens, tokenOverlap } from './text-match';
+import { claimsFactuallyCompatible } from './claim-match';
 import { normalizeScore } from './utility';
 import { QUALITY_WEIGHTS } from './config';
 import { classifyClaimNovelty } from './evaluation';
@@ -49,6 +50,10 @@ function strongestMatch(
   let strongest: (RelevantKnowledgeSignal & { relation: number }) | null = null;
   for (const signal of signals) {
     if (signal.kind !== kind) continue;
+    // Learning interests can be broad; a known statement must support these
+    // particular details, rather than merely mention the same topic.
+    if (kind === 'known' && !claimsFactuallyCompatible(claim, signal.statement))
+      continue;
     const knowledgeTokens = textTokens(`${signal.topic} ${signal.statement}`);
     const claimTokens = textTokens(claim);
     const overlap = tokenOverlap(knowledgeTokens, claimTokens);

@@ -1,3 +1,5 @@
+import { initializeTestProfile } from './helpers/profile';
+import { createTestExtension, initializeTestVault } from './helpers/vault';
 import {
   expect,
   test,
@@ -10,15 +12,16 @@ import { existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 
-const extensionPath = path.resolve('dist');
+let extensionPath: string;
 
 let context: BrowserContext;
 let page: Page;
 let profileDirectory: string;
 
 test.beforeEach(async () => {
-  expect(existsSync(path.join(extensionPath, 'manifest.json'))).toBe(true);
   profileDirectory = await mkdtemp(path.join(tmpdir(), 'attention-e2e-'));
+  extensionPath = await createTestExtension(profileDirectory);
+  expect(existsSync(path.join(extensionPath, 'manifest.json'))).toBe(true);
   context = await chromium.launchPersistentContext(profileDirectory, {
     channel: 'chromium',
     headless: process.env.HEADED !== 'true',
@@ -27,6 +30,8 @@ test.beforeEach(async () => {
       `--load-extension=${extensionPath}`,
     ],
   });
+  await initializeTestVault(context);
+  await initializeTestProfile(context);
   page = context.pages()[0] ?? (await context.newPage());
 });
 
@@ -53,6 +58,51 @@ test('shows a compact recommendation on a feed link', async () => {
   await expect(host).toHaveAttribute(
     'data-attention-verdict',
     /read|maybe|skip/,
+  );
+});
+
+test('ignores account-page promotions while preserving feed previews', async () => {
+  // Reconstructed service UI, with no access to a personal account. Cover
+  // internal, external, article-like and separately linked promotion titles.
+  const url = 'http://127.0.0.1:4317/earnings';
+  await context.route(url, (route) =>
+    route.fulfill({
+      contentType: 'text/html',
+      body: `<!doctype html><html><head><title>Earnings</title>
+        <style>body { font: 18px system-ui; padding: 40px; } section, article { margin: 24px 0; }</style>
+        </head><body><main><h1>Earnings</h1>
+        <section><a id="internal-promo" href="/intros"><h2>Unlock more earnings with Mercor Intros</h2></a></section>
+        <section><a id="external-promo" href="https://connections.example.com/explore"><h2>Explore your professional connections</h2></a></section>
+        <section><a id="article-like-promo" href="/articles/unlock-more-earnings-with-intros"><h2>Unlock more earnings with your connections</h2></a></section>
+        <article><h2 id="separate-promo">Invite your professional connections</h2>
+          <a href="https://connections.example.com/invite">Explore connections</a></article>
+        </main></body></html>`,
+    }),
+  );
+  await page.goto(url);
+  const host = await previewHost();
+  for (const selector of [
+    '#internal-promo h2',
+    '#external-promo h2',
+    '#article-like-promo h2',
+    '#separate-promo',
+  ]) {
+    await page.locator(selector).hover();
+    // Wait past the 420 ms preview delay to detect an unwanted card.
+    await page.waitForTimeout(650);
+    await expect(host).toHaveCSS('display', 'none');
+  }
+  await page.locator('#external-promo').focus();
+  await page.waitForTimeout(650);
+  await expect(host).toHaveCSS('display', 'none');
+
+  await page.goto('http://127.0.0.1:4317/feed');
+  const feedHost = await previewHost();
+  await page.locator('#feed-link').hover();
+  await expect(feedHost).toHaveCSS('display', 'block');
+  await expect(feedHost).toHaveAttribute(
+    'data-attention-source',
+    'title-preview',
   );
 });
 
@@ -113,6 +163,10 @@ test('renders Notion as a dedicated local knowledge source', async () => {
   await expect(page.locator('#notion-title')).toHaveText('Notion');
   await expect(page.locator('#notion-source-mode')).toBeVisible();
   await expect(page.locator('#connect-notion')).toBeVisible();
+  await expect(page.locator('#connect-notion')).toBeDisabled();
+  await expect(page.locator('#notion-intro')).toContainText(
+    /unavailable|недоступно/u,
+  );
   await expect(page.locator('#notion-status')).not.toBeEmpty();
   await expect(page.locator('#notion-privacy')).toContainText(
     /never sent to AI|не отправляются AI/u,
@@ -129,19 +183,19 @@ test('explains the ChatGPT paste step before opening the provider', async () => 
   const extensionId = new URL(worker.url()).host;
 
   await page.goto(`chrome-extension://${extensionId}/popup.html`);
+  await expect(page.locator('#launcher-home')).toBeVisible();
+  await page.locator('#open-popup-settings').click();
+  await page.locator('#open-profile-import').click();
   const chatGptSource = page.locator('[data-profile-source="chatgpt"]');
-  if (!(await chatGptSource.isVisible())) {
-    await page.locator('#open-profile-import').click();
-  }
   await expect(chatGptSource).toBeVisible();
   await chatGptSource.click();
 
   await expect(page.locator('#profile-prompt-step')).toBeVisible();
   await expect(page.locator('#profile-handoff-status')).toContainText(
-    'Запрос уже скопирован',
+    /copied|скопирован/iu,
   );
   await expect(page.locator('#reopen-profile-provider')).toHaveText(
-    'Открыть ChatGPT',
+    /Open ChatGPT|Открыть ChatGPT/iu,
   );
   await expect(page.locator('#reopen-profile-provider')).toBeVisible();
   expect(context.pages()).toHaveLength(1);

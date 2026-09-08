@@ -1,4 +1,8 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { installDataLocks } from './helpers/data-locks';
+import { DATA_GENERATION_KEY } from '../src/privacy/data-operations';
+beforeEach(installDataLocks);
+afterEach(() => vi.unstubAllGlobals());
 import {
   issuePublicSessionToken,
   verifyPublicSessionAuthorization,
@@ -129,6 +133,32 @@ describe('privacy and public session boundaries', () => {
     await expect(loadDiagnostics(storage)).resolves.toEqual([]);
   });
 
+  it('strips arbitrary remote codes and legacy identifiers from diagnostic exports', async () => {
+    const storage =
+      new MemoryStorage() as unknown as chrome.storage.StorageArea;
+    await recordDiagnostic(
+      {
+        subsystem: 'background',
+        operation: 'private-operation-secret',
+        code: 'private-token-secret',
+      },
+      storage,
+    );
+    const entries = await loadDiagnostics(storage);
+    expect(JSON.stringify(entries)).not.toContain('private-');
+    const legacy = {
+      ...entries[0]!,
+      id: 'private-id-secret',
+      at: 'private-date-secret',
+      version: 'private-version-secret',
+      operation: 'private-operation-secret',
+      code: 'private-token-secret',
+    };
+    const result = diagnosticsExport([legacy]);
+    expect(result).not.toContain('private-');
+    expect(result).toContain('REQUEST_FAILED');
+  });
+
   it('deletes both persistent and session-scoped Attention data', async () => {
     const local = new MemoryStorage();
     const session = new MemoryStorage();
@@ -141,7 +171,7 @@ describe('privacy and public session boundaries', () => {
       async () => undefined,
     );
 
-    expect(local.data).toEqual({});
+    expect(Object.keys(local.data)).toEqual([DATA_GENERATION_KEY]);
     expect(session.data).toEqual({});
   });
 });

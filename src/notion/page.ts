@@ -1,4 +1,9 @@
 import {
+  initializeVaultPage,
+  installVaultLockControl,
+} from '../vault/page-guard';
+import { privateStorage } from '../vault/storage';
+import {
   UI_LANGUAGE_KEY,
   normalizeUiLanguage,
   type UiLanguage,
@@ -12,6 +17,8 @@ import {
 } from './messages';
 import { loadNotionSettings } from './storage';
 import type { NotionSettings, NotionSourceMode } from './types';
+import { beginSyncOperation } from '../privacy/data-operations';
+import { notionOAuthConfigured } from './config';
 
 interface PageCopy {
   eyebrow: string;
@@ -37,6 +44,7 @@ interface PageCopy {
   failed: string;
   notConfigured: string;
   disconnectConfirm: string;
+  partial: string;
 }
 
 const ru: PageCopy = {
@@ -65,8 +73,10 @@ const ru: PageCopy = {
   success: 'Готово: {pages} страниц и {fragments} фрагментов.',
   failed: 'Не удалось подключить или обновить Notion. Попробуйте ещё раз.',
   notConfigured:
-    'OAuth Notion не настроен в этой сборке. Нужен адрес серверного OAuth-маршрута.',
+    'Подключение Notion недоступно в этой версии. Существующий локальный индекс сохраняется на устройстве; его можно удалить здесь.',
   disconnectConfirm: 'Отключить Notion и удалить локальный индекс Attention?',
+  partial:
+    'Индекс обновлён частично. Необновлённые страницы сохраняют прежние версии.',
 };
 
 const en: PageCopy = {
@@ -95,12 +105,16 @@ const en: PageCopy = {
   success: 'Done: {pages} pages and {fragments} fragments.',
   failed: 'Could not connect or refresh Notion. Please try again.',
   notConfigured:
-    'Notion OAuth is not configured in this build. An OAuth broker URL is required.',
+    'Connecting Notion is unavailable in this version. Any existing local index stays on this device and can be deleted here.',
   disconnectConfirm: 'Disconnect Notion and delete Attention’s local index?',
+  partial:
+    'Index partially refreshed. Pages that could not be refreshed retain their previous versions.',
 };
 
 const overrides: Partial<Record<UiLanguage, Partial<PageCopy>>> = {
   de: {
+    partial:
+      'Der Index wurde teilweise aktualisiert. Nicht aktualisierte Seiten behalten ihre vorherigen Versionen.',
     eyebrow: 'Ausgewählte Wissensquelle',
     intro:
       'Verbinden Sie nur ausgewählte Seiten. Attention nutzt sie lokal, um Bekanntes vorsichtiger einzuschätzen.',
@@ -118,8 +132,12 @@ const overrides: Partial<Record<UiLanguage, Partial<PageCopy>>> = {
     disconnect: 'Trennen und Index löschen',
     close: 'Fertig',
     disconnected: 'Notion ist nicht verbunden.',
+    notConfigured:
+      'Die Notion-Verbindung ist in dieser Version nicht verfügbar. Ein vorhandener lokaler Index bleibt auf diesem Gerät und kann hier gelöscht werden.',
   },
   es: {
+    partial:
+      'El índice se actualizó parcialmente. Las páginas que no pudieron actualizarse conservan sus versiones anteriores.',
     eyebrow: 'Fuente de conocimiento seleccionada',
     intro:
       'Conecta solo las páginas que elijas. Attention las usa localmente para estimar mejor lo que ya conoces.',
@@ -137,8 +155,12 @@ const overrides: Partial<Record<UiLanguage, Partial<PageCopy>>> = {
     disconnect: 'Desconectar y borrar índice',
     close: 'Listo',
     disconnected: 'Notion no está conectado.',
+    notConfigured:
+      'La conexión con Notion no está disponible en esta versión. El índice local existente permanece en este dispositivo y se puede eliminar aquí.',
   },
   fr: {
+    partial:
+      'L’index a été partiellement actualisé. Les pages non actualisées conservent leurs versions précédentes.',
     eyebrow: 'Source de connaissances choisie',
     intro:
       'Connectez uniquement les pages choisies. Attention les utilise localement pour mieux estimer ce qui vous est familier.',
@@ -156,8 +178,12 @@ const overrides: Partial<Record<UiLanguage, Partial<PageCopy>>> = {
     disconnect: 'Déconnecter et supprimer l’index',
     close: 'Terminé',
     disconnected: 'Notion n’est pas connecté.',
+    notConfigured:
+      'La connexion à Notion est indisponible dans cette version. L’index local existant reste sur cet appareil et peut être supprimé ici.',
   },
   it: {
+    partial:
+      'Indice aggiornato parzialmente. Le pagine non aggiornate conservano le versioni precedenti.',
     eyebrow: 'Fonte di conoscenza selezionata',
     intro:
       'Collega solo le pagine che scegli. Attention le usa localmente per stimare meglio ciò che conosci già.',
@@ -175,8 +201,11 @@ const overrides: Partial<Record<UiLanguage, Partial<PageCopy>>> = {
     disconnect: 'Scollega ed elimina indice',
     close: 'Fatto',
     disconnected: 'Notion non è collegato.',
+    notConfigured:
+      'La connessione a Notion non è disponibile in questa versione. L’indice locale esistente resta su questo dispositivo e può essere eliminato qui.',
   },
   zh: {
+    partial: '索引已部分更新。未能更新的页面保留其先前版本。',
     eyebrow: '已选知识来源',
     intro:
       '只连接您选择的页面。Attention 会在本地使用它们来谨慎估算您已熟悉的内容。',
@@ -193,8 +222,12 @@ const overrides: Partial<Record<UiLanguage, Partial<PageCopy>>> = {
     disconnect: '断开并删除索引',
     close: '完成',
     disconnected: 'Notion 未连接。',
+    notConfigured:
+      '此版本暂不支持连接 Notion。现有本地索引仍保留在此设备上，可在这里删除。',
   },
   ar: {
+    partial:
+      'تم تحديث الفهرس جزئياً. تحتفظ الصفحات التي تعذر تحديثها بإصداراتها السابقة.',
     eyebrow: 'مصدر معرفة محدد',
     intro:
       'اربط الصفحات التي تختارها فقط. يستخدمها Attention محلياً لتقدير ما قد يكون مألوفاً لك بحذر.',
@@ -212,8 +245,12 @@ const overrides: Partial<Record<UiLanguage, Partial<PageCopy>>> = {
     disconnect: 'قطع الاتصال وحذف الفهرس',
     close: 'تم',
     disconnected: 'Notion غير متصل.',
+    notConfigured:
+      'الاتصال بـ Notion غير متاح في هذا الإصدار. يبقى الفهرس المحلي الموجود على هذا الجهاز ويمكن حذفه هنا.',
   },
   hi: {
+    partial:
+      'इंडेक्स आंशिक रूप से अपडेट हुआ। जिन पेजों को अपडेट नहीं किया जा सका, उनके पिछले संस्करण सुरक्षित हैं।',
     eyebrow: 'चुना हुआ ज्ञान स्रोत',
     intro:
       'केवल चुने हुए पेज कनेक्ट करें। Attention उन्हें लोकल रूप से उपयोग करके परिचित जानकारी का सावधानी से अनुमान लगाता है।',
@@ -231,6 +268,8 @@ const overrides: Partial<Record<UiLanguage, Partial<PageCopy>>> = {
     disconnect: 'डिस्कनेक्ट करके इंडेक्स हटाएँ',
     close: 'पूर्ण',
     disconnected: 'Notion कनेक्ट नहीं है।',
+    notConfigured:
+      'इस संस्करण में Notion से कनेक्ट करना उपलब्ध नहीं है। मौजूदा लोकल इंडेक्स इस डिवाइस पर रहता है और यहाँ से हटाया जा सकता है।',
   },
 };
 
@@ -238,6 +277,8 @@ function copyFor(language: UiLanguage): PageCopy {
   if (language === 'ru') return ru;
   return { ...en, ...overrides[language] };
 }
+
+await initializeVaultPage();
 
 function element<T extends HTMLElement>(id: string): T {
   const item = document.getElementById(id);
@@ -254,7 +295,7 @@ const disconnectButton = element<HTMLButtonElement>('disconnect-notion');
 let copy = en;
 
 function setBusy(busy: boolean): void {
-  connectButton.disabled = busy;
+  connectButton.disabled = busy || !notionOAuthConfigured();
   syncButton.disabled = busy;
   disconnectButton.disabled = busy;
   sourceMode.disabled = busy;
@@ -287,7 +328,15 @@ function render(settings: NotionSettings): void {
         .replace('{date}', formattedDate(settings.lastSyncedAt))
     : copy.neverSynced;
   sourceMode.value = settings.sourceMode;
+  if (settings.syncComplete === false)
+    summary.textContent += ` · ${copy.partial}`;
   connectButton.textContent = settings.connected ? copy.change : copy.connect;
+  connectButton.disabled = !notionOAuthConfigured();
+  if (!notionOAuthConfigured()) {
+    connectButton.setAttribute('aria-describedby', 'notion-intro');
+  } else {
+    connectButton.removeAttribute('aria-describedby');
+  }
   syncButton.hidden = !settings.connected;
   disconnectButton.hidden = !settings.connected;
 }
@@ -295,7 +344,7 @@ function render(settings: NotionSettings): void {
 function translate(): void {
   const values: Record<string, string> = {
     'notion-eyebrow': copy.eyebrow,
-    'notion-intro': copy.intro,
+    'notion-intro': notionOAuthConfigured() ? copy.intro : copy.notConfigured,
     'notion-privacy': copy.privacy,
     'notion-selection': copy.selection,
     'notion-source-label': copy.sourceLabel,
@@ -309,6 +358,7 @@ function translate(): void {
   for (const [id, value] of Object.entries(values)) {
     element<HTMLElement>(id).textContent = value;
   }
+  element<HTMLElement>('notion-selection').hidden = !notionOAuthConfigured();
 }
 
 async function request(message: unknown): Promise<NotionResponse> {
@@ -324,9 +374,14 @@ function randomState(): string {
 }
 
 async function connect(): Promise<void> {
+  if (!notionOAuthConfigured()) {
+    status.textContent = copy.notConfigured;
+    return;
+  }
   setBusy(true);
   status.textContent = copy.opening;
   try {
+    const operation = await beginSyncOperation('notion');
     const config = await request({ type: NOTION_CONFIG_TYPE });
     if (!config.ok || !config.clientId) {
       status.textContent =
@@ -357,6 +412,9 @@ async function connect(): Promise<void> {
     status.textContent = copy.syncing;
     const response = await request({
       type: NOTION_CONNECT_TYPE,
+      generation: operation.generation,
+      vaultEpoch: operation.vaultEpoch,
+      syncRevision: operation.sync?.revision,
       code,
       redirectUri,
       sourceMode: selectedMode(),
@@ -375,7 +433,7 @@ async function connect(): Promise<void> {
       render(await loadNotionSettings());
       return;
     }
-    console.warn('[attention:notion] connection failed', error);
+    console.warn('[attention:notion] connection failed');
     status.textContent = copy.failed;
   } finally {
     setBusy(false);
@@ -396,8 +454,8 @@ async function sync(): Promise<void> {
     status.textContent = copy.success
       .replace('{pages}', String(settings.pageCount))
       .replace('{fragments}', String(settings.fragmentCount));
-  } catch (error) {
-    console.warn('[attention:notion] sync failed', error);
+  } catch {
+    console.warn('[attention:notion] sync failed');
     status.textContent = copy.failed;
   } finally {
     setBusy(false);
@@ -411,8 +469,8 @@ async function disconnect(): Promise<void> {
     const response = await request({ type: NOTION_DISCONNECT_TYPE });
     if (!response.ok) throw new Error(response.error ?? 'disconnect_failed');
     render(await loadNotionSettings());
-  } catch (error) {
-    console.warn('[attention:notion] disconnect failed', error);
+  } catch {
+    console.warn('[attention:notion] disconnect failed');
     status.textContent = copy.failed;
   } finally {
     setBusy(false);
@@ -429,7 +487,8 @@ async function closePage(): Promise<void> {
 }
 
 async function initialize(): Promise<void> {
-  const stored = await chrome.storage.local.get(UI_LANGUAGE_KEY);
+  connectButton.disabled = true;
+  const stored = await privateStorage.get(UI_LANGUAGE_KEY);
   const language = normalizeUiLanguage(stored[UI_LANGUAGE_KEY]);
   copy = copyFor(language);
   document.documentElement.lang = language;
@@ -445,7 +504,9 @@ async function initialize(): Promise<void> {
   );
 }
 
-void initialize().catch((error) => {
-  console.warn('[attention:notion] initialization failed', error);
-  status.textContent = copy.failed;
-});
+void initialize()
+  .then(installVaultLockControl)
+  .catch(() => {
+    console.warn('[attention:notion] initialization failed');
+    status.textContent = copy.failed;
+  });

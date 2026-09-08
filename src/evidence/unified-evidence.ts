@@ -1,6 +1,7 @@
 import { classifyClaimNovelty } from '../analyzer/evaluation';
 import { stableTextFingerprint } from '../analyzer/material-features';
 import { textTokens, tokenOverlap } from '../analyzer/text-match';
+import { claimsFactuallyCompatible } from '../analyzer/claim-match';
 import type {
   KeyClaimAssessment,
   LocalEvidenceKind,
@@ -283,6 +284,7 @@ export function mergeUnifiedLocalEvidence(input: {
 }
 
 function relationScore(left: string, right: string): number {
+  if (!claimsFactuallyCompatible(left, right)) return 0;
   const leftTokens = textTokens(left);
   const rightTokens = textTokens(right);
   if (leftTokens.size === 0 || rightTokens.size === 0) return 0;
@@ -340,15 +342,17 @@ export function applyUnifiedLocalEvidenceToClaim(
   evidence: UnifiedLocalEvidence | undefined,
 ): KeyClaimAssessment {
   if (!evidence) return claim;
+  if (
+    claim.sourceExcerpt &&
+    !claimsFactuallyCompatible(claim.claim, claim.sourceExcerpt)
+  )
+    return claim;
   const bestByMaterial = new Map<
     string,
     { item: UnifiedLocalEvidenceItem; relation: number }
   >();
   for (const item of evidence.items) {
-    const relation = relationScore(
-      claim.sourceExcerpt ?? claim.claim,
-      item.excerpt,
-    );
+    const relation = relationScore(claim.claim, item.excerpt);
     if (relation < (item.kind === 'saved-source' ? 0.12 : 0.18)) continue;
     const existing = bestByMaterial.get(item.materialKey);
     if (

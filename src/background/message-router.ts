@@ -6,6 +6,12 @@ import type {
   SaveMaterialResponse,
   UiLanguageResponse,
 } from '../shared/types';
+import {
+  beginDataOperation,
+  commitDataOperation,
+  DataOperationCancelledError,
+  type DataOperation,
+} from '../privacy/data-operations';
 import { UI_LANGUAGE_GET_TYPE } from '../shared/types';
 import type { UiLanguage } from '../i18n/ui';
 import type {
@@ -57,10 +63,11 @@ export interface BackgroundMessageRouterDependencies {
   markOutcomePromptShown: (sessionId: string) => Promise<unknown>;
   saveQuickOutcome: (
     message: AttentionOutcomeSubmitMessage,
+    operation?: DataOperation,
   ) => Promise<AttentionOutcomeSubmitResponse>;
   hoverPreviewResponse: (
     request: HoverPreviewRequest,
-  ) => Promise<HoverPreviewResponse>;
+  ) => Promise<HoverPreviewResponse | undefined>;
   saveMaterialFromCard: (
     request: SaveMaterialRequest,
   ) => Promise<SaveMaterialResponse>;
@@ -86,6 +93,7 @@ export interface BackgroundMessageRouterDependencies {
   handleNotionRequest: (message: NotionRequest) => Promise<NotionResponse>;
   handleNovelPassageMessage: (
     message: NovelPassageMessage,
+    operation?: DataOperation,
   ) => Promise<NovelPassageActionResponse>;
   reportError?: (input: {
     operation: string;
@@ -111,7 +119,16 @@ export function createBackgroundMessageRouter(
     ok: true,
   });
 
+  // Request the shared lock at message receipt, before any queue can delay the
+  // action past erasure. The eventual writer must retain this same generation.
+  function acceptedOperation(): Promise<DataOperation> {
+    const operation = beginDataOperation();
+    void operation.catch(() => undefined);
+    return operation;
+  }
+
   function report(operation: string, code: string, error: unknown): void {
+    if (error instanceof DataOperationCancelledError) return;
     void Promise.resolve(
       dependencies.reportError?.({ operation, code, error }),
     ).catch(() => undefined);
@@ -197,12 +214,15 @@ export function createBackgroundMessageRouter(
       sendResponse({ ok: false, error: 'unauthorized' });
       return;
     }
+    const operation = acceptedOperation();
     novelPassageQueue = novelPassageQueue
       .catch((error) => {
         report('novel-passage-queue', 'NOVEL_PASSAGE_QUEUE_FAILED', error);
         return { ok: false, error: 'queue_failed' };
       })
-      .then(() => dependencies.handleNovelPassageMessage(message));
+      .then(async () =>
+        dependencies.handleNovelPassageMessage(message, await operation),
+      );
     void novelPassageQueue.then(sendResponse).catch((error) => {
       report('novel-passage-action', 'NOVEL_PASSAGE_ACTION_FAILED', error);
       sendResponse({ ok: false, error: 'request_failed' });
@@ -234,10 +254,13 @@ export function createBackgroundMessageRouter(
     sender: chrome.runtime.MessageSender,
   ): void {
     if (!dependencies.senderMatchesPage(sender, message.url)) return;
+    const operation = acceptedOperation();
     outcomeQueue = outcomeQueue
       .then(async () => {
         await dependencies.storageReady;
-        await dependencies.markOutcomePromptShown(message.sessionId);
+        await commitDataOperation(await operation, () =>
+          dependencies.markOutcomePromptShown(message.sessionId),
+        );
       })
       .catch((error) => {
         report('mark-outcome-prompt', 'OUTCOME_PROMPT_MARK_FAILED', error);
@@ -253,8 +276,9 @@ export function createBackgroundMessageRouter(
       sendResponse({ ok: false });
       return;
     }
+    const operation = acceptedOperation();
     void outcomeQueue
-      .then(() => dependencies.saveQuickOutcome(message))
+      .then(async () => dependencies.saveQuickOutcome(message, await operation))
       .then(sendResponse)
       .catch((error) => {
         report('save-outcome', 'OUTCOME_SAVE_FAILED', error);
@@ -294,12 +318,17 @@ export function createBackgroundMessageRouter(
       sendResponse({ ok: false });
       return;
     }
+    const operation = acceptedOperation();
     savedMaterialsQueue = savedMaterialsQueue
       .catch((error) => {
         report('save-material-queue', 'SAVE_QUEUE_FAILED', error);
         return { ok: false };
       })
-      .then(() => dependencies.saveMaterialFromCard(message));
+      .then(async () =>
+        commitDataOperation(await operation, () =>
+          dependencies.saveMaterialFromCard(message),
+        ),
+      );
     void savedMaterialsQueue.then(sendResponse).catch((error) => {
       report('save-material', 'SAVE_MATERIAL_FAILED', error);
       sendResponse({ ok: false });
@@ -308,10 +337,13 @@ export function createBackgroundMessageRouter(
   }
 
   function handleHoverEvent(message: HoverPreviewEventMessage): void {
+    const operation = acceptedOperation();
     memoryQueue = memoryQueue
       .then(async () => {
         await dependencies.storageReady;
-        await dependencies.recordHoverPreviewEvent(message);
+        await commitDataOperation(await operation, () =>
+          dependencies.recordHoverPreviewEvent(message),
+        );
       })
       .catch((error) => {
         report('record-hover-event', 'HOVER_EVENT_SAVE_FAILED', error);
@@ -323,10 +355,13 @@ export function createBackgroundMessageRouter(
     sender: chrome.runtime.MessageSender,
   ): void {
     if (!dependencies.senderMatchesPage(sender, message.url)) return;
+    const operation = acceptedOperation();
     progressQueue = progressQueue
       .then(async () => {
         await dependencies.storageReady;
-        await dependencies.applyAttentionProgress(message);
+        await commitDataOperation(await operation, () =>
+          dependencies.applyAttentionProgress(message),
+        );
       })
       .catch((error) => {
         report('save-reading-progress', 'READING_PROGRESS_SAVE_FAILED', error);

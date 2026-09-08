@@ -10,6 +10,9 @@ export interface NotionConfigRequest {
 }
 
 export interface NotionConnectRequest {
+  generation?: string;
+  vaultEpoch?: string;
+  syncRevision?: string;
   type: typeof NOTION_CONNECT_TYPE;
   code: string;
   redirectUri: string;
@@ -60,6 +63,14 @@ export function isNotionRequest(value: unknown): value is NotionRequest {
   return (
     item.type === NOTION_CONNECT_TYPE &&
     typeof item.code === 'string' &&
+    (item.generation === undefined ||
+      (typeof item.generation === 'string' && item.generation.length <= 100)) &&
+    (item.vaultEpoch === undefined ||
+      (typeof item.vaultEpoch === 'string' && item.vaultEpoch.length <= 100)) &&
+    (item.syncRevision === undefined ||
+      (typeof item.syncRevision === 'string' &&
+        item.syncRevision.length <= 100 &&
+        typeof item.generation === 'string')) &&
     item.code.length >= 8 &&
     item.code.length <= 1_024 &&
     typeof item.redirectUri === 'string' &&

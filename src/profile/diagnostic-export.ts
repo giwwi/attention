@@ -22,9 +22,6 @@ import type { UtilityCalibrationModel } from '../utility/calibration';
 import type { PersonalProfile, PortableProfile } from './schema';
 import { loadProfile } from './storage';
 
-const MAX_HISTORY_TOPICS = 40;
-const MAX_HISTORY_SOURCES = 30;
-
 export interface DiagnosticProfileInput {
   profile: PersonalProfile | null;
   scenario: ScenarioState;
@@ -37,32 +34,9 @@ export interface DiagnosticProfileInput {
   utilityCalibration: UtilityCalibrationModel | null;
 }
 
-export interface DiagnosticProfileExport {
-  exportSchemaVersion: 1;
-  exportedAt: string;
-  extensionVersion: string;
-  privacy: {
-    containsPersonalData: true;
-    excluded: string[];
-  };
-  profile: PortableProfile | null;
-  currentContext: ScenarioState;
-  evidence: {
-    browserHistory: ReturnType<typeof safeHistoryEvidence>;
-    readwise: ReturnType<typeof safeReadwiseSettings>;
-    obsidian: ReturnType<typeof safeObsidianSettings>;
-    notion: ReturnType<typeof safeNotionSettings>;
-  };
-  feedback: {
-    novelty: {
-      total: number;
-      markedNew: number;
-      markedKnown: number;
-      lastRecordedAt: string | null;
-    };
-    utilityCalibration: UtilityCalibrationModel | null;
-  };
-}
+export type DiagnosticProfileExport = ReturnType<
+  typeof buildDiagnosticProfileExport
+>;
 
 export function toPortableProfile(
   profile: PersonalProfile | null,
@@ -138,113 +112,68 @@ export function toPortableProfile(
   };
 }
 
-function safeHistoryEvidence(
-  evidence: BrowserHistoryEvidence | null,
-  settings: BrowserHistorySettings | null,
-) {
-  if (!evidence && !settings) return null;
-  return {
-    lookbackDays: settings?.lookbackDays ?? null,
-    lastProcessedAt: settings?.lastProcessedAt ?? evidence?.generatedAt ?? null,
-    permissionRetained: settings?.permissionRetained ?? false,
-    periodStart: evidence?.periodStart ?? null,
-    periodEnd: evidence?.periodEnd ?? null,
-    processedUrlCount:
-      evidence?.processedUrlCount ?? settings?.processedUrlCount ?? 0,
-    totalVisitCount:
-      evidence?.totalVisitCount ?? settings?.totalVisitCount ?? 0,
-    excludedUrlCount:
-      evidence?.excludedUrlCount ?? settings?.excludedUrlCount ?? 0,
-    topics: (evidence?.topics ?? [])
-      .slice(0, MAX_HISTORY_TOPICS)
-      .map(({ topic, pageCount, visitCount, sourceCount, confidence }) => ({
-        topic,
-        pageCount,
-        visitCount,
-        sourceCount,
-        confidence,
-      })),
-    sources: (evidence?.sources ?? [])
-      .slice(0, MAX_HISTORY_SOURCES)
-      .map(({ hostname, pageCount, visitCount, typedCount, confidence }) => ({
-        hostname,
-        pageCount,
-        visitCount,
-        typedCount,
-        confidence,
-      })),
-  };
-}
-
-function safeReadwiseSettings(settings: ReadwiseSettings) {
-  return {
-    connected: settings.connected,
-    lastSyncedAt: settings.lastSyncedAt,
-    evidenceUpdatedAt: settings.evidenceUpdatedAt ?? null,
-    sourceCount: settings.sourceCount,
-    highlightCount: settings.highlightCount,
-    noteCount: settings.noteCount,
-    excludedSourceCount: settings.excludedSourceCount,
-  };
-}
-
-function safeObsidianSettings(settings: ObsidianSettings) {
-  return {
-    connected: settings.connected,
-    lastIndexedAt: settings.lastIndexedAt,
-    evidenceUpdatedAt: settings.evidenceUpdatedAt ?? null,
-    noteCount: settings.noteCount,
-    fragmentCount: settings.fragmentCount,
-    skippedFileCount: settings.skippedFileCount,
-  };
-}
-
-function safeNotionSettings(settings: NotionSettings) {
-  return {
-    connected: settings.connected,
-    sourceMode: settings.sourceMode,
-    lastSyncedAt: settings.lastSyncedAt,
-    evidenceUpdatedAt: settings.evidenceUpdatedAt ?? null,
-    pageCount: settings.pageCount,
-    fragmentCount: settings.fragmentCount,
-    excludedPageCount: settings.excludedPageCount,
-  };
+function count(value: unknown): number {
+  return typeof value === 'number' && Number.isFinite(value)
+    ? Math.max(0, Math.trunc(value))
+    : 0;
 }
 
 export function buildDiagnosticProfileExport(
   input: DiagnosticProfileInput,
   now = new Date(),
-): DiagnosticProfileExport {
-  const noveltyDates = input.noveltyFeedback
-    .map((record) => record.createdAt)
-    .sort();
+) {
   return {
-    exportSchemaVersion: 1,
+    exportSchemaVersion: 2,
     exportedAt: now.toISOString(),
     extensionVersion: EXTENSION_RUNTIME_VERSION,
     privacy: {
-      containsPersonalData: true,
+      aggregateCountsOnly: true,
       excluded: [
-        'api-keys-and-access-tokens',
-        'authentication-and-session-secrets',
-        'visited-page-list-and-page-urls',
-        'article-text-and-titles',
-        'readwise-highlight-and-note-text',
-        'obsidian-note-paths-and-text',
-        'notion-workspace-identifiers-and-page-text',
-        'raw-feedback-claims-and-excerpts',
+        'profile-content-and-goals',
+        'scenario-content',
+        'topics-and-hostnames',
+        'urls-titles-and-text',
+        'source-identifiers-and-paths',
+        'keys-tokens-and-passwords',
+        'feedback-content-and-history-timestamps',
       ],
     },
-    profile: toPortableProfile(input.profile),
-    currentContext: { ...input.scenario },
+    profile: {
+      present: input.profile !== null,
+      interestCount: input.profile?.interests.length ?? 0,
+      goalCount: input.profile?.goals.length ?? 0,
+      knowledgeCount: input.profile?.demonstratedKnowledge.length ?? 0,
+    },
     evidence: {
-      browserHistory: safeHistoryEvidence(
-        input.historyEvidence,
-        input.historySettings,
-      ),
-      readwise: safeReadwiseSettings(input.readwise),
-      obsidian: safeObsidianSettings(input.obsidian),
-      notion: safeNotionSettings(input.notion),
+      browserHistory: {
+        processedUrlCount: count(
+          input.historyEvidence?.processedUrlCount ??
+            input.historySettings?.processedUrlCount,
+        ),
+        totalVisitCount: count(
+          input.historyEvidence?.totalVisitCount ??
+            input.historySettings?.totalVisitCount,
+        ),
+        excludedUrlCount: count(
+          input.historyEvidence?.excludedUrlCount ??
+            input.historySettings?.excludedUrlCount,
+        ),
+      },
+      readwise: {
+        sourceCount: count(input.readwise.sourceCount),
+        highlightCount: count(input.readwise.highlightCount),
+        noteCount: count(input.readwise.noteCount),
+      },
+      obsidian: {
+        noteCount: count(input.obsidian.noteCount),
+        fragmentCount: count(input.obsidian.fragmentCount),
+        skippedFileCount: count(input.obsidian.skippedFileCount),
+      },
+      notion: {
+        pageCount: count(input.notion.pageCount),
+        fragmentCount: count(input.notion.fragmentCount),
+        excludedPageCount: count(input.notion.excludedPageCount),
+      },
     },
     feedback: {
       novelty: {
@@ -255,9 +184,8 @@ export function buildDiagnosticProfileExport(
         markedKnown: input.noveltyFeedback.filter(
           (record) => record.value === 'known',
         ).length,
-        lastRecordedAt: noveltyDates.at(-1) ?? null,
       },
-      utilityCalibration: input.utilityCalibration,
+      utilitySampleSize: count(input.utilityCalibration?.sampleSize),
     },
   };
 }

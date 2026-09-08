@@ -244,7 +244,7 @@ function localComponents(
 }
 
 export class LocalAnalyzer implements Analyzer {
-  readonly id = 'local-claim-assessment-v4';
+  readonly id = 'local-claim-assessment-v5-factual-guards';
 
   async analyze(
     material: PageCapture,

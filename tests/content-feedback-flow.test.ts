@@ -73,7 +73,7 @@ describe('content-script feedback flow', () => {
       },
     });
 
-    await import('../src/content/index');
+    (await import('../src/content/runtime')).startContentRuntime();
     await vi.advanceTimersByTimeAsync(91_000);
     expect(sendMessage).not.toHaveBeenCalledWith(
       expect.objectContaining({ type: ATTENTION_SESSION_AUTO_START_TYPE }),

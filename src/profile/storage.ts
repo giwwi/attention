@@ -1,3 +1,4 @@
+import { privateStorage } from '../vault/storage';
 import {
   LEGACY_PROFILE_SCHEMA_VERSION,
   PROFILE_SCHEMA_VERSION,
@@ -112,19 +113,14 @@ function isImportRecord(value: unknown): value is ProfileImportRecord {
 }
 
 export async function loadProfile(
-  storage: StorageArea = chrome.storage.local,
+  storage: StorageArea = privateStorage,
 ): Promise<PersonalProfile | null> {
   const stored = await storage.get(PERSONAL_PROFILE_KEY);
   const value = stored[PERSONAL_PROFILE_KEY];
   const profile = storedProfile(value);
-  if (
-    profile &&
-    value &&
-    typeof value === 'object' &&
-    (value as Record<string, unknown>).schemaVersion !== PROFILE_SCHEMA_VERSION
-  ) {
-    await storage.set({ [PERSONAL_PROFILE_KEY]: profile });
-  }
+  // Normalize in memory. A read must never persist an old snapshot after the
+  // user has erased data in another extension context. Explicit saves persist
+  // the current schema inside the caller's data-operation lock.
   return profile;
 }
 
@@ -132,7 +128,7 @@ export async function saveProfile(
   profile: PersonalProfile,
   source: ProfileSource,
   importedProfile: PersonalProfile = profile,
-  storage: StorageArea = chrome.storage.local,
+  storage: StorageArea = privateStorage,
 ): Promise<void> {
   const stored = await storage.get(PROFILE_IMPORT_HISTORY_KEY);
   const historyValue = stored[PROFILE_IMPORT_HISTORY_KEY];
@@ -177,7 +173,7 @@ export async function saveProfile(
 
 export async function updateProfile(
   profile: PersonalProfile,
-  storage: StorageArea = chrome.storage.local,
+  storage: StorageArea = privateStorage,
 ): Promise<void> {
   await storage.set({ [PERSONAL_PROFILE_KEY]: profile });
 }
@@ -190,7 +186,7 @@ export async function applyScenarioOutcomeToProfileSignals(
   scenario: AttentionScenario,
   signalIds: readonly string[],
   outcome: MaterialOutcome,
-  storage: Pick<StorageArea, 'get' | 'set'> = chrome.storage.local,
+  storage: Pick<StorageArea, 'get' | 'set'> = privateStorage,
   now = new Date(),
 ): Promise<void> {
   if (scenario !== 'relax' || outcome === 'partial') return;
@@ -207,7 +203,13 @@ export async function applyScenarioOutcomeToProfileSignals(
   let changed = false;
   for (const preference of profile.leisureProfile.preferences) {
     if (!leisureIds.has(preference.id)) continue;
-    const delta = outcome === 'yes' ? 0.05 : -0.03;
+    const negative =
+      preference.kind === 'dislike' || preference.preference === 'low';
+    const positive =
+      !negative && ['high', 'medium'].includes(preference.preference);
+    if (!negative && !positive) continue;
+    const confirmsPreference = negative ? outcome === 'no' : outcome === 'yes';
+    const delta = confirmsPreference ? 0.05 : -0.03;
     preference.confidence = Math.min(
       1,
       Math.max(0.05, Math.round((preference.confidence + delta) * 100) / 100),
@@ -224,14 +226,8 @@ export async function applyScenarioOutcomeToProfileSignals(
   await storage.set({ [PERSONAL_PROFILE_KEY]: profile });
 }
 
-export async function completeProfileOnboarding(
-  storage: StorageArea = chrome.storage.local,
-): Promise<void> {
-  await storage.set({ [PROFILE_ONBOARDING_KEY]: true });
-}
-
 export async function deleteProfile(
-  storage: StorageArea = chrome.storage.local,
+  storage: StorageArea = privateStorage,
 ): Promise<void> {
   await storage.remove([PERSONAL_PROFILE_KEY, PROFILE_IMPORT_HISTORY_KEY]);
 }

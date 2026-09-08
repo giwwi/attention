@@ -6,92 +6,40 @@ import {
   type LocalSearchDocument,
   type LocalSearchIndex,
 } from '../evidence/local-search-index';
+import { NOTION_DATA_KEY, type NotionVaultData } from '../vault/legacy';
+import { withSourceDataLock } from '../vault/source-lock';
+import { privateStorage } from '../vault/storage';
 
-const DATABASE_NAME = 'attention-notion-v1';
-const DATABASE_VERSION = 2;
-const PAGES_STORE = 'pages';
-const INDEX_STORE = 'search-index';
-const SEARCH_INDEX_KEY = 'fragments';
-
-function requestResult<T>(request: IDBRequest<T>): Promise<T> {
-  return new Promise((resolve, reject) => {
-    request.addEventListener('success', () => resolve(request.result), {
-      once: true,
-    });
-    request.addEventListener(
-      'error',
-      () => reject(request.error ?? new Error('IndexedDB request failed.')),
-      { once: true },
-    );
-  });
-}
-
-function transactionDone(transaction: IDBTransaction): Promise<void> {
-  return new Promise((resolve, reject) => {
-    transaction.addEventListener('complete', () => resolve(), { once: true });
-    transaction.addEventListener(
-      'abort',
-      () => reject(transaction.error ?? new Error('IndexedDB aborted.')),
-      { once: true },
-    );
-    transaction.addEventListener(
-      'error',
-      () => reject(transaction.error ?? new Error('IndexedDB failed.')),
-      { once: true },
-    );
-  });
-}
-
-async function openDatabase(): Promise<IDBDatabase> {
-  const request = indexedDB.open(DATABASE_NAME, DATABASE_VERSION);
-  request.addEventListener('upgradeneeded', () => {
-    const database = request.result;
-    if (!database.objectStoreNames.contains(PAGES_STORE)) {
-      database.createObjectStore(PAGES_STORE, { keyPath: 'id' });
-    }
-    if (!database.objectStoreNames.contains(INDEX_STORE)) {
-      database.createObjectStore(INDEX_STORE);
-    }
-  });
-  return requestResult(request);
+async function loadNotionData(): Promise<NotionVaultData> {
+  const stored = await privateStorage.get(NOTION_DATA_KEY);
+  return (
+    (stored[NOTION_DATA_KEY] as NotionVaultData | undefined) ?? { pages: [] }
+  );
 }
 
 export async function loadNotionPages(): Promise<NotionPageRecord[]> {
-  const database = await openDatabase();
-  try {
-    const transaction = database.transaction(PAGES_STORE, 'readonly');
-    const done = transactionDone(transaction);
-    const pages = await requestResult(
-      transaction.objectStore(PAGES_STORE).getAll(),
-    );
-    await done;
-    return pages as NotionPageRecord[];
-  } finally {
-    database.close();
-  }
+  return (await loadNotionData()).pages;
+}
+
+function orderedPages(pages: Iterable<NotionPageRecord>): NotionPageRecord[] {
+  return [...new Map([...pages].map((page) => [page.id, page])).values()].sort(
+    (left, right) => (left.id < right.id ? -1 : left.id > right.id ? 1 : 0),
+  );
 }
 
 export async function replaceNotionPages(
   pages: NotionPageRecord[],
   generatedAt: string,
 ): Promise<void> {
-  const database = await openDatabase();
-  try {
-    const transaction = database.transaction(
-      [PAGES_STORE, INDEX_STORE],
-      'readwrite',
-    );
-    const done = transactionDone(transaction);
-    const store = transaction.objectStore(PAGES_STORE);
-    store.clear();
-    for (const page of pages) store.put(page);
-    transaction
-      .objectStore(INDEX_STORE)
-      .put(buildNotionSearchIndex(pages, generatedAt), SEARCH_INDEX_KEY);
-    await done;
-  } finally {
-    database.close();
-  }
+  await withSourceDataLock('notion', async () => {
+    const nextPages = orderedPages(pages);
+    await privateStorage.set({
+      [NOTION_DATA_KEY]: {
+        pages: nextPages,
+        searchIndex: buildNotionSearchIndex(nextPages, generatedAt),
+      } satisfies NotionVaultData,
+    });
+  });
 }
 
 function buildNotionSearchIndex(
@@ -112,21 +60,6 @@ function notionSearchDocuments(
   );
 }
 
-async function loadStoredNotionSearchIndex(): Promise<unknown> {
-  const database = await openDatabase();
-  try {
-    const transaction = database.transaction(INDEX_STORE, 'readonly');
-    const done = transactionDone(transaction);
-    const value = await requestResult(
-      transaction.objectStore(INDEX_STORE).get(SEARCH_INDEX_KEY),
-    );
-    await done;
-    return value;
-  } finally {
-    database.close();
-  }
-}
-
 export async function applyNotionPageChanges(input: {
   upserts: NotionPageRecord[];
   removedPageIds: string[];
@@ -134,73 +67,44 @@ export async function applyNotionPageChanges(input: {
   allPages: NotionPageRecord[];
   generatedAt: string;
 }): Promise<void> {
-  if (input.upserts.length === 0 && input.removedPageIds.length === 0) return;
-  const storedIndex = await loadStoredNotionSearchIndex();
-  const nextIndex = isLocalSearchIndex(storedIndex)
-    ? updateLocalSearchIndex(
-        storedIndex,
-        input.removedFragmentIds,
-        notionSearchDocuments(input.upserts),
-        input.generatedAt,
-      )
-    : buildNotionSearchIndex(input.allPages, input.generatedAt);
-  const database = await openDatabase();
-  try {
-    const transaction = database.transaction(
-      [PAGES_STORE, INDEX_STORE],
-      'readwrite',
-    );
-    const done = transactionDone(transaction);
-    const pagesStore = transaction.objectStore(PAGES_STORE);
-    for (const id of input.removedPageIds) pagesStore.delete(id);
-    for (const page of input.upserts) pagesStore.put(page);
-    transaction.objectStore(INDEX_STORE).put(nextIndex, SEARCH_INDEX_KEY);
-    await done;
-  } finally {
-    database.close();
-  }
-}
-
-async function saveNotionSearchIndex(index: LocalSearchIndex): Promise<void> {
-  const database = await openDatabase();
-  try {
-    const transaction = database.transaction(INDEX_STORE, 'readwrite');
-    const done = transactionDone(transaction);
-    transaction.objectStore(INDEX_STORE).put(index, SEARCH_INDEX_KEY);
-    await done;
-  } finally {
-    database.close();
-  }
+  await withSourceDataLock('notion', async () => {
+    const stored = await loadNotionData();
+    if (input.upserts.length === 0 && input.removedPageIds.length === 0) return;
+    const byId = new Map(stored.pages.map((page) => [page.id, page]));
+    const removedFragmentIds = new Set(input.removedFragmentIds);
+    for (const id of [
+      ...input.removedPageIds,
+      ...input.upserts.map((page) => page.id),
+    ]) {
+      for (const fragment of byId.get(id)?.fragments ?? [])
+        removedFragmentIds.add(fragment.id);
+    }
+    for (const id of input.removedPageIds) byId.delete(id);
+    for (const page of input.upserts) byId.set(page.id, page);
+    const pages = orderedPages(byId.values());
+    const searchIndex = isLocalSearchIndex(stored.searchIndex)
+      ? updateLocalSearchIndex(
+          stored.searchIndex,
+          removedFragmentIds,
+          notionSearchDocuments(input.upserts),
+          input.generatedAt,
+        )
+      : buildNotionSearchIndex(pages, input.generatedAt);
+    await privateStorage.set({
+      [NOTION_DATA_KEY]: { pages, searchIndex } satisfies NotionVaultData,
+    });
+  });
 }
 
 export async function loadNotionIndex(
   workspaceName: string,
   generatedAt: string,
 ): Promise<NotionIndex | null> {
-  const database = await openDatabase();
-  let pages: NotionPageRecord[];
-  let storedIndex: unknown;
-  try {
-    const transaction = database.transaction(
-      [PAGES_STORE, INDEX_STORE],
-      'readonly',
-    );
-    const done = transactionDone(transaction);
-    [pages, storedIndex] = await Promise.all([
-      requestResult(transaction.objectStore(PAGES_STORE).getAll()) as Promise<
-        NotionPageRecord[]
-      >,
-      requestResult(transaction.objectStore(INDEX_STORE).get(SEARCH_INDEX_KEY)),
-    ]);
-    await done;
-  } finally {
-    database.close();
-  }
+  const { pages, searchIndex: storedIndex } = await loadNotionData();
   if (pages.length === 0) return null;
   const searchIndex = isLocalSearchIndex(storedIndex, generatedAt)
     ? storedIndex
     : buildNotionSearchIndex(pages, generatedAt);
-  if (searchIndex !== storedIndex) await saveNotionSearchIndex(searchIndex);
   return {
     schemaVersion: 1,
     generatedAt,
@@ -211,17 +115,7 @@ export async function loadNotionIndex(
 }
 
 export async function clearNotionDatabase(): Promise<void> {
-  const database = await openDatabase();
-  try {
-    const transaction = database.transaction(
-      [PAGES_STORE, INDEX_STORE],
-      'readwrite',
-    );
-    const done = transactionDone(transaction);
-    transaction.objectStore(PAGES_STORE).clear();
-    transaction.objectStore(INDEX_STORE).clear();
-    await done;
-  } finally {
-    database.close();
-  }
+  await withSourceDataLock('notion', () =>
+    privateStorage.remove(NOTION_DATA_KEY),
+  );
 }

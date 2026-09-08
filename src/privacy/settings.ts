@@ -1,3 +1,4 @@
+import { privateStorage } from '../vault/storage';
 export const PRIVACY_SETTINGS_KEY = 'privacySettings';
 
 export interface PrivacySettings {
@@ -31,11 +32,11 @@ function extensionLocalStorage(): chrome.storage.StorageArea | null {
   const runtime = globalThis as typeof globalThis & {
     chrome?: Partial<typeof chrome>;
   };
-  return runtime.chrome?.storage?.local ?? null;
+  return runtime.chrome?.storage?.local ? privateStorage : null;
 }
 
 export async function loadPrivacySettings(
-  storage: chrome.storage.StorageArea = chrome.storage.local,
+  storage: chrome.storage.StorageArea = privateStorage,
 ): Promise<PrivacySettings> {
   const stored = await storage.get(PRIVACY_SETTINGS_KEY);
   const value: unknown = stored[PRIVACY_SETTINGS_KEY];
@@ -44,7 +45,7 @@ export async function loadPrivacySettings(
 
 export async function saveLocalOnlyMode(
   localOnly: boolean,
-  storage: chrome.storage.StorageArea = chrome.storage.local,
+  storage: chrome.storage.StorageArea = privateStorage,
   now = new Date(),
 ): Promise<PrivacySettings> {
   const settings: PrivacySettings = {

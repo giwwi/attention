@@ -58,19 +58,19 @@ const preferenceLabels = {
 
 function materialText(
   material: PageCapture,
-  context: AnalysisContext,
   features?: MaterialFeatures,
 ): string {
-  return [
+  // Intent describes the reader, not the article. Including it here lets a
+  // profile goal match itself even when the material is about another topic.
+  return (
     features?.matchingText ??
-      [
-        material.title,
-        material.excerpt,
-        ...material.headings,
-        material.content.slice(0, 14_000),
-      ].join(' '),
-    context.intent,
-  ].join(' ');
+    [
+      material.title,
+      material.excerpt,
+      ...material.headings,
+      material.content.slice(0, 14_000),
+    ].join(' ')
+  );
 }
 
 function isLikelyBeginnerMaterial(
@@ -112,7 +112,7 @@ export function selectRelevantProfileContext(
   features?: MaterialFeatures,
 ): RelevantProfileContext | null {
   if (!profile) return null;
-  const target = materialText(material, context, features);
+  const target = materialText(material, features);
   const beginnerMaterial = isLikelyBeginnerMaterial(material, features);
   const advancedMaterial = isLikelyAdvancedMaterial(material, features);
   const materialHeadingSummary =

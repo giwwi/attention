@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   CHATGPT_PROFILE_URL,
   CLAUDE_PROFILE_WEB_URL,
@@ -18,6 +18,9 @@ import {
 } from '../src/onboarding/handoff/state';
 import { ProfileOnboarding } from '../src/onboarding/profile-onboarding';
 import { PROFILE_PROVIDERS } from '../src/profile/providers';
+import { installDataLocks } from './helpers/data-locks';
+import { DATA_GENERATION_KEY } from '../src/privacy/data-operations';
+import { createEmptyProfile } from '../src/profile/schema';
 
 class MemoryStorage {
   readonly values: Record<string, unknown> = {};
@@ -117,6 +120,11 @@ function onboardingFixture(): void {
     <button data-profile-source="chatgpt"></button>
   `;
 }
+
+beforeEach(() => {
+  document.documentElement.lang = 'ru';
+  installDataLocks();
+});
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -236,11 +244,76 @@ describe('profile provider handoff', () => {
 });
 
 describe('profile handoff persistence', () => {
+  it('does not reopen a completed import when the interface language changes', async () => {
+    const storage = new MemoryStorage();
+    vi.stubGlobal('chrome', { storage: { local: storage } });
+    onboardingFixture();
+    const onComplete = vi.fn();
+    const onboarding = new ProfileOnboarding({ onComplete });
+    await onboarding.initialize(true);
+    document
+      .querySelector<HTMLButtonElement>('[data-profile-source="chatgpt"]')!
+      .click();
+    await vi.waitFor(() =>
+      expect(document.getElementById('profile-prompt-step')!.hidden).toBe(
+        false,
+      ),
+    );
+    (
+      document.getElementById('profile-import-json') as HTMLTextAreaElement
+    ).value = JSON.stringify({
+      schema_version: '2.0',
+      interests: [
+        { topic: 'Software quality', confidence: 0.9, strength: 0.8 },
+      ],
+      leisure_profile: {
+        status: 'insufficient_data',
+        preferences: [],
+        novelty_preference: null,
+        effort_preference: null,
+        typical_session_minutes: null,
+        confidence: 0,
+      },
+    });
+    document.getElementById('validate-profile')!.click();
+    await vi.waitFor(() =>
+      expect(document.getElementById('profile-review-step')!.hidden).toBe(
+        false,
+      ),
+    );
+    document.getElementById('save-profile')!.click();
+    await vi.waitFor(() => expect(onComplete).toHaveBeenCalledOnce());
+    expect(storage.values.personalProfile).toBeDefined();
+    document.documentElement.lang = 'en';
+    onboarding.translate();
+    expect(document.getElementById('profile-onboarding')!.hidden).toBe(true);
+    expect(document.body.classList.contains('profile-flow-active')).toBe(false);
+    expect(onComplete).toHaveBeenCalledOnce();
+  });
+
+  it('cannot complete setup through the old skip action without a saved profile', async () => {
+    const storage = new MemoryStorage();
+    vi.stubGlobal('chrome', { storage: { local: storage } });
+    onboardingFixture();
+    const onComplete = vi.fn();
+    const onboarding = new ProfileOnboarding({ onComplete });
+    await onboarding.initialize(true);
+    expect(document.getElementById('skip-profile')!.hidden).toBe(true);
+    document.getElementById('skip-profile')!.click();
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(onComplete).not.toHaveBeenCalled();
+    expect(storage.values.profileOnboardingComplete).toBeUndefined();
+    expect(document.getElementById('profile-onboarding')!.hidden).toBe(false);
+  });
+
   it('shows the paste instruction before ChatGPT is opened', async () => {
     const storage = new MemoryStorage();
     const createTab = vi.fn().mockResolvedValue({ id: 42 });
     const writeText = vi.fn().mockResolvedValue(undefined);
-    vi.stubGlobal('navigator', { clipboard: { writeText } });
+    vi.stubGlobal('navigator', {
+      locks: navigator.locks,
+      clipboard: { writeText },
+    });
     vi.stubGlobal('chrome', {
       storage: { local: storage },
       tabs: { create: createTab },
@@ -292,7 +365,7 @@ describe('profile handoff persistence', () => {
     await expect(loadProfileHandoffState(storage)).resolves.toBeNull();
   });
 
-  it('removes stale waiting state instead of restoring an old session', async () => {
+  it('ignores stale waiting state without mutating storage', async () => {
     const storage = new MemoryStorage();
     const startedAt = new Date('2026-08-24T10:00:00Z');
     await saveProfileHandoffState(
@@ -304,7 +377,7 @@ describe('profile handoff persistence', () => {
       startedAt.getTime() + PROFILE_IMPORT_HANDOFF_MAX_AGE_MS + 1,
     );
     await expect(loadProfileHandoffState(storage, now)).resolves.toBeNull();
-    expect(storage.values[PROFILE_IMPORT_HANDOFF_KEY]).toBeUndefined();
+    expect(storage.values[PROFILE_IMPORT_HANDOFF_KEY]).toBeTruthy();
   });
 
   it.each(['chatgpt', 'claude', 'other'] as const)(
@@ -338,4 +411,81 @@ describe('profile handoff persistence', () => {
       );
     },
   );
+});
+
+describe('profile imports after data erasure', () => {
+  it('discards a quick profile completed after erasure', async () => {
+    const storage = new MemoryStorage();
+    vi.stubGlobal('chrome', { storage: { local: storage } });
+    onboardingFixture();
+    let finish!: (profile: ReturnType<typeof createEmptyProfile>) => void;
+    const buildQuickProfile = vi.fn(
+      () =>
+        new Promise<ReturnType<typeof createEmptyProfile>>((resolve) => {
+          finish = resolve;
+        }),
+    );
+    const onboarding = new ProfileOnboarding({
+      onComplete: vi.fn(),
+      buildQuickProfile,
+    });
+    await onboarding.initialize(true);
+    document.getElementById('open-quick-profile')!.click();
+    await vi.waitFor(() =>
+      expect(document.getElementById('profile-quick-step')!.hidden).toBe(false),
+    );
+    document.getElementById('generate-quick-profile')!.click();
+    await vi.waitFor(() => expect(buildQuickProfile).toHaveBeenCalledOnce());
+    await storage.set({ [DATA_GENERATION_KEY]: 'erased' });
+    finish(createEmptyProfile());
+    await vi.waitFor(() =>
+      expect(
+        document.getElementById('quick-profile-error')!.textContent,
+      ).toContain('данные были удалены'),
+    );
+    expect(document.getElementById('profile-quick-review-step')!.hidden).toBe(
+      true,
+    );
+    document.getElementById('save-quick-profile')!.click();
+    await Promise.resolve();
+    expect(storage.values.personalProfile).toBeUndefined();
+    expect(storage.values.profileImportHistory).toBeUndefined();
+  });
+
+  it('does not recreate handoff state when clipboard preparation completes after erasure', async () => {
+    const storage = new MemoryStorage();
+    let finish!: () => void;
+    const writeText = vi.fn(
+      () =>
+        new Promise<void>((resolve) => {
+          finish = resolve;
+        }),
+    );
+    vi.stubGlobal('navigator', {
+      locks: navigator.locks,
+      clipboard: { writeText },
+    });
+    vi.stubGlobal('chrome', {
+      storage: { local: storage },
+      tabs: { create: vi.fn() },
+    });
+    onboardingFixture();
+    const onboarding = new ProfileOnboarding({ onComplete: vi.fn() });
+    await onboarding.initialize(true);
+    document
+      .querySelector<HTMLButtonElement>('[data-profile-source="chatgpt"]')!
+      .click();
+    await vi.waitFor(() =>
+      expect(storage.values[PROFILE_IMPORT_HANDOFF_KEY]).toBeTruthy(),
+    );
+    await storage.remove(PROFILE_IMPORT_HANDOFF_KEY);
+    await storage.set({ [DATA_GENERATION_KEY]: 'erased' });
+    finish();
+    await vi.waitFor(() =>
+      expect(
+        document.getElementById('profile-handoff-status')!.textContent,
+      ).toContain('данные были удалены'),
+    );
+    expect(storage.values[PROFILE_IMPORT_HANDOFF_KEY]).toBeUndefined();
+  });
 });

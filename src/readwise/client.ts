@@ -3,6 +3,7 @@ import {
   mergeReadwiseEvidence,
   type ReadwiseEvidence,
 } from './evidence';
+import { DataOperationCancelledError } from '../privacy/data-operations';
 
 const AUTH_URL = 'https://readwise.io/api/v2/auth/';
 const EXPORT_URL = 'https://readwise.io/api/v2/export/';
@@ -43,8 +44,11 @@ async function readwiseFetch(
   token: string,
   fetchImpl: typeof fetch,
   init: Pick<RequestInit, 'method' | 'body' | 'headers'> = { method: 'GET' },
+  signal?: AbortSignal,
 ): Promise<Response> {
   const controller = new AbortController();
+  if (signal?.aborted) throw new DataOperationCancelledError();
+  signal?.addEventListener('abort', () => controller.abort(), { once: true });
   const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
   try {
     const headers = Object.fromEntries(new Headers(init.headers).entries());
@@ -59,6 +63,7 @@ async function readwiseFetch(
       redirect: 'error',
     });
   } catch {
+    if (signal?.aborted) throw new DataOperationCancelledError();
     throw new ReadwiseClientError(
       'network_error',
       'Не удалось связаться с Readwise.',
@@ -90,9 +95,16 @@ function responseError(response: Response): ReadwiseClientError {
 export async function validateReadwiseToken(
   rawToken: string,
   fetchImpl: typeof fetch = fetch,
+  signal?: AbortSignal,
 ): Promise<string> {
   const token = normalizeReadwiseToken(rawToken);
-  const response = await readwiseFetch(AUTH_URL, token, fetchImpl);
+  const response = await readwiseFetch(
+    AUTH_URL,
+    token,
+    fetchImpl,
+    undefined,
+    signal,
+  );
   if (!response.ok) throw responseError(response);
   return token;
 }
@@ -129,6 +141,7 @@ export async function fetchReadwiseExport(
   rawToken: string,
   fetchImpl: typeof fetch = fetch,
   updatedAfter?: string | null,
+  signal?: AbortSignal,
 ): Promise<unknown[]> {
   const token = normalizeReadwiseToken(rawToken);
   const results: unknown[] = [];
@@ -137,7 +150,13 @@ export async function fetchReadwiseExport(
     const url = new URL(EXPORT_URL);
     if (cursor) url.searchParams.set('pageCursor', cursor);
     if (updatedAfter) url.searchParams.set('updatedAfter', updatedAfter);
-    const response = await readwiseFetch(url.toString(), token, fetchImpl);
+    const response = await readwiseFetch(
+      url.toString(),
+      token,
+      fetchImpl,
+      undefined,
+      signal,
+    );
     if (!response.ok) throw responseError(response);
     let body: unknown;
     try {
@@ -165,9 +184,16 @@ export async function syncReadwiseLibrary(
   now = new Date(),
   previousEvidence: ReadwiseEvidence | null = null,
   updatedAfter: string | null = null,
+  signal?: AbortSignal,
 ): Promise<{ token: string; evidence: ReadwiseEvidence }> {
-  const token = await validateReadwiseToken(rawToken, fetchImpl);
-  const sources = await fetchReadwiseExport(token, fetchImpl, updatedAfter);
+  const token = await validateReadwiseToken(rawToken, fetchImpl, signal);
+  const sources = await fetchReadwiseExport(
+    token,
+    fetchImpl,
+    updatedAfter,
+    signal,
+  );
+  if (signal?.aborted) throw new DataOperationCancelledError();
   return {
     token,
     evidence:

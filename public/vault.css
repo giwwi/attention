@@ -1,0 +1,144 @@
+#vault-gate {
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 440px;
+  margin: 0 auto;
+  padding: 24px;
+  color: var(--text, #24352e);
+  background: var(--page-background, #fff);
+  font:
+    14px/1.5 -apple-system,
+    BlinkMacSystemFont,
+    'Segoe UI',
+    sans-serif;
+}
+#vault-gate * {
+  box-sizing: border-box;
+}
+#vault-gate [hidden] {
+  display: none !important;
+}
+#vault-gate .vault-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-weight: 650;
+  font-size: 18px;
+  margin: 0 0 24px;
+}
+#vault-gate .vault-brand::before {
+  content: '';
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--accent, #187451);
+}
+#vault-gate h1 {
+  margin: 0 0 12px;
+  font-size: 24px;
+  line-height: 1.2;
+  letter-spacing: -0.5px;
+}
+#vault-gate p {
+  margin: 0 0 14px;
+}
+#vault-gate .vault-hint {
+  color: var(--muted, #69766e);
+  font-size: 12px;
+}
+#vault-gate form {
+  margin: 22px 0 16px;
+}
+#vault-gate label {
+  display: block;
+  margin: 0 0 6px;
+  font-weight: 550;
+}
+#vault-gate input[type='password'],
+#vault-gate input[type='text'] {
+  display: block;
+  width: 100%;
+  min-height: 42px;
+  border: 1px solid var(--input-border, #ccd7d0);
+  border-radius: 8px;
+  padding: 10px 12px;
+  font: inherit;
+  color: inherit;
+  background: var(--input-background, #fff);
+  margin: 0 0 12px;
+}
+#vault-gate .vault-checkbox {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  font-size: 12px;
+  font-weight: 400;
+  margin: 12px 0 18px;
+  cursor: pointer;
+}
+#vault-gate input[type='checkbox'] {
+  flex: 0 0 auto;
+  margin: 3px 0 0;
+  width: 15px;
+  height: 15px;
+  accent-color: var(--accent, #187451);
+}
+#vault-gate button,
+#vault-lock {
+  min-height: 40px;
+  border-radius: 8px;
+  padding: 10px 12px;
+  font: inherit;
+  cursor: pointer;
+}
+#vault-gate button {
+  width: 100%;
+  border: 1px solid var(--border, #e4eae6);
+  color: inherit;
+  background: var(--surface-background, #fff);
+}
+#vault-gate .vault-primary {
+  color: var(--on-accent, #fff);
+  background: var(--accent, #187451);
+  border-color: var(--accent, #187451);
+  font-weight: 600;
+}
+#vault-gate .vault-danger {
+  color: var(--danger, #a33328);
+  border-color: var(--danger-border, #e7c6c0);
+  margin-bottom: 10px;
+  font-weight: 600;
+}
+#vault-gate .vault-link {
+  border: 0;
+  background: transparent;
+  color: var(--muted, #69766e);
+  font-size: 12px;
+  padding: 8px 0;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+#vault-gate button:disabled {
+  opacity: 0.55;
+  cursor: wait;
+}
+#vault-gate button:focus-visible,
+#vault-gate input:focus-visible,
+#vault-lock:focus-visible {
+  outline: 3px solid var(--accent, #187451);
+  outline-offset: 3px;
+}
+#vault-gate #vault-status {
+  color: var(--danger, #a33328);
+  font-size: 12px;
+  margin-top: 14px;
+}
+#vault-gate #vault-status:empty {
+  margin: 0;
+}
+#vault-lock {
+  border: 1px solid var(--border, #e4eae6);
+  background: transparent;
+  color: var(--muted, #69766e);
+  font-size: 12px;
+}

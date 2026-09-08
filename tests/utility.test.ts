@@ -621,7 +621,7 @@ describe('Utility Score', () => {
     });
   });
 
-  it('migrates pre-scenario utility feedback to Work and keeps calibration data', async () => {
+  it('reads pre-scenario utility feedback as Work without writing a stale snapshot', async () => {
     const storage = new MemoryStorage();
     storage.data[UTILITY_FEEDBACK_KEY] = [
       {
@@ -642,11 +642,17 @@ describe('Utility Score', () => {
       },
     ];
 
+    const snapshot = structuredClone(storage.data[UTILITY_FEEDBACK_KEY]);
     const [migrated] = await loadUtilityFeedback(storage);
     const stats = await getUtilityFeedbackStats(storage);
 
     expect(migrated).toMatchObject({
-      source: 'slider',
+      source: 'legacy-unknown',
+      prediction: {
+        rawUtility: null,
+        displayedUtility: 70,
+        provenance: 'legacy-display-only',
+      },
       scenario: 'work',
       scenarioContext: {
         intent: '',
@@ -656,8 +662,6 @@ describe('Utility Score', () => {
       },
     });
     expect(stats.byScenario.work).toEqual({ total: 1, averageError: 15 });
-    expect(storage.data[UTILITY_FEEDBACK_KEY]).toEqual([
-      expect.objectContaining({ scenario: 'work', source: 'slider' }),
-    ]);
+    expect(storage.data[UTILITY_FEEDBACK_KEY]).toEqual(snapshot);
   });
 });

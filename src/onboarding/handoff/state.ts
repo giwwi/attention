@@ -1,3 +1,4 @@
+import { privateStorage } from '../../vault/storage';
 import type { ExternalProfileSource } from '../../profile/schema';
 
 export const PROFILE_IMPORT_HANDOFF_KEY = 'profileImportHandoff';
@@ -7,6 +8,9 @@ export type ProfileHandoffProviderId = ExternalProfileSource;
 export type ProfileHandoffMethod = 'deep-link' | 'clipboard-and-web' | 'manual';
 
 export interface ProfileHandoffState {
+  /** Snapshot of the import generation, so reopening a popup cannot revive erased data. */
+  generation?: string;
+  vaultEpoch?: string;
   profileImportProvider: ProfileHandoffProviderId;
   profileImportStage: 'waiting-for-response';
   startedAt: string;
@@ -28,6 +32,8 @@ function isProfileHandoffState(value: unknown): value is ProfileHandoffState {
     ['chatgpt', 'claude', 'other'].includes(
       String(state.profileImportProvider),
     ) &&
+    (state.generation === undefined || typeof state.generation === 'string') &&
+    (state.vaultEpoch === undefined || typeof state.vaultEpoch === 'string') &&
     state.profileImportStage === 'waiting-for-response' &&
     typeof state.startedAt === 'string' &&
     Number.isFinite(Date.parse(state.startedAt)) &&
@@ -55,31 +61,31 @@ export function createProfileHandoffState(
 
 export async function saveProfileHandoffState(
   state: ProfileHandoffState,
-  storage: StorageArea = chrome.storage.local,
+  storage: StorageArea = privateStorage,
 ): Promise<void> {
   await storage.set({ [PROFILE_IMPORT_HANDOFF_KEY]: state });
 }
 
 export async function loadProfileHandoffState(
-  storage: StorageArea = chrome.storage.local,
+  storage: StorageArea = privateStorage,
   now = new Date(),
 ): Promise<ProfileHandoffState | null> {
+  // A stale read must not remove a newer handoff created in another popup.
+  // Explicit user actions clear this key under the shared data-operation lock.
   const stored = await storage.get(PROFILE_IMPORT_HANDOFF_KEY);
   const state = stored[PROFILE_IMPORT_HANDOFF_KEY];
   if (!isProfileHandoffState(state)) {
-    if (state !== undefined) await storage.remove(PROFILE_IMPORT_HANDOFF_KEY);
     return null;
   }
   const age = now.getTime() - Date.parse(state.startedAt);
   if (age < 0 || age > PROFILE_IMPORT_HANDOFF_MAX_AGE_MS) {
-    await storage.remove(PROFILE_IMPORT_HANDOFF_KEY);
     return null;
   }
   return state;
 }
 
 export async function clearProfileHandoffState(
-  storage: StorageArea = chrome.storage.local,
+  storage: StorageArea = privateStorage,
 ): Promise<void> {
   await storage.remove(PROFILE_IMPORT_HANDOFF_KEY);
 }

@@ -1,5 +1,24 @@
 import { NOTION_OAUTH_BROKER_URL, notionOAuthConfigured } from './config';
 import type { NotionAuth } from './types';
+import { DataOperationCancelledError } from '../privacy/data-operations';
+
+const BROKER_ERROR_CODES = new Set([
+  'oauth_not_configured',
+  'forbidden',
+  'method_not_allowed',
+  'invalid_json',
+  'invalid_request',
+  'notion_oauth_failed',
+  'notion_revoke_failed',
+  'invalid_notion_response',
+  'invalid_client',
+  'invalid_grant',
+  'invalid_scope',
+  'unauthorized_client',
+  'unsupported_grant_type',
+  'access_denied',
+  'temporarily_unavailable',
+]);
 
 interface BrokerConfig {
   clientId: string;
@@ -13,18 +32,30 @@ interface TokenPayload {
   workspace_name: string | null;
 }
 
-function brokerError(status: number, body: unknown): Error {
-  const code =
+function brokerError(body: unknown): Error {
+  const remote =
     body && typeof body === 'object' && 'error' in body
-      ? String((body as { error: unknown }).error)
-      : `broker_${status}`;
+      ? (body as { error: unknown }).error
+      : undefined;
+  const candidate = typeof remote === 'string' ? remote.toLowerCase() : '';
+  // Remote error strings can contain credentials or workspace content. Only
+  // fixed codes may reach diagnostics or extension responses.
+  const code = BROKER_ERROR_CODES.has(candidate)
+    ? candidate
+    : 'broker_request_failed';
   return Object.assign(new Error(code), { code });
+}
+
+function assertNotAborted(signal?: AbortSignal): void {
+  if (signal?.aborted) throw new DataOperationCancelledError();
 }
 
 async function brokerFetch(
   method: 'GET' | 'POST',
   body?: Record<string, unknown>,
+  signal?: AbortSignal,
 ): Promise<unknown> {
+  assertNotAborted(signal);
   if (!notionOAuthConfigured()) {
     throw Object.assign(new Error('oauth_not_configured'), {
       code: 'oauth_not_configured',
@@ -32,11 +63,14 @@ async function brokerFetch(
   }
   const response = await fetch(NOTION_OAUTH_BROKER_URL, {
     method,
+    signal,
     headers: body ? { 'Content-Type': 'application/json' } : undefined,
     body: body ? JSON.stringify(body) : undefined,
   });
+  assertNotAborted(signal);
   const payload: unknown = await response.json().catch(() => null);
-  if (!response.ok) throw brokerError(response.status, payload);
+  assertNotAborted(signal);
+  if (!response.ok) throw brokerError(payload);
   return payload;
 }
 
@@ -78,9 +112,19 @@ function authFromToken(token: TokenPayload): NotionAuth {
   };
 }
 
-export async function loadNotionOAuthClientId(): Promise<string> {
-  const payload = (await brokerFetch('GET')) as Partial<BrokerConfig>;
-  if (typeof payload.clientId !== 'string' || payload.clientId.length < 8) {
+export async function loadNotionOAuthClientId(
+  signal?: AbortSignal,
+): Promise<string> {
+  const payload = (await brokerFetch(
+    'GET',
+    undefined,
+    signal,
+  )) as Partial<BrokerConfig> | null;
+  if (
+    !payload ||
+    typeof payload.clientId !== 'string' ||
+    payload.clientId.length < 8
+  ) {
     throw Object.assign(new Error('invalid_broker_response'), {
       code: 'invalid_broker_response',
     });
@@ -91,29 +135,42 @@ export async function loadNotionOAuthClientId(): Promise<string> {
 export async function exchangeNotionCode(
   code: string,
   redirectUri: string,
+  signal?: AbortSignal,
 ): Promise<NotionAuth> {
   const payload = tokenPayload(
-    await brokerFetch('POST', {
-      action: 'exchange',
-      code,
-      redirectUri,
-    }),
+    await brokerFetch(
+      'POST',
+      {
+        action: 'exchange',
+        code,
+        redirectUri,
+      },
+      signal,
+    ),
   );
   return authFromToken(payload);
 }
 
 export async function refreshNotionToken(
   refreshToken: string,
+  signal?: AbortSignal,
 ): Promise<NotionAuth> {
   const payload = tokenPayload(
-    await brokerFetch('POST', {
-      action: 'refresh',
-      refreshToken,
-    }),
+    await brokerFetch(
+      'POST',
+      {
+        action: 'refresh',
+        refreshToken,
+      },
+      signal,
+    ),
   );
   return authFromToken(payload);
 }
 
-export async function revokeNotionToken(accessToken: string): Promise<void> {
-  await brokerFetch('POST', { action: 'revoke', accessToken });
+export async function revokeNotionToken(
+  accessToken: string,
+  signal?: AbortSignal,
+): Promise<void> {
+  await brokerFetch('POST', { action: 'revoke', accessToken }, signal);
 }

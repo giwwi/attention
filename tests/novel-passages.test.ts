@@ -1,5 +1,8 @@
-import { describe, expect, it } from 'vitest';
-import { findNovelPassageMatches } from '../src/content/novel-passages';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import {
+  findNovelPassageMatches,
+  NovelPassageController,
+} from '../src/content/novel-passages';
 import type { KeyClaimAssessment, PageCapture } from '../src/shared/types';
 
 const capture: PageCapture = {
@@ -18,6 +21,47 @@ const capture: PageCapture = {
   extractionMethod: 'semantic',
   capturedAt: '2026-08-27T18:00:00.000Z',
 };
+
+afterEach(() => {
+  vi.restoreAllMocks();
+  vi.unstubAllGlobals();
+});
+
+it('isolates passage actions and rejects synthetic mutations even with privileged test access', () => {
+  document.body.innerHTML =
+    '<article><h1>A useful article</h1><p>Solar cells reached a measured efficiency of 34 percent in the reported experiment.</p></article>';
+  const sendMessage = vi.fn().mockResolvedValue({ ok: true });
+  vi.stubGlobal('chrome', { runtime: { sendMessage } });
+  Element.prototype.scrollIntoView = vi.fn();
+  const original = Element.prototype.attachShadow;
+  let panel: ShadowRoot | undefined;
+  vi.spyOn(Element.prototype, 'attachShadow').mockImplementation(function (
+    this: Element,
+    options,
+  ) {
+    const root = original.call(this, options);
+    if (this.hasAttribute('data-attention-novel-passages')) panel = root;
+    return root;
+  });
+  const controller = new NovelPassageController();
+  controller.show(
+    findNovelPassageMatches(document, capture, [
+      claim(
+        'Solar cells reached a measured efficiency of 34 percent in the reported experiment.',
+      ),
+    ]),
+    capture,
+    { language: 'en', readwiseConnected: true },
+  );
+  expect(
+    document.querySelector('[data-attention-novel-passages]')?.shadowRoot,
+  ).toBeNull();
+  expect(panel).toBeDefined();
+  for (const selector of ['.known', '.novel', '.readwise'])
+    panel!.querySelector<HTMLButtonElement>(selector)!.click();
+  expect(sendMessage).not.toHaveBeenCalled();
+  controller.clear();
+});
 
 function claim(
   text: string,

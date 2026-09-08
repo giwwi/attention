@@ -10,7 +10,6 @@ import {
 import { PROFILE_PROVIDERS } from '../profile/providers';
 import {
   createEmptyProfile,
-  hasProfileContent,
   type ExpertiseLevel,
   type GoalPriority,
   type GoalStatus,
@@ -25,14 +24,19 @@ import {
   type SourceAttribution,
 } from '../profile/schema';
 import type { QuickProfileAnswers } from '../profile/quick-builder';
-import {
-  completeProfileOnboarding,
-  deleteProfile,
-  loadProfile,
-  saveProfile,
-} from '../profile/storage';
+import { deleteProfile, loadProfile, saveProfile } from '../profile/storage';
 import { validatePortableProfile } from '../profile/validator';
+import { isProfileReady } from '../profile/readiness';
 import type { CognitiveEffort } from '../shared/types';
+import { captureProfileLabels, profileText as p } from '../i18n/profile';
+import { normalizeUiLanguage } from '../i18n/ui';
+import {
+  beginDataOperation,
+  commitDataOperation,
+  assertDataOperationCurrent,
+  DataOperationCancelledError,
+  type DataOperation,
+} from '../privacy/data-operations';
 import {
   launchClaudeWebFallback,
   launchProfileHandoff,
@@ -87,29 +91,10 @@ const levelLabels: Record<string, string> = {
   dislike: 'Не нравится',
 };
 
-function profileItemLabel(count: number): string {
-  const category = new Intl.PluralRules('ru-RU').select(count);
-  const labels: Record<Intl.LDMLPluralRule, string> = {
-    one: 'пункт',
-    few: 'пункта',
-    many: 'пунктов',
-    other: 'пункта',
-    two: 'пункта',
-    zero: 'пунктов',
-  };
-  return `${count} ${labels[category]}`;
-}
-
 function profileBarSummary(count: number | null): string {
-  const russian = document.documentElement.lang === 'ru';
-  if (count === null) {
-    return russian
-      ? 'Личный контекст пока не настроен.'
-      : 'Personal context is not configured yet.';
-  }
-  return russian
-    ? `Личный контекст: ${profileItemLabel(count)} · хранится локально.`
-    : `Personal context: ${count} ${count === 1 ? 'item' : 'items'} · stored locally.`;
+  return count === null
+    ? p('Личный контекст пока не настроен.')
+    : p('Личный контекст: {count} · хранится локально.', { count });
 }
 
 function element<T extends HTMLElement>(id: string): T {
@@ -138,7 +123,7 @@ function confidenceInput(
   input.max = '1';
   input.step = '0.05';
   input.value = String(value);
-  input.setAttribute('aria-label', 'Уверенность от 0 до 1');
+  input.setAttribute('aria-label', p('Уверенность от 0 до 1'));
   input.addEventListener('input', () => onChange(Number(input.value)));
   return input;
 }
@@ -152,9 +137,9 @@ function optionalMinutesInput(
   input.min = '1';
   input.max = '480';
   input.step = '1';
-  input.placeholder = 'Неизвестно';
+  input.placeholder = p('Неизвестно');
   input.value = value === null ? '' : String(value);
-  input.setAttribute('aria-label', 'Обычная длительность отдыха в минутах');
+  input.setAttribute('aria-label', p('Обычная длительность отдыха в минутах'));
   input.addEventListener('input', () => {
     const parsed = Number(input.value);
     onChange(input.value === '' || !Number.isFinite(parsed) ? null : parsed);
@@ -187,7 +172,7 @@ function selectInput<T extends string>(
   for (const optionValue of values) {
     const option = document.createElement('option');
     option.value = optionValue;
-    option.textContent = levelLabels[optionValue] ?? optionValue;
+    option.textContent = p(levelLabels[optionValue] ?? optionValue);
     option.selected = optionValue === value;
     select.append(option);
   }
@@ -225,11 +210,15 @@ function profileErrors(profile: PersonalProfile): string[] {
       (item) => [item.category, item.confidence] as const,
     ),
   ];
-  if (!hasProfileContent(profile)) {
-    errors.push('Добавьте хотя бы один пункт или настройку предпочтений.');
+  if (!isProfileReady(profile)) {
+    errors.push(
+      p(
+        'Добавьте ваши интересы, цели или знакомые темы. Одних настроек формата недостаточно.',
+      ),
+    );
   }
   if (entries.some(([text]) => !text.trim())) {
-    errors.push('Текстовые поля не должны быть пустыми.');
+    errors.push(p('Текстовые поля не должны быть пустыми.'));
   }
   const confidenceValues = [
     ...entries.map(([, confidence]) => confidence),
@@ -244,7 +233,9 @@ function profileErrors(profile: PersonalProfile): string[] {
       (value) => !Number.isFinite(value) || value < 0 || value > 1,
     )
   ) {
-    errors.push('Уверенность и сила интереса должны быть числами от 0 до 1.');
+    errors.push(
+      p('Уверенность и сила интереса должны быть числами от 0 до 1.'),
+    );
   }
   const leisureMinutes = profile.leisureProfile.typicalSessionMinutes;
   if (
@@ -253,7 +244,9 @@ function profileErrors(profile: PersonalProfile): string[] {
       leisureMinutes < 1 ||
       leisureMinutes > 480)
   ) {
-    errors.push('Обычная длительность отдыха должна быть от 1 до 480 минут.');
+    errors.push(
+      p('Обычная длительность отдыха должна быть от 1 до 480 минут.'),
+    );
   }
   return errors;
 }
@@ -327,10 +320,52 @@ export class ProfileOnboarding {
   private existing: PersonalProfile | null = null;
   private pendingMerge: MergeResult | null = null;
   private handoffState: ProfileHandoffState | null = null;
+  private operation: DataOperation | null = null;
+  private readonly translateStatic = captureProfileLabels(this.root);
 
   constructor(options: ProfileOnboardingOptions) {
     this.options = options;
     this.bindEvents();
+    this.translateStatic();
+    new MutationObserver(() => {
+      if (this.root.isConnected) this.translate();
+    }).observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ['lang'],
+    });
+  }
+
+  translate(): void {
+    this.translateStatic();
+    this.renderProfileBar();
+    // Changing the interface language must not reopen an inactive import view.
+    if (this.root.hidden) return;
+    if (!this.promptStep.hidden && this.handoffState)
+      this.renderHandoff(this.handoffState);
+    if (!this.reviewStep.hidden && this.draft) this.renderReview();
+    if (!this.quickReviewStep.hidden && this.draft) this.renderQuickSummary();
+    if (!this.mergeStep.hidden && this.pendingMerge)
+      this.renderConflicts(this.pendingMerge);
+  }
+
+  resetAfterErasure(): void {
+    this.operation = null;
+    this.draft = null;
+    this.existing = null;
+    this.pendingMerge = null;
+    this.handoffState = null;
+    this.response.value = '';
+    this.quickInternet.value = '';
+    this.quickKnowledge.value = '';
+    this.quickLeisure.value = '';
+    this.reviewContent.replaceChildren();
+    this.quickSummary.replaceChildren();
+    this.conflictContent.replaceChildren();
+    this.clearErrors(this.validationErrors);
+    this.clearErrors(this.reviewErrors);
+    this.root.hidden = true;
+    document.body.classList.remove('profile-flow-active');
+    this.renderProfileBar();
   }
 
   async initialize(showOnboarding: boolean): Promise<boolean> {
@@ -338,6 +373,13 @@ export class ProfileOnboarding {
     this.renderProfileBar();
     const handoff = await loadProfileHandoffState();
     if (handoff) {
+      const current = await beginDataOperation();
+      this.operation = {
+        ...current,
+        generation: handoff.generation ?? current.generation,
+      };
+      handoff.vaultEpoch = current.vaultEpoch;
+      await assertDataOperationCurrent(this.operation);
       this.restoreHandoff(handoff);
       return true;
     }
@@ -354,7 +396,7 @@ export class ProfileOnboarding {
   }
 
   async openSource(clearHandoff = true): Promise<void> {
-    if (clearHandoff) await clearProfileHandoffState();
+    await this.beginProfileOperation(clearHandoff);
     this.handoffState = null;
     document.body.classList.add('profile-flow-active');
     this.root.hidden = false;
@@ -371,17 +413,17 @@ export class ProfileOnboarding {
         const source = button.dataset.profileSource as
           ProfileHandoffProviderId | 'manual' | undefined;
         if (!source) return;
-        if (source === 'manual') void this.openManual();
-        else void this.beginProvider(source);
+        if (source === 'manual') this.runAction(this.openManual());
+        else this.runAction(this.beginProvider(source));
       });
     }
     element<HTMLButtonElement>('open-quick-profile').addEventListener(
       'click',
-      () => void this.openQuickProfile(),
+      () => this.runAction(this.openQuickProfile()),
     );
     element<HTMLButtonElement>('profile-quick-back').addEventListener(
       'click',
-      () => void this.openSource(),
+      () => this.runAction(this.openSource()),
     );
     element<HTMLButtonElement>('profile-quick-review-back').addEventListener(
       'click',
@@ -389,34 +431,37 @@ export class ProfileOnboarding {
     );
     element<HTMLButtonElement>('cancel-quick-profile').addEventListener(
       'click',
-      () => void this.openSource(),
+      () => this.runAction(this.openSource()),
     );
     element<HTMLButtonElement>('save-quick-profile').addEventListener(
       'click',
-      () => void this.acceptDraft(),
+      () => this.runAction(this.acceptDraft()),
     );
     this.generateQuickButton.addEventListener('click', () => {
-      void this.generateQuickProfile();
+      this.runAction(this.generateQuickProfile());
     });
     element<HTMLButtonElement>('skip-profile').addEventListener('click', () => {
-      void this.skip();
+      this.runAction(this.skip());
     });
     element<HTMLButtonElement>('profile-prompt-back').addEventListener(
       'click',
-      () => void this.openSource(),
+      () => this.runAction(this.openSource()),
     );
     this.showPromptButton.addEventListener('click', () => {
       this.setManualPromptVisible(this.manualPrompt.hidden);
     });
     this.reopenProviderButton.addEventListener('click', () => {
-      void this.reopenProvider();
+      this.runAction(this.reopenProvider());
     });
     this.claudeWebFallbackButton.addEventListener('click', () => {
-      void this.openClaudeWebFallback();
+      this.runAction(this.openClaudeWebFallback());
     });
     element<HTMLButtonElement>('copy-profile-prompt').addEventListener(
       'click',
-      (event) => void this.copyPrompt(event.currentTarget as HTMLButtonElement),
+      (event) =>
+        this.runAction(
+          this.copyPrompt(event.currentTarget as HTMLButtonElement),
+        ),
     );
     element<HTMLButtonElement>('validate-profile').addEventListener(
       'click',
@@ -424,10 +469,10 @@ export class ProfileOnboarding {
     );
     element<HTMLButtonElement>('cancel-profile-review').addEventListener(
       'click',
-      () => void this.openSource(),
+      () => this.runAction(this.openSource()),
     );
     element<HTMLButtonElement>('save-profile').addEventListener('click', () => {
-      void this.acceptDraft();
+      this.runAction(this.acceptDraft());
     });
     element<HTMLButtonElement>('cancel-profile-merge').addEventListener(
       'click',
@@ -435,15 +480,14 @@ export class ProfileOnboarding {
     );
     element<HTMLButtonElement>('confirm-profile-merge').addEventListener(
       'click',
-      () => void this.confirmMerge(),
+      () => this.runAction(this.confirmMerge()),
     );
     element<HTMLButtonElement>('open-profile-import').addEventListener(
       'click',
-      () => void this.openSource(),
+      () => this.runAction(this.openSource()),
     );
-    this.deleteButton.addEventListener(
-      'click',
-      () => void this.removeProfile(),
+    this.deleteButton.addEventListener('click', () =>
+      this.runAction(this.removeProfile()),
     );
     for (const button of document.querySelectorAll<HTMLButtonElement>(
       '[data-add-profile-item]',
@@ -473,7 +517,7 @@ export class ProfileOnboarding {
   }
 
   private async openQuickProfile(): Promise<void> {
-    await clearProfileHandoffState();
+    await this.beginProfileOperation();
     this.handoffState = null;
     this.source = 'quick_ai';
     this.draft = null;
@@ -491,22 +535,28 @@ export class ProfileOnboarding {
     this.quickError.hidden = true;
     this.quickError.textContent = '';
     try {
+      const operation = this.operation ?? (await beginDataOperation());
+      this.operation = operation;
       if (!this.options.buildQuickProfile) {
-        throw new Error('Быстрая AI-настройка сейчас недоступна.');
+        throw new Error(p('Быстрая AI-настройка сейчас недоступна.'));
       }
       this.source = 'quick_ai';
-      this.draft = await this.options.buildQuickProfile({
+      const draft = await this.options.buildQuickProfile({
         internetUse: this.quickInternet.value,
         knownTopics: this.quickKnowledge.value,
         leisure: this.quickLeisure.value,
       });
+      await assertDataOperationCurrent(operation);
+      this.draft = draft;
       this.renderQuickSummary();
       this.showStep(this.quickReviewStep);
     } catch (error) {
       this.quickError.textContent =
-        error instanceof Error
-          ? error.message
-          : 'Не удалось подготовить профиль. Попробуйте ещё раз.';
+        error instanceof DataOperationCancelledError
+          ? p(
+              'Профиль не сохранён: данные были удалены. Начните настройку заново.',
+            )
+          : p('Не удалось подготовить профиль. Попробуйте ещё раз.');
       this.quickError.hidden = false;
     } finally {
       this.generateQuickButton.disabled = false;
@@ -517,15 +567,18 @@ export class ProfileOnboarding {
     if (!this.draft) return;
     this.quickSummary.replaceChildren();
     const sections: Array<[string, string[]]> = [
-      ['Интересы', this.draft.interests.map((item) => item.topic)],
-      ['Текущие цели', this.draft.goals.map((item) => item.goal)],
-      ['Хорошо знакомые темы', this.draft.expertise.map((item) => item.topic)],
+      [p('Интересы'), this.draft.interests.map((item) => item.topic)],
+      [p('Текущие цели'), this.draft.goals.map((item) => item.goal)],
       [
-        'Что хотите изучать',
+        p('Хорошо знакомые темы'),
+        this.draft.expertise.map((item) => item.topic),
+      ],
+      [
+        p('Что хотите изучать'),
         this.draft.learningAreas.map((item) => item.topic),
       ],
       [
-        'Для отдыха',
+        p('Для отдыха'),
         this.draft.leisureProfile.preferences.map((item) => item.category),
       ],
     ];
@@ -547,23 +600,26 @@ export class ProfileOnboarding {
 
     if (this.quickSummary.childElementCount === 0) {
       const empty = document.createElement('p');
-      empty.textContent =
-        'В ответах недостаточно конкретного контекста. Измените ответы или начните без профиля.';
+      empty.textContent = p(
+        'В ответах недостаточно конкретного контекста. Добавьте интересы, цели и знакомые темы.',
+      );
       this.quickSummary.append(empty);
     }
   }
 
   private async beginProvider(source: ProfileHandoffProviderId): Promise<void> {
+    const operation = await this.beginProfileOperation();
     const chatGptPreparation =
       source === 'chatgpt'
         ? prepareChatGptProfileHandoff(PROFILE_PROVIDERS.chatgpt.prompt)
         : null;
-    await clearProfileHandoffState();
     const state = createProfileHandoffState(source);
+    state.generation = operation.generation;
+    state.vaultEpoch = operation.vaultEpoch;
     if (source === 'chatgpt') state.method = 'clipboard-and-web';
     if (source === 'claude') state.method = 'deep-link';
     if (source === 'other') state.method = 'manual';
-    await saveProfileHandoffState(state);
+    await this.saveHandoff(state);
     this.restoreHandoff(state);
     if (source === 'other') return;
     if (source === 'chatgpt') {
@@ -574,7 +630,7 @@ export class ProfileOnboarding {
         ...prepared,
       };
       this.handoffState = preparedState;
-      await saveProfileHandoffState(preparedState);
+      await this.saveHandoff(preparedState);
       this.renderHandoff(preparedState);
       return;
     }
@@ -597,19 +653,19 @@ export class ProfileOnboarding {
   private renderHandoff(state: ProfileHandoffState): void {
     const provider = state.profileImportProvider;
     const providerName =
-      provider === 'other' ? 'другим AI' : sourceLabels[provider];
+      provider === 'other' ? p('другим AI') : p(sourceLabels[provider] ?? '');
     this.providerTitle.textContent =
       provider === 'other'
-        ? 'Создайте профиль с другим AI'
-        : `Вернитесь с ответом ${providerName}`;
+        ? p('Создайте профиль с другим AI')
+        : p('Вернитесь с ответом {provider}', { provider: providerName });
     this.reopenProviderButton.hidden = provider === 'other';
     this.claudeWebFallbackButton.hidden =
       provider !== 'claude' || state.method === 'clipboard-and-web';
     if (provider !== 'other') {
       this.reopenProviderButton.textContent =
         provider === 'chatgpt' && state.providerOpened !== true
-          ? 'Открыть ChatGPT'
-          : `Открыть ${providerName} снова`;
+          ? p('Открыть ChatGPT')
+          : p('Открыть {provider} снова', { provider: providerName });
     }
 
     const openFailed = state.providerOpened === false;
@@ -618,48 +674,55 @@ export class ProfileOnboarding {
     const copyFailed = copyRequired && state.promptCopied === false;
     const usesWebFallback =
       provider === 'claude' && state.method === 'clipboard-and-web';
-    let statusText = 'Используйте запрос ниже в любом AI.';
+    let statusText = p('Используйте запрос ниже в любом AI.');
     let instructions = [
-      'Скопируйте запрос и отправьте его выбранному AI.',
-      'Скопируйте JSON-ответ.',
-      'Вставьте ответ в поле ниже.',
+      p('Скопируйте запрос и отправьте его выбранному AI.'),
+      p('Скопируйте JSON-ответ.'),
+      p('Вставьте ответ в поле ниже.'),
     ];
 
     if (provider === 'chatgpt') {
       statusText =
         state.promptCopied === undefined
-          ? 'Копируем запрос и открываем ChatGPT…'
+          ? p('Копируем запрос и открываем ChatGPT…')
           : copyFailed
-            ? 'Не удалось скопировать автоматически. Покажите запрос и скопируйте его вручную.'
+            ? p(
+                'Не удалось скопировать автоматически. Покажите запрос и скопируйте его вручную.',
+              )
             : state.providerOpened === true
-              ? 'Запрос скопирован, ChatGPT открыт.'
-              : 'Запрос уже скопирован. Откройте ChatGPT кнопкой ниже, вставьте его в поле сообщения и отправьте.';
+              ? p('Запрос скопирован, ChatGPT открыт.')
+              : p(
+                  'Запрос уже скопирован. Откройте ChatGPT кнопкой ниже, вставьте его в поле сообщения и отправьте.',
+                );
       instructions = [
-        'Вставьте запрос в ChatGPT и отправьте его.',
-        'Скопируйте полученный JSON-ответ.',
-        'Вернитесь сюда и вставьте ответ ниже.',
+        p('Вставьте запрос в ChatGPT и отправьте его.'),
+        p('Скопируйте полученный JSON-ответ.'),
+        p('Вернитесь сюда и вставьте ответ ниже.'),
       ];
     } else if (provider === 'claude') {
       statusText = usesWebFallback
         ? copyFailed
-          ? 'Claude открыт. Покажите запрос и скопируйте его вручную.'
-          : 'Запрос скопирован, Claude открыт в браузере.'
-        : 'Claude открыт с подготовленным запросом.';
+          ? p('Claude открыт. Покажите запрос и скопируйте его вручную.')
+          : p('Запрос скопирован, Claude открыт в браузере.')
+        : p('Claude открыт с подготовленным запросом.');
       instructions = usesWebFallback
         ? [
-            'Вставьте запрос в Claude и отправьте его.',
-            'Скопируйте полученный JSON-ответ.',
-            'Вернитесь сюда и вставьте ответ ниже.',
+            p('Вставьте запрос в Claude и отправьте его.'),
+            p('Скопируйте полученный JSON-ответ.'),
+            p('Вернитесь сюда и вставьте ответ ниже.'),
           ]
         : [
-            'Отправьте уже подготовленный запрос.',
-            'Скопируйте полученный JSON-ответ.',
-            'Вернитесь сюда и вставьте ответ ниже.',
+            p('Отправьте уже подготовленный запрос.'),
+            p('Скопируйте полученный JSON-ответ.'),
+            p('Вернитесь сюда и вставьте ответ ниже.'),
           ];
     }
 
     if (openFailed) {
-      statusText = `${providerName} не открылся автоматически. Откройте сервис снова или используйте запрос вручную.`;
+      statusText = p(
+        '{provider} не открылся автоматически. Откройте сервис снова или используйте запрос вручную.',
+        { provider: providerName },
+      );
     }
     this.handoffStatus.textContent = statusText;
     this.handoffInstructions.replaceChildren();
@@ -676,8 +739,8 @@ export class ProfileOnboarding {
   private setManualPromptVisible(visible: boolean): void {
     this.manualPrompt.hidden = !visible;
     this.showPromptButton.textContent = visible
-      ? 'Скрыть запрос'
-      : 'Показать запрос вручную';
+      ? p('Скрыть запрос')
+      : p('Показать запрос вручную');
   }
 
   private async launchProvider(state: ProfileHandoffState): Promise<void> {
@@ -696,7 +759,7 @@ export class ProfileOnboarding {
           ...prepared,
         };
         this.handoffState = preparedState;
-        await saveProfileHandoffState(preparedState);
+        await this.saveHandoff(preparedState);
         this.renderHandoff(preparedState);
       },
     );
@@ -707,7 +770,7 @@ export class ProfileOnboarding {
       providerOpened: result.providerOpened,
     };
     this.handoffState = resultState;
-    await saveProfileHandoffState(resultState);
+    await this.saveHandoff(resultState);
     this.renderHandoff(resultState);
   }
 
@@ -737,7 +800,7 @@ export class ProfileOnboarding {
       async (prepared) => {
         const preparedState = { ...state, ...prepared };
         this.handoffState = preparedState;
-        await saveProfileHandoffState(preparedState);
+        await this.saveHandoff(preparedState);
         this.renderHandoff(preparedState);
       },
     );
@@ -748,12 +811,12 @@ export class ProfileOnboarding {
       providerOpened: result.providerOpened,
     };
     this.handoffState = resultState;
-    await saveProfileHandoffState(resultState);
+    await this.saveHandoff(resultState);
     this.renderHandoff(resultState);
   }
 
   private async openManual(): Promise<void> {
-    await clearProfileHandoffState();
+    await this.beginProfileOperation();
     this.handoffState = null;
     this.source = 'manual';
     this.draft = createEmptyProfile();
@@ -764,11 +827,11 @@ export class ProfileOnboarding {
     const original = button.textContent;
     try {
       await navigator.clipboard.writeText(this.prompt.value);
-      button.textContent = 'Скопировано';
+      button.textContent = p('Скопировано');
     } catch {
       this.prompt.focus();
       this.prompt.select();
-      button.textContent = 'Выделено — скопируйте';
+      button.textContent = p('Выделено — скопируйте');
     }
     window.setTimeout(() => {
       button.textContent = original;
@@ -791,19 +854,21 @@ export class ProfileOnboarding {
     document.body.classList.add('profile-flow-active');
     this.reviewSource.textContent =
       this.source === 'manual'
-        ? 'Создайте только полезный минимум. Всё можно изменить позже.'
-        : `Источник: ${sourceLabels[this.source]}. Это гипотеза — проверьте каждый пункт.`;
+        ? p('Создайте только полезный минимум. Всё можно изменить позже.')
+        : p('Источник: {source}. Это гипотеза — проверьте каждый пункт.', {
+            source: p(sourceLabels[this.source]),
+          });
     this.reviewContent.replaceChildren();
     this.clearErrors(this.reviewErrors);
-    this.renderCollection('Интересы', 'interests');
-    this.renderCollection('Текущие цели', 'goals');
-    this.renderCollection('Широкая экспертиза', 'expertise');
-    this.renderCollection('Подтверждённые знания', 'demonstratedKnowledge');
-    this.renderCollection('Что сейчас изучаете', 'learningAreas');
-    this.renderCollection('Неопределённости профиля', 'uncertainties');
+    this.renderCollection(p('Интересы'), 'interests');
+    this.renderCollection(p('Текущие цели'), 'goals');
+    this.renderCollection(p('Широкая экспертиза'), 'expertise');
+    this.renderCollection(p('Подтверждённые знания'), 'demonstratedKnowledge');
+    this.renderCollection(p('Что сейчас изучаете'), 'learningAreas');
+    this.renderCollection(p('Неопределённости профиля'), 'uncertainties');
     this.renderPreferences();
     this.renderLeisurePreferences();
-    this.renderCollection('Обычно малоценные темы', 'lowValueTopics');
+    this.renderCollection(p('Обычно малоценные темы'), 'lowValueTopics');
     this.root.hidden = false;
     this.showStep(this.reviewStep);
   }
@@ -819,7 +884,7 @@ export class ProfileOnboarding {
     if (entries.length === 0) {
       const empty = document.createElement('p');
       empty.className = 'profile-empty';
-      empty.textContent = 'Нет данных';
+      empty.textContent = p('Нет данных');
       section.append(empty);
     }
     for (const item of entries) {
@@ -831,19 +896,19 @@ export class ProfileOnboarding {
         const interest = item as PersonalProfile['interests'][number];
         fields.append(
           field(
-            'Тема',
-            textInput(interest.topic, 'Тема интереса', (value) => {
+            p('Тема'),
+            textInput(interest.topic, p('Тема интереса'), (value) => {
               interest.topic = value;
             }),
           ),
           field(
-            'Сила',
+            p('Сила'),
             confidenceInput(interest.strength, (value) => {
               interest.strength = value;
             }),
           ),
           field(
-            'Уверенность',
+            p('Уверенность'),
             confidenceInput(interest.confidence, (value) => {
               interest.confidence = value;
             }),
@@ -853,35 +918,35 @@ export class ProfileOnboarding {
         const goal = item as PersonalProfile['goals'][number];
         fields.append(
           field(
-            'Цель',
-            textInput(goal.goal, 'Текущая цель', (value) => {
+            p('Цель'),
+            textInput(goal.goal, p('Текущая цель'), (value) => {
               goal.goal = value;
             }),
           ),
           field(
-            'Приоритет',
+            p('Приоритет'),
             selectInput<GoalPriority>(
               goal.priority,
               ['low', 'medium', 'high'],
-              'Приоритет цели',
+              p('Приоритет цели'),
               (value) => {
                 goal.priority = value;
               },
             ),
           ),
           field(
-            'Статус',
+            p('Статус'),
             selectInput<GoalStatus>(
               goal.status,
               ['active', 'paused', 'completed'],
-              'Статус цели',
+              p('Статус цели'),
               (value) => {
                 goal.status = value;
               },
             ),
           ),
           field(
-            'Уверенность',
+            p('Уверенность'),
             confidenceInput(goal.confidence, (value) => {
               goal.confidence = value;
             }),
@@ -891,24 +956,24 @@ export class ProfileOnboarding {
         const expertise = item as PersonalProfile['expertise'][number];
         fields.append(
           field(
-            'Область',
-            textInput(expertise.topic, 'Область экспертизы', (value) => {
+            p('Область'),
+            textInput(expertise.topic, p('Область экспертизы'), (value) => {
               expertise.topic = value;
             }),
           ),
           field(
-            'Уровень',
+            p('Уровень'),
             selectInput<ExpertiseLevel>(
               expertise.level,
               ['beginner', 'intermediate', 'advanced', 'expert'],
-              'Уровень экспертизы',
+              p('Уровень экспертизы'),
               (value) => {
                 expertise.level = value;
               },
             ),
           ),
           field(
-            'Уверенность',
+            p('Уверенность'),
             confidenceInput(expertise.confidence, (value) => {
               expertise.confidence = value;
             }),
@@ -918,13 +983,13 @@ export class ProfileOnboarding {
         const lowValue = item as PersonalProfile['lowValueTopics'][number];
         fields.append(
           field(
-            'Тема',
-            textInput(lowValue.topic, 'Малоценная тема', (value) => {
+            p('Тема'),
+            textInput(lowValue.topic, p('Малоценная тема'), (value) => {
               lowValue.topic = value;
             }),
           ),
           field(
-            'Уверенность',
+            p('Уверенность'),
             confidenceInput(lowValue.confidence, (value) => {
               lowValue.confidence = value;
             }),
@@ -935,30 +1000,34 @@ export class ProfileOnboarding {
           item as PersonalProfile['demonstratedKnowledge'][number];
         fields.append(
           field(
-            'Область',
-            textInput(knowledge.topic, 'Область знания', (value) => {
+            p('Область'),
+            textInput(knowledge.topic, p('Область знания'), (value) => {
               knowledge.topic = value;
             }),
           ),
           field(
-            'Что уже известно',
-            textInput(knowledge.statement, 'Известное утверждение', (value) => {
-              knowledge.statement = value;
-            }),
+            p('Что уже известно'),
+            textInput(
+              knowledge.statement,
+              p('Известное утверждение'),
+              (value) => {
+                knowledge.statement = value;
+              },
+            ),
           ),
           field(
-            'Основание',
+            p('Основание'),
             selectInput<KnowledgeEvidenceType>(
               knowledge.evidenceType,
               ['demonstrated', 'explicitly_stated', 'inferred'],
-              'Тип основания знания',
+              p('Тип основания знания'),
               (value) => {
                 knowledge.evidenceType = value;
               },
             ),
           ),
           field(
-            'Уверенность',
+            p('Уверенность'),
             confidenceInput(knowledge.confidence, (value) => {
               knowledge.confidence = value;
             }),
@@ -968,19 +1037,19 @@ export class ProfileOnboarding {
         const learning = item as PersonalProfile['learningAreas'][number];
         fields.append(
           field(
-            'Область',
-            textInput(learning.topic, 'Изучаемая область', (value) => {
+            p('Область'),
+            textInput(learning.topic, p('Изучаемая область'), (value) => {
               learning.topic = value;
             }),
           ),
           field(
-            'Фокус',
-            textInput(learning.focus ?? '', 'Текущий фокус', (value) => {
+            p('Фокус'),
+            textInput(learning.focus ?? '', p('Текущий фокус'), (value) => {
               learning.focus = value.trim() ? value : null;
             }),
           ),
           field(
-            'Уверенность',
+            p('Уверенность'),
             confidenceInput(learning.confidence, (value) => {
               learning.confidence = value;
             }),
@@ -990,19 +1059,23 @@ export class ProfileOnboarding {
         const uncertainty = item as PersonalProfile['uncertainties'][number];
         fields.append(
           field(
-            'Область',
-            textInput(uncertainty.topic, 'Неопределённая область', (value) => {
-              uncertainty.topic = value;
-            }),
+            p('Область'),
+            textInput(
+              uncertainty.topic,
+              p('Неопределённая область'),
+              (value) => {
+                uncertainty.topic = value;
+              },
+            ),
           ),
           field(
-            'Что неизвестно',
-            textInput(uncertainty.note, 'Неопределённость', (value) => {
+            p('Что неизвестно'),
+            textInput(uncertainty.note, p('Неопределённость'), (value) => {
               uncertainty.note = value;
             }),
           ),
           field(
-            'Уверенность',
+            p('Уверенность'),
             confidenceInput(uncertainty.confidence, (value) => {
               uncertainty.confidence = value;
             }),
@@ -1020,13 +1093,13 @@ export class ProfileOnboarding {
     const section = document.createElement('section');
     section.className = 'profile-review-group';
     const heading = document.createElement('h4');
-    heading.textContent = 'Предпочтения по материалам';
+    heading.textContent = p('Предпочтения по материалам');
     section.append(heading);
     const preferences = this.draft.contentPreferences;
     if (!preferences) {
       const empty = document.createElement('p');
       empty.className = 'profile-empty';
-      empty.textContent = 'Не указаны';
+      empty.textContent = p('Не указаны');
       section.append(empty);
     } else {
       const card = document.createElement('div');
@@ -1035,32 +1108,32 @@ export class ProfileOnboarding {
       fields.className = 'profile-edit-fields';
       fields.append(
         field(
-          'Глубина',
+          p('Глубина'),
           selectInput<PreferenceLevel>(
             preferences.preferredDepth,
             ['low', 'medium', 'high'],
-            'Предпочитаемая глубина',
+            p('Предпочитаемая глубина'),
             (value) => {
               preferences.preferredDepth = value;
             },
           ),
         ),
         field(
-          'Новизна',
+          p('Новизна'),
           selectInput<PreferenceLevel>(
             preferences.noveltyPreference,
             ['low', 'medium', 'high'],
-            'Предпочитаемая новизна',
+            p('Предпочитаемая новизна'),
             (value) => {
               preferences.noveltyPreference = value;
             },
           ),
         ),
         field(
-          'Форматы через запятую',
+          p('Форматы через запятую'),
           textInput(
             preferences.preferredFormats.join(', '),
-            'Предпочитаемые форматы',
+            p('Предпочитаемые форматы'),
             (value) => {
               preferences.preferredFormats = value
                 .split(',')
@@ -1070,7 +1143,7 @@ export class ProfileOnboarding {
           ),
         ),
         field(
-          'Уверенность',
+          p('Уверенность'),
           confidenceInput(preferences.confidence, (value) => {
             preferences.confidence = value;
           }),
@@ -1085,13 +1158,13 @@ export class ProfileOnboarding {
         preferences.avoidRepetition = checkbox.checked;
       });
       const repeatText = document.createElement('span');
-      repeatText.textContent = 'Избегать повторов уже известного';
+      repeatText.textContent = p('Избегать повторов уже известного');
       repeatLabel.append(checkbox, repeatText);
       fields.append(repeatLabel);
       const remove = document.createElement('button');
       remove.type = 'button';
       remove.className = 'profile-remove';
-      remove.textContent = 'Удалить';
+      remove.textContent = p('Удалить');
       remove.addEventListener('click', () => {
         if (!this.draft) return;
         this.draft.contentPreferences = null;
@@ -1109,14 +1182,15 @@ export class ProfileOnboarding {
     const section = document.createElement('section');
     section.className = 'profile-review-group';
     const heading = document.createElement('h4');
-    heading.textContent = 'Предпочтения для отдыха';
+    heading.textContent = p('Предпочтения для отдыха');
     section.append(heading);
 
     if (leisure.preferences.length === 0) {
       const empty = document.createElement('p');
       empty.className = 'profile-empty';
-      empty.textContent =
-        'Недостаточно данных — в режиме отдыха профиль не будет ничего додумывать.';
+      empty.textContent = p(
+        'Недостаточно данных — в режиме отдыха профиль не будет ничего додумывать.',
+      );
       section.append(empty);
     }
 
@@ -1127,52 +1201,56 @@ export class ProfileOnboarding {
       fields.className = 'profile-edit-fields';
       fields.append(
         field(
-          'Тип',
+          p('Тип'),
           selectInput<LeisurePreferenceKind>(
             preference.kind,
             ['genre', 'format', 'creator', 'recreationalTopic', 'dislike'],
-            'Тип предпочтения для отдыха',
+            p('Тип предпочтения для отдыха'),
             (value) => {
               preference.kind = value;
             },
           ),
         ),
         field(
-          'Что именно',
-          textInput(preference.category, 'Предпочтение для отдыха', (value) => {
-            preference.category = value;
-          }),
+          p('Что именно'),
+          textInput(
+            preference.category,
+            p('Предпочтение для отдыха'),
+            (value) => {
+              preference.category = value;
+            },
+          ),
         ),
         field(
-          'Насколько нравится',
+          p('Насколько нравится'),
           selectInput<LeisurePreferenceLevel>(
             preference.preference,
             ['low', 'medium', 'high', 'unknown'],
-            'Сила предпочтения',
+            p('Сила предпочтения'),
             (value) => {
               preference.preference = value;
             },
           ),
         ),
         field(
-          'Основание',
+          p('Основание'),
           selectInput<KnowledgeEvidenceType>(
             preference.evidenceType,
             ['demonstrated', 'explicitly_stated', 'inferred'],
-            'Основание предпочтения',
+            p('Основание предпочтения'),
             (value) => {
               preference.evidenceType = value;
             },
           ),
         ),
         field(
-          'Почему так решено',
-          textInput(preference.basis, 'Основание предпочтения', (value) => {
+          p('Почему так решено'),
+          textInput(preference.basis, p('Основание предпочтения'), (value) => {
             preference.basis = value;
           }),
         ),
         field(
-          'Уверенность',
+          p('Уверенность'),
           confidenceInput(preference.confidence, (value) => {
             preference.confidence = value;
           }),
@@ -1181,7 +1259,7 @@ export class ProfileOnboarding {
       const remove = document.createElement('button');
       remove.type = 'button';
       remove.className = 'profile-remove';
-      remove.textContent = 'Удалить';
+      remove.textContent = p('Удалить');
       remove.addEventListener('click', () => {
         if (!this.draft) return;
         this.draft.leisureProfile.preferences =
@@ -1205,35 +1283,35 @@ export class ProfileOnboarding {
       fields.className = 'profile-edit-fields';
       fields.append(
         field(
-          'Новое или знакомое',
+          p('Новое или знакомое'),
           selectInput<LeisureNoveltyPreference | 'unknown'>(
             leisure.noveltyPreference ?? 'unknown',
             ['unknown', 'familiar', 'balanced', 'novel'],
-            'Новизна для отдыха',
+            p('Новизна для отдыха'),
             (value) => {
               leisure.noveltyPreference = value === 'unknown' ? null : value;
             },
           ),
         ),
         field(
-          'Предпочитаемое усилие',
+          p('Предпочитаемое усилие'),
           selectInput<CognitiveEffort | 'unknown'>(
             leisure.effortPreference ?? 'unknown',
             ['unknown', 'low', 'medium', 'high'],
-            'Предпочитаемое усилие для отдыха',
+            p('Предпочитаемое усилие для отдыха'),
             (value) => {
               leisure.effortPreference = value === 'unknown' ? null : value;
             },
           ),
         ),
         field(
-          'Обычная сессия, минут',
+          p('Обычная сессия, минут'),
           optionalMinutesInput(leisure.typicalSessionMinutes, (value) => {
             leisure.typicalSessionMinutes = value;
           }),
         ),
         field(
-          'Уверенность профиля',
+          p('Уверенность профиля'),
           confidenceInput(leisure.confidence, (value) => {
             leisure.confidence = value;
           }),
@@ -1252,7 +1330,7 @@ export class ProfileOnboarding {
     const button = document.createElement('button');
     button.type = 'button';
     button.className = 'profile-remove';
-    button.textContent = 'Удалить';
+    button.textContent = p('Удалить');
     button.addEventListener('click', () => {
       if (!this.draft) return;
       this.draft = {
@@ -1292,7 +1370,7 @@ export class ProfileOnboarding {
         topic: '',
         level: 'intermediate',
         confidence: 1,
-        basis: ['Добавлено пользователем'],
+        basis: [p('Добавлено пользователем')],
         sources,
       });
     } else if (collection === 'lowValueTopics') {
@@ -1309,7 +1387,7 @@ export class ProfileOnboarding {
         statement: '',
         evidenceType: 'explicitly_stated',
         confidence: 1,
-        basis: ['Добавлено пользователем'],
+        basis: [p('Добавлено пользователем')],
         sources,
       });
     } else if (collection === 'learningAreas') {
@@ -1341,7 +1419,7 @@ export class ProfileOnboarding {
         preference: 'high',
         confidence: 1,
         evidenceType: 'explicitly_stated',
-        basis: 'Добавлено пользователем',
+        basis: p('Добавлено пользователем'),
         sources,
       });
     } else if (!this.draft.contentPreferences) {
@@ -1389,17 +1467,17 @@ export class ProfileOnboarding {
       const values =
         conflict.kind === 'expertise'
           ? [
-              levelLabels[conflict.existing.level],
-              levelLabels[conflict.incoming.level],
+              p(levelLabels[conflict.existing.level] ?? ''),
+              p(levelLabels[conflict.incoming.level] ?? ''),
             ]
           : conflict.kind === 'goal'
             ? [
-                `${levelLabels[conflict.existing.priority]} · ${levelLabels[conflict.existing.status]}`,
-                `${levelLabels[conflict.incoming.priority]} · ${levelLabels[conflict.incoming.status]}`,
+                `${p(levelLabels[conflict.existing.priority] ?? '')} · ${p(levelLabels[conflict.existing.status] ?? '')}`,
+                `${p(levelLabels[conflict.incoming.priority] ?? '')} · ${p(levelLabels[conflict.incoming.status] ?? '')}`,
               ]
             : [
-                `${levelLabels[conflict.existing.preferredDepth]} глубина · ${levelLabels[conflict.existing.noveltyPreference]} новизна`,
-                `${levelLabels[conflict.incoming.preferredDepth]} глубина · ${levelLabels[conflict.incoming.noveltyPreference]} новизна`,
+                `${p('Глубина')}: ${p(levelLabels[conflict.existing.preferredDepth] ?? '')} · ${p('Новизна')}: ${p(levelLabels[conflict.existing.noveltyPreference] ?? '')}`,
+                `${p('Глубина')}: ${p(levelLabels[conflict.incoming.preferredDepth] ?? '')} · ${p('Новизна')}: ${p(levelLabels[conflict.incoming.noveltyPreference] ?? '')}`,
               ];
       for (const [index, choice] of ['existing', 'incoming'].entries()) {
         const label = document.createElement('label');
@@ -1409,7 +1487,7 @@ export class ProfileOnboarding {
         radio.value = choice;
         radio.checked = index === 0;
         const text = document.createElement('span');
-        text.textContent = `${index === 0 ? 'Оставить текущее' : 'Использовать импорт'}: ${values[index]}`;
+        text.textContent = `${index === 0 ? p('Оставить текущее') : p('Использовать импорт')}: ${values[index]}`;
         label.append(radio, text);
         card.append(label);
       }
@@ -1432,11 +1510,43 @@ export class ProfileOnboarding {
   }
 
   private async persist(profile: PersonalProfile): Promise<void> {
-    await saveProfile(profile, this.source, this.draft ?? profile);
-    await clearProfileHandoffState();
+    const operation = this.operation;
+    if (!operation) return;
+    try {
+      await commitDataOperation(operation, async () => {
+        await saveProfile(profile, this.source, this.draft ?? profile);
+        await clearProfileHandoffState();
+      });
+    } catch (error) {
+      if (!(error instanceof DataOperationCancelledError)) throw error;
+      this.draft = null;
+      this.pendingMerge = null;
+      this.operation = null;
+      const target = !this.quickReviewStep.hidden
+        ? this.quickError
+        : this.reviewErrors;
+      if (target === this.quickError) this.showStep(this.quickStep);
+      if (target instanceof HTMLUListElement) {
+        this.renderErrors(target, [
+          p(
+            'Профиль не сохранён: данные были удалены. Начните настройку заново.',
+          ),
+        ]);
+      } else {
+        target.textContent = p(
+          'Профиль не сохранён: данные были удалены. Начните настройку заново.',
+        );
+        target.hidden = false;
+      }
+      return;
+    }
     this.handoffState = null;
     this.existing = profile;
+    this.draft = null;
     this.pendingMerge = null;
+    this.operation = null;
+    this.response.value = '';
+    this.showStep(this.sourceStep);
     this.root.hidden = true;
     document.body.classList.remove('profile-flow-active');
     this.renderProfileBar();
@@ -1444,8 +1554,13 @@ export class ProfileOnboarding {
   }
 
   private async skip(): Promise<void> {
-    await completeProfileOnboarding();
-    await clearProfileHandoffState();
+    // The old skip action cannot activate an empty installation, even when
+    // invoked directly or left over in a previously open popup.
+    if (!isProfileReady(await loadProfile())) return;
+    const operation = this.operation ?? (await beginDataOperation());
+    await commitDataOperation(operation, async () => {
+      await clearProfileHandoffState();
+    });
     this.handoffState = null;
     this.root.hidden = true;
     document.body.classList.remove('profile-flow-active');
@@ -1454,13 +1569,24 @@ export class ProfileOnboarding {
   }
 
   private async removeProfile(): Promise<void> {
-    if (!window.confirm('Удалить весь локальный личный профиль?')) return;
+    if (!window.confirm(p('Удалить весь локальный личный профиль?'))) return;
     await deleteProfile();
     this.existing = null;
     this.renderProfileBar();
+    await this.options.onComplete();
   }
 
   private renderProfileBar(): void {
+    const ready = isProfileReady(this.existing);
+    element<HTMLButtonElement>('skip-profile').hidden = !ready;
+    for (const item of this.root.querySelectorAll<HTMLElement>(
+      '[data-profile-requires-ready]',
+    ))
+      item.hidden = !ready;
+    for (const item of this.root.querySelectorAll<HTMLElement>(
+      '[data-profile-required]',
+    ))
+      item.hidden = ready;
     this.profileBar.hidden = false;
     if (!this.existing) {
       this.profileBarText.textContent = profileBarSummary(null);
@@ -1485,7 +1611,12 @@ export class ProfileOnboarding {
     list.replaceChildren();
     for (const error of errors) {
       const item = document.createElement('li');
-      item.textContent = error;
+      const translated = p(error);
+      item.textContent =
+        normalizeUiLanguage(document.documentElement.lang) !== 'ru' &&
+        /[а-яё]/iu.test(translated)
+          ? p('Проверьте формат JSON и обязательные поля профиля.')
+          : translated;
       list.append(item);
     }
     list.hidden = false;
@@ -1494,5 +1625,65 @@ export class ProfileOnboarding {
   private clearErrors(list: HTMLUListElement): void {
     list.replaceChildren();
     list.hidden = true;
+  }
+
+  private async beginProfileOperation(
+    clearHandoff = true,
+  ): Promise<DataOperation> {
+    const operation = await beginDataOperation();
+    this.operation = operation;
+    const existing = await commitDataOperation(operation, async () => {
+      const profile = await loadProfile();
+      if (clearHandoff) await clearProfileHandoffState();
+      return profile;
+    });
+    if (this.operation !== operation) throw new DataOperationCancelledError();
+    this.existing = existing;
+    return operation;
+  }
+
+  private runAction(action: Promise<unknown>): void {
+    void action.catch((error: unknown) => {
+      if (
+        !this.root.isConnected ||
+        (error instanceof DataOperationCancelledError &&
+          this.operation === null)
+      )
+        return;
+      const message =
+        error instanceof DataOperationCancelledError
+          ? p(
+              'Профиль не сохранён: данные были удалены. Начните настройку заново.',
+            )
+          : p('Не удалось подготовить профиль. Попробуйте ещё раз.');
+      if (error instanceof DataOperationCancelledError) {
+        this.operation = null;
+        this.draft = null;
+        this.pendingMerge = null;
+        this.handoffState = null;
+      }
+      this.root.hidden = false;
+      this.showStep(this.promptStep);
+      this.handoffStatus.textContent = message;
+      this.reopenProviderButton.hidden = true;
+      this.claudeWebFallbackButton.hidden = true;
+    });
+  }
+
+  private async saveHandoff(state: ProfileHandoffState): Promise<void> {
+    const operation = state.generation
+      ? {
+          generation: state.generation,
+          vaultEpoch: state.vaultEpoch ?? this.operation?.vaultEpoch,
+        }
+      : this.operation;
+    if (!operation) throw new DataOperationCancelledError();
+    await commitDataOperation(operation, () =>
+      saveProfileHandoffState({
+        ...state,
+        generation: operation.generation,
+        vaultEpoch: operation.vaultEpoch,
+      }),
+    );
   }
 }

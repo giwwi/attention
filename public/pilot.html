@@ -1,0 +1,184 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Attention — добровольный пилот</title>
+    <link rel="stylesheet" href="pilot.css" />
+    <script type="module" src="pilot.js"></script>
+  </head>
+  <body>
+    <main>
+      <header>
+        <p class="eyebrow">ATTENTION · PILOT 01</p>
+        <h1 data-copy="title">Что действительно стоит читать?</h1>
+        <p data-copy="intro">
+          Добровольная проверка рекомендаций для рабочих задач. Один сценарий:
+          Work, 15 минут, технические статьи на русском или английском.
+        </p>
+      </header>
+      <label class="language"
+        ><span data-copy="language">Язык пилота</span
+        ><select id="pilot-language">
+          <option value="ru">Русский</option>
+          <option value="en">English</option>
+        </select></label
+      >
+      <section id="consent-panel">
+        <h2 data-copy="consentTitle">Вы решаете, участвовать ли</h2>
+        <p data-copy="privacy">
+          Ничего не отправляется автоматически. Решения, длительности и
+          добровольные отзывы сохраняются только в этом Chrome. Текст статьи и
+          рабочая цель используются в памяти страницы. Экспорт не содержит их,
+          URL, заметок или профиля. Метки пилота не обучают основной анализатор.
+        </p>
+        <p data-copy="method">
+          Сначала вы решите по заголовку и цели, затем увидите Attention.
+          Порядок фиксирован: это предварительное сравнение, а не доказательство
+          экономии времени. Можно не давать отзыв, остановиться или удалить
+          результаты.
+        </p>
+        <label class="check"
+          ><input id="consent" type="checkbox" /><span data-copy="consent"
+            >Добровольно участвую и разрешаю сохранить результаты
+            локально.</span
+          ></label
+        >
+        <button id="enroll" data-copy="enroll">Начать или продолжить</button>
+      </section>
+      <section id="setup-panel" hidden>
+        <h2 data-copy="setupTitle">Выберите новый материал</h2>
+        <label
+          ><span data-copy="goal"
+            >Какую конкретную рабочую задачу вы решаете?</span
+          ><input id="pilot-goal" maxlength="300" autocomplete="off"
+        /></label>
+        <label
+          ><span data-copy="articleTab">Открытая вкладка со статьёй</span
+          ><select id="article-tab"></select
+        ></label>
+        <button id="refresh-tabs" class="secondary" data-copy="refresh">
+          Обновить список
+        </button>
+        <label class="check"
+          ><input id="unseen" type="checkbox" /><span data-copy="unseen"
+            >Я ещё не читал эту статью и не видел её оценку Attention; это
+            техническая статья.</span
+          ></label
+        >
+        <label class="check"
+          ><input id="use-context" type="checkbox" /><span
+            data-copy="useContext"
+            >Использовать мой существующий локальный профиль, знания и
+            калибровку. Ничего не импортировать.</span
+          ></label
+        >
+        <button id="start-trial" data-copy="start">
+          Показать только заголовок
+        </button>
+      </section>
+      <section id="baseline-panel" hidden>
+        <p class="eyebrow" data-copy="baselineStep">ШАГ 1 · ЗАГОЛОВОК + ЦЕЛЬ</p>
+        <h2 id="article-title"></h2>
+        <p id="trial-goal"></p>
+        <p data-copy="baselinePrompt">
+          Как бы вы поступили без Attention? Полный текст и оценка пока скрыты.
+        </p>
+        <div class="actions" id="baseline-actions"></div>
+        <button id="retry-analysis" class="secondary" hidden data-copy="retry">
+          Повторить расчёт Attention
+        </button>
+      </section>
+      <section id="attention-panel" hidden>
+        <p class="eyebrow" data-copy="attentionStep">ШАГ 2 · ATTENTION</p>
+        <h2 id="pilot-recommendation"></h2>
+        <p id="pilot-reason"></p>
+        <ul id="pilot-sections"></ul>
+        <p data-copy="attentionPrompt">
+          Как поступите теперь? Ваш выбор может отличаться от рекомендации.
+        </p>
+        <div class="actions" id="attention-actions"></div>
+      </section>
+      <section id="review-panel" hidden>
+        <h2 data-copy="reviewTitle">Проверка по содержанию — по желанию</h2>
+        <p id="audit-invitation" hidden data-copy="audit">
+          Этот материал случайно выбран для проверки пропусков. Если одно из
+          решений — «Пропустить», особенно полезно проверить, не потеряли ли мы
+          ценную информацию. Можно отказаться.
+        </p>
+        <details>
+          <summary data-copy="readText">
+            Прочитать извлечённый текст здесь
+          </summary>
+          <article id="review-text"></article>
+        </details>
+        <label class="check"
+          ><input id="reviewed" type="checkbox" /><span data-copy="reviewed"
+            >Я прочитал достаточно, чтобы оценить пользу для своей задачи.</span
+          ></label
+        >
+        <label
+          ><span data-copy="materialUseful">Материал оказался полезен?</span
+          ><select id="material-useful">
+            <option value="" data-copy="noAnswer">Без ответа</option>
+            <option value="yes" data-copy="yes">Да</option>
+            <option value="partial" data-copy="partial">Частично</option>
+            <option value="no" data-copy="no">Нет</option>
+          </select></label
+        >
+        <label
+          ><span data-copy="baselineHelpful"
+            >Моё решение по заголовку помогло правильно распорядиться
+            временем?</span
+          ><select id="baseline-helpful">
+            <option value="" data-copy="noAnswer">Без ответа</option>
+            <option value="yes" data-copy="yes">Да</option>
+            <option value="no" data-copy="no">Нет</option>
+          </select></label
+        >
+        <label
+          ><span data-copy="attentionHelpful"
+            >Рекомендация Attention помогла правильно распорядиться
+            временем?</span
+          ><select id="attention-helpful">
+            <option value="" data-copy="noAnswer">Без ответа</option>
+            <option value="yes" data-copy="yes">Да</option>
+            <option value="no" data-copy="no">Нет</option>
+          </select></label
+        >
+        <div class="actions">
+          <button id="save-review" data-copy="saveReview">
+            Сохранить добровольный отзыв</button
+          ><button id="next-trial" class="secondary" data-copy="next">
+            Другой материал / без отзыва
+          </button>
+        </div>
+      </section>
+      <button
+        id="back-to-setup"
+        class="secondary"
+        hidden
+        data-copy="backToSetup"
+      >
+        Выбрать другой материал
+      </button>
+      <p id="pilot-status" role="status" aria-live="polite"></p>
+      <section class="results">
+        <h2 data-copy="results">Ваши локальные результаты</h2>
+        <p id="pilot-summary"></p>
+        <p data-copy="exportHint">
+          Перед передачей кому-либо просмотрите файл. Он содержит случайный ID
+          участника, решения, версии прогнозов и длительности; небольшую выборку
+          нельзя считать доказательством эффективности.
+        </p>
+        <div class="actions">
+          <button id="export-pilot" class="secondary" data-copy="export">
+            Скачать результаты</button
+          ><button id="erase-pilot" class="danger" data-copy="erase">
+            Выйти и удалить результаты пилота
+          </button>
+        </div>
+      </section>
+    </main>
+  </body>
+</html>
