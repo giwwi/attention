@@ -6,8 +6,8 @@ const choices = {
     'Hover over an article link in your feed for a first indication of whether it fits your interests. Open the article for a fuller assessment.',
   ],
   focus: [
-    'Go straight to what may be new.',
-    'Jump to matching passages in the article. The card moves out of the way, the text is highlighted, and you can step through the passages.',
+    'Useful passages. With their context.',
+    'Jump to passages that fit your goal, with the surrounding explanation. Move between them and say what you already knew. If no useful match is found, Attention says so.',
   ],
   save: [
     'Worth reading. Just not right now.',

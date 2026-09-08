@@ -19,8 +19,8 @@ if (video && playButton && playLabel) {
     playButton.hidden = true;
   });
   video.addEventListener('pause', () => {
-    if (!video.ended) playLabel.textContent = 'Continue watching';
-    playButton.hidden = false;
+    // Native controls resume playback without covering the frame or captions.
+    playButton.hidden = true;
   });
   video.addEventListener('ended', () => {
     playLabel.textContent = 'Watch again';
