@@ -354,8 +354,14 @@ h1 em::after {
 }
 .proof-decisions {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: 1fr;
   gap: 8px;
+}
+.proof-decisions small {
+  text-align: center;
+  color: #587065;
+  font-size: 11px;
+  margin: -3px 0 3px;
 }
 .proof-decisions span {
   padding: 10px 8px;
@@ -365,7 +371,7 @@ h1 em::after {
   font-size: 13px;
   font-weight: 700;
 }
-.proof-decisions .proof-read {
+.proof-decisions .proof-passages {
   grid-column: 1 / -1;
   background: #196b51;
   border-color: #196b51;
@@ -411,7 +417,7 @@ h1 em::after {
 }
 .decision-picker {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(3, 1fr);
   gap: 26px;
   margin-top: 22px;
 }
@@ -429,7 +435,7 @@ h1 em::after {
   text-align: left;
 }
 .decision-picker button > span {
-  font: 400 clamp(52px, 7.8vw, 112px)/1.2 var(--serif);
+  font: 400 clamp(46px, 6.8vw, 100px)/1.2 var(--serif);
   letter-spacing: -0.04em;
 }
 .decision-picker sup {
@@ -1058,7 +1064,7 @@ code {
   }
   .decision-picker {
     gap: 14px;
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: 1fr;
     margin-top: 20px;
   }
   .decision-picker button {

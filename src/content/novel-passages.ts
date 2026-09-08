@@ -326,6 +326,7 @@ export class NovelPassageController {
     );
     this.bindView();
     this.render();
+    this.view.close.focus({ preventScroll: true });
   }
 
   clear(): void {
@@ -398,7 +399,20 @@ export class NovelPassageController {
     this.view.readwise.addEventListener('click', (event) => {
       if (event.isTrusted) this.saveToReadwise();
     });
-    this.view.close.addEventListener('click', () => this.clear());
+    const dismiss = (): void => {
+      this.clear();
+      document
+        .querySelector<HTMLButtonElement>('[data-attention-trigger]')
+        ?.focus({ preventScroll: true });
+    };
+    this.view.close.addEventListener('click', dismiss);
+    this.view.host.addEventListener('keydown', (event) => {
+      if (event.isTrusted && event.key === 'Escape') {
+        event.preventDefault();
+        event.stopPropagation();
+        dismiss();
+      }
+    });
   }
 
   private render(): void {
@@ -410,6 +424,20 @@ export class NovelPassageController {
       total: this.matches.length,
     });
     this.view.excerpt.textContent = match.excerpt;
+    // Disabling the focused navigation button would send keyboard input to the
+    // underlying page. Keep focus on the other available passage control.
+    const focused = (this.view.close.getRootNode() as ShadowRoot).activeElement;
+    if (focused === this.view.next && this.index === this.matches.length - 1) {
+      this.view.previous.disabled = this.matches.length === 1;
+      (this.matches.length > 1 ? this.view.previous : this.view.close).focus({
+        preventScroll: true,
+      });
+    } else if (focused === this.view.previous && this.index === 0) {
+      this.view.next.disabled = this.matches.length === 1;
+      (this.matches.length > 1 ? this.view.next : this.view.close).focus({
+        preventScroll: true,
+      });
+    }
     this.view.previous.disabled = this.index === 0;
     this.view.next.disabled = this.index === this.matches.length - 1;
     const selected = this.feedback.get(match.excerpt);

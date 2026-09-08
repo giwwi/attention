@@ -111,16 +111,23 @@ export async function cardTextContent(
   context: BrowserContext,
   page: Page,
   selector: string,
+  hostAttribute = 'data-attention-preview',
 ): Promise<string> {
-  return await withCardNode(context, page, selector, async (cdp, nodeId) => {
-    const { object } = await cdp.send('DOM.resolveNode', { nodeId });
-    const { result } = await cdp.send('Runtime.callFunctionOn', {
-      objectId: object.objectId!,
-      functionDeclaration: 'function() { return this.textContent; }',
-      returnByValue: true,
-    });
-    return String(result.value ?? '');
-  });
+  return await withCardNode(
+    context,
+    page,
+    selector,
+    async (cdp, nodeId) => {
+      const { object } = await cdp.send('DOM.resolveNode', { nodeId });
+      const { result } = await cdp.send('Runtime.callFunctionOn', {
+        objectId: object.objectId!,
+        functionDeclaration: 'function() { return this.textContent; }',
+        returnByValue: true,
+      });
+      return String(result.value ?? '');
+    },
+    hostAttribute,
+  );
 }
 
 export async function selectCardOption(

@@ -2,19 +2,19 @@
 
 **A local-first Chrome extension that estimates whether an article is worth your attention right now.**
 
-[Website](https://giwwi.github.io/attention/) · [Download the extension](https://giwwi.github.io/attention/releases/attention-0.24.0.zip)
+[Website](https://giwwi.github.io/attention/) · [Download the extension](https://giwwi.github.io/attention/releases/attention-0.25.0.zip)
 
 ![Attention demo](docs/attention-demo.gif)
 
-Attention combines the article, your current goal, and your available time to suggest **Read, Skim, Save, or Skip**. The decision lives in a card on the article page. The extension popup is a short launcher with access to **Saved** and **Settings**; it does not show or calculate a second assessment.
+Attention combines the article, your personal profile, and your current goal to suggest **Read, Skim, Save, or Skip**. The decision lives in a card on the article page. The extension popup is a short launcher with access to **Saved** and **Settings**; it does not show or calculate a second assessment.
 
-The **Utility Score** is an estimate on a 0–100 scale, shown as **/100** in the card's details. It is not a probability that the article will be useful or correct. Reading and skimming durations are estimates, not measured time savings. Later feedback can calibrate future predictions locally.
+The **Utility Score** is an estimate on a 0–100 scale, shown as **/100** in the card's details. It is not a probability that the article will be useful or correct. Article and passage reading durations are estimates, not measured time savings. Later feedback can calibrate future predictions locally.
 
 A saved personal profile is required before cards appear. Start with a profile prepared in ChatGPT or Claude using context you have already shared, review it, and save it locally. Attention does not access your chat history or connect to either account. Local article evaluation needs no API key or analytics. An optional Vercel AI Gateway connection can provide a deeper analysis with a model selected by the user; `google/gemini-2.5-flash-lite` is the default suggestion.
 
 ## Try it in Chrome
 
-1. Download and unzip the [version 0.24.0](https://giwwi.github.io/attention/releases/attention-0.24.0.zip).
+1. Download and unzip the [version 0.25.0](https://giwwi.github.io/attention/releases/attention-0.25.0.zip).
 2. Open `chrome://extensions`.
 3. Enable **Developer mode**.
 4. Click **Load unpacked** and select the unzipped `attention-extension` folder.
@@ -25,13 +25,13 @@ Deleting the profile disables article and feed cards again. An old “onboarding
 
 Unlock the vault when you start a new browser session. **Lock** closes access to Attention's personal data until you unlock again. If you forget the password, the reset option deletes the local vault and lets you start over; it cannot recover the old data.
 
-The card starts with one recommendation, one short reason, estimated reading time, and **Read / Skim / Save / Skip**. The suggested action is highlighted. **Read** closes the card so you can continue reading; **Skim** highlights recommended sections and moves to the first one when sections are available; **Save** adds the whole article to your local reading list; **Skip** closes the card.
+The article card shows one recommendation, a short reason and the estimated reading time for the whole article. Its actions are **Go to passages** (when matching potentially new passages are found and passage highlighting is enabled) and **Save for later**. The first highlights the actual text, scrolls to the first passage and closes the large card. The passage panel lets you move between matches. Saving adds the whole article to the local reading list and shows **Saved ✓** without closing the card. There are no Read, Skim or Skip buttons on an already open article.
 
-Your scenario, **5, 15, or 30 minute** budget, and current goal appear above the recommendation. Expand that context row to edit them, then choose **Apply**. Applying a change updates the local assessment without requesting external AI. The AI action and analysis status are visible above the reading actions. **Why this assessment** is collapsed by default and contains the Utility Score, further explanation, and a short list of recommended sections when available.
+Your scenario and current goal appear above the recommendation. Expand that context row to edit them, then choose **Apply**. There is no time-budget selector: the displayed duration estimates the article’s length rather than asking you for another setting. Applying context updates the local assessment without requesting external AI. The AI action and analysis status remain visible. **Why this assessment** is collapsed by default and contains the Utility Score, explanation and recommended sections when available.
 
 To reopen the card, click the extension icon and choose **Evaluate this page**. The popup also opens your saved articles and settings for language, profile, sources, AI, and privacy. On the article itself, Tab to the **Attention** button beside its title and press Enter or Space. Focus moves to a visible action; Tab reaches the other controls and expandable details. Escape closes the card and returns focus to the title button. Hovering over the title opens the same card. On a protected or unsupported page, the launcher explains that you need an accessible article.
 
-To save a potentially new passage to Readwise, enable **Settings → Highlight new passages** and connect Readwise through the personalization sources. Open the Attention card beside the article title, choose **Show passages**, then **Save to Readwise** in the passage panel. The panel is available when matching passages are found; its Readwise button appears when Readwise is connected. Marking a passage **New to me** or **Already knew** keeps the selected passage open so you can save it afterward. The main **Save** decision adds the whole article to Attention's local reading list.
+To save a potentially new passage to Readwise, enable **Settings → Highlight new passages** and connect Readwise through the personalization sources. Open the Attention card beside the article title, choose **Go to passages**, then **Save to Readwise** in the passage panel. The panel is available when matching passages are found; its Readwise button appears when Readwise is connected. Marking a passage **New to me** or **Already knew** keeps the selected passage open so you can save it afterward. **Save for later** adds the whole article to Attention's local reading list.
 
 No API key is required for the local evaluation. To configure optional AI analysis, open **Settings → AI**, paste a Vercel AI Gateway key, and keep the suggested Gemini model or enter another `provider/model` identifier. Choose **Check with AI** directly on the article card. The same visible row shows **Checked with AI** after success or lets you retry after an error. If AI is not connected or local-only mode is enabled, the disabled control explains why it is unavailable. Opening the card, popup, or details does not itself send an AI request.
 
@@ -40,7 +40,7 @@ No API key is required for the local evaluation. To configure optional AI analys
 - Evaluates an article relative to your current **Work, Learn, Explore, or Relax** context.
 - Explains the recommendation in terms of the current scenario, such as relevance for work or taste and effort for relaxation.
 - Shows lightweight previews on material links in feeds and one article card with details available on request.
-- Lets you save an article or jump directly to recommended sections.
+- Lets you save an article or jump directly to potentially new passages.
 - Asks whether the material was worth the time and calibrates later predictions locally.
 - Optionally uses local evidence from browser history, Readwise and Obsidian. Notion requires a separately configured OAuth service and is unavailable in the standard release.
 - Offers setup, profile controls, decisions, reading plans, and feedback in English, Russian, German, Spanish, French, Italian, Simplified Chinese, Arabic, and Hindi. Article text, quotations, and imported personal content keep their original language.
@@ -63,7 +63,7 @@ Attention is local-first. Read the [privacy policy](https://giwwi.github.io/atte
 
 When an existing installation first creates its vault, Attention copies its older local records and source libraries into encrypted storage, reads them back to verify the copy, and then removes the old stored copies and folder handles. If migration fails, it keeps access locked and retains the remaining originals so the operation can be retried.
 
-The current prototype requests access to ordinary web pages so it can show title previews and end-of-reading feedback without opening the popup. Chrome describes this broadly as permission to “read and change your data on all websites.” Attention uses it only to extract the current page and render its own isolated UI. You can restrict site access in Chrome's extension settings.
+The current prototype requests access to ordinary web pages so it can show title previews and end-of-reading feedback without opening the popup. Chrome describes this broadly as permission to “read and change your data on all websites.” Attention uses it only to extract the current page and render its own isolated UI after you save a profile. You can restrict site access in Chrome's extension settings.
 
 ## Build from source
 
@@ -82,7 +82,7 @@ pnpm build
 
 Load `dist/` through `chrome://extensions` → **Load unpacked**.
 
-For an existing unpacked installation, rebuild and click **Reload** in `chrome://extensions`, then refresh open article tabs. Version 0.24.0 requires a saved profile before cards activate.
+For an existing unpacked installation, rebuild and click **Reload** in `chrome://extensions`, then refresh open article tabs. Version 0.25.0 requires a saved profile before cards activate.
 
 Useful commands:
 

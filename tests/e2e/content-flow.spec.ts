@@ -405,55 +405,41 @@ test('refreshes context and AI availability in the same open document', async ()
   });
 });
 
-test('records read, skim, save and skip through the visible card', async () => {
-  for (const decision of ['read', 'skim', 'save', 'skip']) {
-    await openCard();
-    await clickCardButton('data-decision', decision);
-    await expect
-      .poll(() =>
-        worker.evaluate(
-          async () =>
-            (await attentionVault.privateStorage.get('materialDecisions'))
-              .materialDecisions?.[0]?.decision,
-        ),
-      )
-      .toBe(decision);
-    if (decision === 'skim')
-      await expect(
-        page.locator('[data-attention-recommended-section="heading"]').first(),
-      ).toBeVisible();
-    if (decision === 'save')
-      await expect
-        .poll(() =>
-          worker.evaluate(
-            async () =>
-              (await attentionVault.privateStorage.get('savedMaterials'))
-                .savedMaterials?.length,
-          ),
-        )
-        .toBe(1);
-    else
-      await expect(page.locator('[data-attention-preview]')).toHaveCSS(
-        'display',
-        'none',
-      );
-  }
-  await page.mouse.wheel(0, 700);
+test('saves through the single article action with visible confirmation and no duplicate', async () => {
+  await openCard();
+  const card = page.locator('[data-attention-preview]');
+  await expect
+    .poll(() => cardTextContent(context, page, '.save-button'))
+    .toBe('Save for later');
+  await clickCardButton('data-decision', 'save');
+  await expect
+    .poll(() => cardTextContent(context, page, '.save-button'))
+    .toBe('Saved ✓');
+  await expect(card).toHaveCSS('display', 'block');
   await expect
     .poll(() =>
-      worker.evaluate(async () => {
-        const sessions =
-          (await attentionVault.privateStorage.get('attentionSessions'))
-            .attentionSessions ?? [];
-        return sessions.every(
-          (session: { endedAt: string | null }) => session.endedAt !== null,
-        );
-      }),
+      worker.evaluate(
+        async () =>
+          (await attentionVault.privateStorage.get('savedMaterials'))
+            .savedMaterials?.length,
+      ),
     )
-    .toBe(true);
+    .toBe(1);
+  await expect
+    .poll(() =>
+      worker.evaluate(
+        async () =>
+          (await attentionVault.privateStorage.get('materialDecisions'))
+            .materialDecisions?.[0]?.decision,
+      ),
+    )
+    .toBe('save');
+  await page.keyboard.press('Escape');
+  await openCard();
+  expect(await cardTextContent(context, page, '.save-button')).toBe('Saved ✓');
 });
 
-test('completes reading feedback after an explicit Read decision', async () => {
+test('completes reading feedback from actual reading without a Read button', async () => {
   test.setTimeout(65_000);
   const paragraph =
     '<p>This article explains a concrete method for allocating attention. It presents evidence, a causal mechanism, practical steps, limitations, and examples that make the argument testable and useful.</p>';
@@ -465,7 +451,7 @@ test('completes reading feedback after an explicit Read decision', async () => {
   );
   await page.reload();
   await openCard();
-  await clickCardButton('data-decision', 'read');
+  await page.keyboard.press('Escape');
   await expect(page.locator('[data-attention-preview]')).toHaveCSS(
     'display',
     'none',

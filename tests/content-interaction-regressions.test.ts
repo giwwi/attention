@@ -294,32 +294,42 @@ describe('current article interactions', () => {
     expect(trigger().getAttribute('aria-expanded')).toBe('false');
   });
 
-  it('submits all four explicit decisions with the captured article', async () => {
+  it('saves the article once and shows confirmation without closing the card', async () => {
     const onDecision = vi.fn().mockResolvedValue(true);
     installHoverPreview({ onDecision });
-    for (const decision of ['read', 'skim', 'save', 'skip']) {
-      await hover();
-      Object.defineProperty(document.querySelector('h2'), 'scrollIntoView', {
-        configurable: true,
-        value: vi.fn(),
-      });
-      host()
-        .shadowRoot!.querySelector<HTMLButtonElement>(
-          `[data-decision="${decision}"]`,
-        )!
-        .click();
-      await vi.advanceTimersByTimeAsync(0);
-      expect(onDecision).toHaveBeenLastCalledWith(
-        expect.objectContaining({ url: window.location.href, title }),
-        decision,
-      );
-      if (decision === 'save') {
-        expect(host().dataset.attentionSaved).toBe('true');
-        document
-          .querySelector('h1')!
-          .dispatchEvent(new FocusEvent('focusout', { bubbles: true }));
-      } else expect(host().style.display).toBe('none');
-    }
+    await hover();
+    const save = host().shadowRoot!.querySelector<HTMLButtonElement>(
+      '[data-decision="save"]',
+    )!;
+    expect(host().shadowRoot!.querySelectorAll('[data-decision]')).toHaveLength(
+      1,
+    );
+    save.click();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(onDecision).toHaveBeenCalledExactlyOnceWith(
+      expect.objectContaining({ url: window.location.href, title }),
+      'save',
+    );
+    expect(host().dataset.attentionSaved).toBe('true');
+    expect(host().style.display).toBe('block');
+    expect(save.textContent).toContain('Saved');
+    expect(save.disabled).toBe(true);
+    save.click();
+    expect(onDecision).toHaveBeenCalledTimes(1);
+  });
+
+  it('ignores a late save acknowledgement after data erasure', async () => {
+    let complete!: (ok: boolean) => void;
+    installHoverPreview({ onDecision: () => new Promise((resolve) => { complete = resolve; }) });
+    await hover();
+    host().shadowRoot!.querySelector<HTMLButtonElement>('[data-decision="save"]')!.click();
+    runtimeListeners.forEach((listener) => listener({
+      type: ATTENTION_INPUTS_INVALIDATED_TYPE, changedKeys: ['attentionDataGeneration'],
+    }));
+    complete(true);
+    await vi.advanceTimersByTimeAsync(200);
+    expect(host().style.display).toBe('none');
+    expect(host().dataset.attentionSaved).not.toBe('true');
   });
 
   it('retains a usable card when saving a decision fails', async () => {
@@ -328,7 +338,7 @@ describe('current article interactions', () => {
     });
     await hover();
     host()
-      .shadowRoot!.querySelector<HTMLButtonElement>('[data-decision="read"]')!
+      .shadowRoot!.querySelector<HTMLButtonElement>('[data-decision="save"]')!
       .click();
     await vi.advanceTimersByTimeAsync(0);
     expect(host().style.display).toBe('block');
@@ -337,7 +347,7 @@ describe('current article interactions', () => {
     ).toBe(false);
     expect(
       host().shadowRoot!.querySelector<HTMLButtonElement>(
-        '[data-decision="read"]',
+        '[data-decision="save"]',
       )!.disabled,
     ).toBe(false);
   });
@@ -360,7 +370,7 @@ describe('current article interactions', () => {
     expect(onDecision).not.toHaveBeenCalled();
   });
 
-  it('finishes Skim after focus loss while the decision is being saved', async () => {
+  it('finishes saving after focus loss without reopening the card', async () => {
     let complete!: (ok: boolean) => void;
     installHoverPreview({
       onDecision: () =>
@@ -369,13 +379,8 @@ describe('current article interactions', () => {
         }),
     });
     await hover();
-    const heading = document.querySelector('h2')!;
-    Object.defineProperty(heading, 'scrollIntoView', {
-      configurable: true,
-      value: vi.fn(),
-    });
     host()
-      .shadowRoot!.querySelector<HTMLButtonElement>('[data-decision="skim"]')!
+      .shadowRoot!.querySelector<HTMLButtonElement>('[data-decision="save"]')!
       .click();
     host().dispatchEvent(
       new FocusEvent('focusout', {
@@ -386,7 +391,6 @@ describe('current article interactions', () => {
     expect(host().style.display).toBe('none');
     complete(true);
     await vi.advanceTimersByTimeAsync(0);
-    expect(heading.dataset.attentionRecommendedSection).toBe('heading');
-    expect(heading.scrollIntoView).toHaveBeenCalled();
+    expect(host().style.display).toBe('none');
   });
 });

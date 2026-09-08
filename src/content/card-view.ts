@@ -1,5 +1,4 @@
 import { CONTENT_THEME_CSS } from './theme';
-import type { MaterialDecision } from '../shared/types';
 import { DEFAULT_UI_LANGUAGE } from '../i18n/ui';
 import { cardText } from '../i18n/card';
 import { readingPlanText } from '../i18n/reading-plan';
@@ -15,8 +14,7 @@ export interface CardView {
   analysisSource: HTMLSpanElement;
   aiButton: HTMLButtonElement;
   saveButton: HTMLButtonElement;
-  decisionButtons: Map<MaterialDecision, HTMLButtonElement>;
-  decisionActions: HTMLElement;
+  passageHint: HTMLParagraphElement;
   actionStatus: HTMLParagraphElement;
   passagesButton: HTMLButtonElement;
   readingPlan: HTMLElement;
@@ -91,13 +89,12 @@ export function installCardHost(): CardView {
     .useful-time { margin-block-start: 10px; color: var(--attention-muted); font-size: 12px; font-weight: 550; }
     .reliability-note { display: none; }
     .reliability-note.has-warning { display: block; margin-block-start: 10px; padding-inline-start: 9px; border-inline-start: 2px solid var(--attention-warning-border); color: var(--attention-warning); font-size: 12px; }
-    .decision-actions { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 7px; margin-block-start: 16px; }
-    .save-button { order: 1; min-height: 38px; }
-    .save-button[data-primary="true"] { order: 0; grid-column: 1 / -1; min-height: 42px; border-color: var(--attention-accent); color: var(--attention-on-accent); background: var(--attention-accent); font-size: 14px; }
-    .save-button[data-primary="true"]:not(:disabled):hover { border-color: var(--attention-accent-hover); background: var(--attention-accent-hover); }
+    .article-actions { display: grid; gap: 8px; margin-block-start: 16px; }
+    .save-button, .passages-button { display: block; width: 100%; min-height: 40px; font-size: 13px; }
+    .article-actions button[data-primary="true"] { min-height: 42px; border-color: var(--attention-accent); color: var(--attention-on-accent); background: var(--attention-accent); font-size: 14px; }
+    .article-actions button[data-primary="true"]:not(:disabled):hover { border-color: var(--attention-accent-hover); background: var(--attention-accent-hover); }
+    .passage-hint { margin: 0 0 4px; color: var(--attention-muted); font-size: 11px; text-align: center; }
     .action-status { margin: 9px 0 0; color: var(--attention-muted); font-size: 12px; }
-    .passages-button { display: block; width: 100%; margin-block-start: 12px; padding: 7px 0; border-color: transparent; color: var(--attention-accent); background: transparent; text-align: start; font-size: 12px; }
-    .passages-button:not(:disabled):hover { border-color: transparent; background: transparent; text-decoration: underline; text-underline-offset: 3px; }
     .details { margin-block-start: 12px; border-block-start: 1px solid var(--attention-border); color: var(--attention-muted); font-size: 12px; }
     .details > summary { padding-block: 12px 2px; color: var(--attention-secondary); font-size: 12px; font-weight: 650; cursor: pointer; }
     .details[open] > summary { padding-block-end: 10px; }
@@ -135,23 +132,23 @@ export function installCardHost(): CardView {
   const score = element('div', 'score');
   const usefulTime = element('div', 'useful-time');
   const reliabilityNote = element('div', 'reliability-note');
-  const decisionActions = element('div', 'decision-actions');
-  const decisionButtons = new Map<MaterialDecision, HTMLButtonElement>();
-  for (const decision of ['read', 'skim', 'save', 'skip'] as const) {
-    const action = button(
-      'save-button',
-      readingPlanText(DEFAULT_UI_LANGUAGE, decision),
-    );
-    action.dataset.decision = decision;
-    decisionButtons.set(decision, action);
-    decisionActions.append(action);
-  }
-  const saveButton = decisionButtons.get('save')!;
+  const actions = element('div', 'article-actions');
+  const passagesButton = button('passages-button');
+  passagesButton.hidden = true;
+  const passageHint = element('p', 'passage-hint');
+  passageHint.id = 'attention-passage-hint';
+  passageHint.hidden = true;
+  passagesButton.setAttribute('aria-describedby', passageHint.id);
+  const saveButton = button(
+    'save-button',
+    cardText(DEFAULT_UI_LANGUAGE, 'saveForLater'),
+  );
+  saveButton.dataset.decision = 'save';
+  saveButton.setAttribute('aria-live', 'polite');
+  actions.append(passagesButton, passageHint, saveButton);
   const actionStatus = element('p', 'action-status');
   actionStatus.setAttribute('role', 'status');
   actionStatus.hidden = true;
-  const passagesButton = button('passages-button');
-  passagesButton.hidden = true;
   const details = element('details', 'details');
   const detailsSummary = element('summary', 'details-summary');
   detailsSummary.textContent = cardText(DEFAULT_UI_LANGUAGE, 'details');
@@ -182,9 +179,8 @@ export function installCardHost(): CardView {
     usefulTime,
     reliabilityNote,
     analysisControls,
-    decisionActions,
+    actions,
     actionStatus,
-    passagesButton,
     details,
   );
   shadow.append(style, card);
@@ -200,8 +196,7 @@ export function installCardHost(): CardView {
     analysisSource,
     aiButton,
     saveButton,
-    decisionButtons,
-    decisionActions,
+    passageHint,
     actionStatus,
     passagesButton,
     readingPlan,

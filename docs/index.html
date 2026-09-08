@@ -27,7 +27,7 @@
       type="font/ttf"
       crossorigin
     />
-    <link rel="stylesheet" href="./site.css?v=20260907-ai-card" />
+    <link rel="stylesheet" href="./site.css?v=20260908-actions" />
   </head>
   <body>
     <a class="skip-link" href="#main">Skip to content</a>
@@ -59,9 +59,8 @@
             >
           </h1>
           <p class="lede">
-            The next article can wait a second. Attention considers your goal,
-            your time, and what you already know—then helps you choose what to
-            read.
+            The next article can wait a second. Attention considers your goal
+            and what you already know—then helps you choose what to read.
           </p>
           <div class="actions">
             <a class="button primary" href="#install"
@@ -84,27 +83,28 @@
           <div
             class="proof-card"
             role="img"
-            aria-label="Example Attention card: Learning, 15 minutes, Understand software quality. Worth reading. 12 minute read. Local evaluation, with an optional Evaluate with AI button. Read, Skim, Save and Skip."
+            aria-label="Example Attention card: Learning, Understand software quality. Worth reading. Full article: about 12 minutes. Local evaluation, with an optional Evaluate with AI button. Go to 2 passages that may be new to you, or save for later."
           >
             <div class="proof-card-content" aria-hidden="true">
               <div class="proof-card-header">
                 <span>ATTENTION</span><span>×</span>
               </div>
               <p class="proof-context">
-                ▸ Learning · 15 min · Understand software quality
+                ▸ Learning · Understand software quality
               </p>
               <p class="proof-verdict">Worth reading</p>
               <p class="proof-reason">
                 Looks like a useful next step for learning this topic
               </p>
-              <p class="proof-readtime">12 min read</p>
+              <p class="proof-readtime">Full article · ~12 min</p>
               <div class="proof-analysis">
                 <span>Local evaluation</span
                 ><span class="proof-ai">Evaluate with AI</span>
               </div>
               <div class="proof-decisions">
-                <span class="proof-read">Read</span>
-                <span>Skim</span><span>Save</span><span>Skip</span>
+                <span class="proof-passages">Go to 2 passages</span>
+                <small>May be new to you · ~1 min</small>
+                <span>Save for later</span>
               </div>
               <p class="proof-why">▸ Why this assessment</p>
             </div>
@@ -135,40 +135,36 @@
           <div
             class="decision-picker"
             role="group"
-            aria-label="Explore the four reading choices"
+            aria-label="Explore how Attention helps you read"
           >
-            <button type="button" data-decision="read" aria-pressed="true">
-              <span>Read</span><sup>01</sup>
+            <button type="button" data-decision="preview" aria-pressed="true">
+              <span>Preview</span><sup>01</sup>
             </button>
-            <button type="button" data-decision="skim" aria-pressed="false">
-              <span>Skim</span><sup>02</sup>
+            <button type="button" data-decision="focus" aria-pressed="false">
+              <span>Focus</span><sup>02</sup>
             </button>
             <button type="button" data-decision="save" aria-pressed="false">
               <span>Save</span><sup>03</sup>
             </button>
-            <button type="button" data-decision="skip" aria-pressed="false">
-              <span>Skip</span><sup>04</sup>
-            </button>
           </div>
           <div class="decision-detail">
             <p class="decision-hint">
-              Four choices.<br />You have the last word.
+              A signal. A shortcut.<br />You have the last word.
             </p>
             <div aria-live="polite" aria-atomic="true">
-              <h3 id="decision-heading">
-                Give a good fit your full attention.
-              </h3>
+              <h3 id="decision-heading">A first signal before you open.</h3>
               <p id="decision-copy">
-                See the recommendation, the reason, and the reading time
-                together. Then decide whether to dive in.
+                Hover over an article link in your feed for a first indication
+                of whether it fits your interests. Open the article for a fuller
+                assessment.
               </p>
             </div>
             <span class="decision-arrow" aria-hidden="true">↗</span>
           </div>
           <noscript
             ><p class="no-script-note">
-              Skim to find useful sections. Save for another moment. Skip when
-              the article does not fit what you need.
+              Preview a link before opening. Jump to passages that may be new to
+              you. Save a worthwhile article for later.
             </p></noscript
           >
         </div>
@@ -193,9 +189,8 @@
               <div>
                 <h3>Tell it what matters now.</h3>
                 <p>
-                  Choose your scenario and available time. Add a topic if you
-                  have one. Change your context on the card to get an updated
-                  recommendation.
+                  Choose your scenario and add a topic if you have one. Change
+                  your goal on the card to get an updated recommendation.
                 </p>
               </div>
             </li>
@@ -204,9 +199,9 @@
               <div>
                 <h3>Find what adds something.</h3>
                 <p>
-                  Preview links while browsing, or open an article for a fuller
-                  assessment. Use your profile and optional knowledge sources to
-                  help distinguish familiar ideas from new ones.
+                  Open an article for a fuller assessment. When matching
+                  passages may be new to you, jump straight to the highlighted
+                  text and move between them.
                 </p>
               </div>
             </li>
@@ -288,6 +283,7 @@
             <figcaption id="demo-caption">
               <p class="demo-explanation">
                 Real websites. Hover, decide, and read what might be new.
+                Recorded before the card simplification.
               </p>
               <a
                 class="demo-download"
@@ -398,12 +394,12 @@
             </h2>
             <a
               class="button primary"
-              href="releases/attention-0.24.0.zip"
+              href="releases/attention-0.25.0.zip"
               download
               >Download for Chrome <span aria-hidden="true">↓</span></a
             >
             <p class="microcopy">
-              Free prototype · v0.24.0 · Manual installation
+              Free prototype · v0.25.0 · Manual installation
             </p>
           </div>
           <div class="install-guide">
@@ -477,6 +473,6 @@
       </nav>
     </footer>
     <script src="./demo.js?v=20260907-editorial" defer></script>
-    <script src="./site.js?v=20260907-editorial" defer></script>
+    <script src="./site.js?v=20260908-actions" defer></script>
   </body>
 </html>

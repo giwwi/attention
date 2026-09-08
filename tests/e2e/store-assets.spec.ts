@@ -209,7 +209,7 @@ test('capture authentic English store screenshots from the article card', async 
     await expect(card).toHaveAttribute('data-attention-score', /^\d+$/);
     await expect
       .poll(() => cardTextContent(context, page, '.context-summary'))
-      .toContain('15 min');
+      .toContain('Learning');
     await assertAiControlInFirstScreen(context, page);
     const headline = (await page.locator('h1').boundingBox())!;
     const cardBox = (await card.boundingBox())!;

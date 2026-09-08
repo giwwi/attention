@@ -380,12 +380,18 @@ describe('large article card surface', () => {
       expect(
         element<HTMLElement>(details, '.score-detail').textContent,
       ).toContain('67');
-      const actions = element<HTMLElement>(shadow, '.decision-actions');
-      expect((actions.firstElementChild as HTMLElement).dataset.decision).toBe(
-        decision,
-      );
+      expect(shadow.querySelectorAll('[data-decision]')).toHaveLength(1);
       expect(
-        shadow.querySelectorAll('.decision-actions [data-primary="true"]'),
+        element<HTMLButtonElement>(shadow, '[data-decision="save"]')
+          .textContent,
+      ).toBe('Save for later');
+      expect(
+        shadow.querySelector(
+          '[data-decision="read"], [data-decision="skim"], [data-decision="skip"]',
+        ),
+      ).toBeNull();
+      expect(
+        shadow.querySelectorAll('.article-actions [data-primary="true"]'),
       ).toHaveLength(1);
       const ai = element<HTMLButtonElement>(shadow, '.ai-button');
       expect(ai.hidden).toBe(false);
@@ -395,9 +401,10 @@ describe('large article card surface', () => {
       expect(
         element<HTMLSelectElement>(shadow, '.context-scenario').value,
       ).toBe('learn');
-      expect(element<HTMLSelectElement>(shadow, '.context-minutes').value).toBe(
-        '30',
-      );
+      expect(shadow.querySelector('.context-minutes')).toBeNull();
+      expect(
+        element<HTMLElement>(shadow, '.context-summary').textContent,
+      ).not.toMatch(/\d+ min/);
       expect(element<HTMLInputElement>(shadow, '.context-intent').value).toBe(
         context.intent,
       );
@@ -514,7 +521,7 @@ describe('large article card surface', () => {
     await vi.advanceTimersByTimeAsync(600);
     expect(details.open).toBe(false);
     expect(shadow.activeElement).toBe(
-      element(shadow, '[data-decision="skim"]'),
+      element(shadow, '[data-decision="save"]'),
     );
   });
 
@@ -546,9 +553,7 @@ describe('large article card surface', () => {
     expect(element<HTMLSelectElement>(shadow, '.context-scenario').value).toBe(
       'work',
     );
-    expect(element<HTMLSelectElement>(shadow, '.context-minutes').value).toBe(
-      '15',
-    );
+    expect(shadow.querySelector('.context-minutes')).toBeNull();
     resolve({
       ok: true,
       context: {

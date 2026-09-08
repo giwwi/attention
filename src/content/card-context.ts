@@ -11,7 +11,6 @@ export class CardContextControl {
   private readonly summary = document.createElement('summary');
   private readonly form = document.createElement('form');
   private readonly scenario = document.createElement('select');
-  private readonly minutes = document.createElement('select');
   private readonly intent = document.createElement('input');
   private readonly mood = document.createElement('select');
   private readonly effort = document.createElement('select');
@@ -42,7 +41,6 @@ export class CardContextControl {
     this.summary.className = 'context-summary';
     this.form.className = 'context-form';
     this.scenario.className = 'context-scenario';
-    this.minutes.className = 'context-minutes';
     this.intent.className = 'context-intent';
     this.intent.type = 'text';
     this.intent.maxLength = 180;
@@ -60,7 +58,6 @@ export class CardContextControl {
       }
     };
     options(this.scenario, scenarios);
-    options(this.minutes, ['5', '15', '30']);
     options(this.mood, [
       '',
       'chill',
@@ -79,11 +76,7 @@ export class CardContextControl {
       return label;
     };
     const row = document.createElement('div');
-    row.className = 'context-selects';
-    row.append(
-      field(this.scenario, 'scenario'),
-      field(this.minutes, 'availableTime'),
-    );
+    row.append(field(this.scenario, 'scenario'));
     this.relax.className = 'context-selects';
     this.relax.append(
       field(this.mood, 'relaxMood'),
@@ -183,11 +176,7 @@ export class CardContextControl {
     this.context = context;
     this.language = language;
     const scenario = context.scenario ?? 'work';
-    this.summary.textContent = [
-      uiText(language, scenario),
-      uiText(language, 'minutesShort', { count: context.availableMinutes }),
-      context.intent,
-    ]
+    this.summary.textContent = [uiText(language, scenario), context.intent]
       .filter(Boolean)
       .join(' · ');
     this.summary.title = `${cardText(language, 'editContext')}: ${this.summary.textContent}`;
@@ -203,10 +192,6 @@ export class CardContextControl {
         language,
         option.value as (typeof scenarios)[number],
       );
-    for (const option of this.minutes.options)
-      option.textContent = uiText(language, 'minutesShort', {
-        count: option.value,
-      });
     const moodLabels: UiTextKey[] = [
       'any',
       'calm',
@@ -227,7 +212,6 @@ export class CardContextControl {
     this.apply.textContent = cardText(language, 'apply');
     if (!this.dirty || !this.details.open) {
       this.scenario.value = scenario;
-      this.minutes.value = String(context.availableMinutes);
       this.intent.value = context.intent;
       this.mood.value = context.relaxIntent ?? '';
       this.effort.value = context.desiredEffort ?? '';
@@ -248,7 +232,6 @@ export class CardContextControl {
     this.summary.removeAttribute('title');
     this.summary.removeAttribute('aria-label');
     this.scenario.value = 'work';
-    this.minutes.value = '15';
     this.mood.value = '';
     this.effort.value = '';
     this.status.hidden = true;
@@ -258,7 +241,6 @@ export class CardContextControl {
   private disable(disabled: boolean): void {
     for (const element of [
       this.scenario,
-      this.minutes,
       this.intent,
       this.mood,
       this.effort,
@@ -272,9 +254,6 @@ export class CardContextControl {
     const context: AnalysisContext = {
       ...this.context,
       scenario: this.scenario.value as AnalysisContext['scenario'],
-      availableMinutes: Number(
-        this.minutes.value,
-      ) as AnalysisContext['availableMinutes'],
       intent: this.intent.value.trim(),
       relaxIntent: (this.mood.value || null) as AnalysisContext['relaxIntent'],
       desiredEffort: (this.effort.value ||

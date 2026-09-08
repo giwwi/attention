@@ -35,7 +35,7 @@ import {
   findCurrentArticleRoot,
   findCurrentArticleTitleElement,
 } from './article-root';
-import { captureDocument } from './capture';
+import { captureDocument, countWords, calculateReadingTime } from './capture';
 import { HOVER_PREVIEW_CONFIG } from './config';
 import {
   buildPageCaptureSignature,
@@ -59,8 +59,7 @@ interface HoverPreviewGlobal {
 }
 
 const hoverGlobal = globalThis as typeof globalThis & HoverPreviewGlobal;
-const HOVER_CONTRACT_VERSION =
-  'feed-compact-current-title-attention-plan-spa-v16';
+const HOVER_CONTRACT_VERSION = 'feed-compact-article-passages-save-v17';
 const MATERIAL_TITLE_SELECTOR = [
   'h1',
   'h2',
@@ -1351,7 +1350,8 @@ export function installHoverPreview(
   let focusAfterRefresh: HTMLElement | null = null;
   let primaryDecision: MaterialDecision = 'read';
   let contextPending = false;
-  let decisionPending = false;
+  let savingUrl: string | null = null;
+  let saveRevision = 0;
   let refreshKeyboardTrigger = (): void => undefined;
   const keyboardInteractionActive = (): boolean =>
     (document.activeElement === view.host &&
@@ -1367,8 +1367,8 @@ export function installHoverPreview(
       if (!details?.currentPage) throw new Error('No active article');
       const pageUrl = window.location.href;
       contextPending = true;
-      for (const button of view.decisionButtons.values())
-        button.disabled = true;
+      view.saveButton.disabled = true;
+      view.passagesButton.disabled = true;
       try {
         const response: ContextResponse = await chrome.runtime.sendMessage({
           type: ATTENTION_CONTEXT_UPDATE_TYPE,
@@ -1389,12 +1389,9 @@ export function installHoverPreview(
         return response.context;
       } finally {
         contextPending = false;
-        for (const [decision, button] of view.decisionButtons) {
-          button.disabled =
-            decisionPending ||
-            (decision === 'save' &&
-              view.host.dataset.attentionSaved === 'true');
-        }
+        view.saveButton.disabled =
+          Boolean(savingUrl) || view.host.dataset.attentionSaved === 'true';
+        view.passagesButton.disabled = false;
       }
     },
     listenerController.signal,
@@ -1523,9 +1520,13 @@ export function installHoverPreview(
       event.stopPropagation();
       if (!activeSaveCapture || view.saveButton.disabled) return;
       const capture = activeSaveCapture;
+      const url = canonicalPageUrl(capture.url);
+      const revision = ++saveRevision;
+      savingUrl = url;
       view.host.focus({ preventScroll: true });
       view.saveButton.disabled = true;
       view.saveButton.textContent = uiText(currentLanguage(), 'saving');
+      view.actionStatus.hidden = true;
       void (
         options.onDecision
           ? options.onDecision(capture, 'save').then((ok) => ({ ok }))
@@ -1535,84 +1536,40 @@ export function installHoverPreview(
             })
       )
         .then((response: unknown) => {
+          if (listenerController.signal.aborted || revision !== saveRevision)
+            return;
           const ok =
             Boolean(response) &&
             typeof response === 'object' &&
             (response as Record<string, unknown>).ok === true;
           if (!ok) throw new Error('Save failed');
-          savedUrls.add(canonicalPageUrl(capture.url));
+          savingUrl = null;
+          savedUrls.add(url);
           if (activeSaveCapture?.url !== capture.url) return;
           view.host.dataset.attentionSaved = 'true';
           view.saveButton.textContent = uiText(currentLanguage(), 'saved');
+          view.saveButton.disabled = true;
+          view.actionStatus.hidden = true;
         })
         .catch(() => {
-          view.saveButton.textContent = uiText(currentLanguage(), 'saveFailed');
-          window.setTimeout(() => {
-            if (view.host.style.display === 'block') {
-              view.saveButton.textContent = uiText(currentLanguage(), 'save');
-              view.saveButton.disabled = false;
-            }
-          }, 1400);
+          if (listenerController.signal.aborted || revision !== saveRevision)
+            return;
+          savingUrl = null;
+          if (activeSaveCapture?.url !== capture.url) return;
+          view.saveButton.textContent = cardText(
+            currentLanguage(),
+            'saveForLater',
+          );
+          view.saveButton.disabled = contextPending;
+          view.actionStatus.textContent = uiText(
+            currentLanguage(),
+            'saveFailed',
+          );
+          view.actionStatus.hidden = false;
         });
     },
     { signal: listenerController.signal },
   );
-
-  for (const decision of ['read', 'skim', 'skip'] as const) {
-    view.decisionButtons.get(decision)!.addEventListener(
-      'click',
-      (event) => {
-        if (!isTrustedUserInteraction(event)) return;
-        if (
-          !activeSaveCapture ||
-          !options.onDecision ||
-          decisionPending ||
-          contextPending
-        )
-          return;
-        const capture = activeSaveCapture;
-        const headings = activeRecommendedHeadings.slice();
-        decisionPending = true;
-        view.host.focus({ preventScroll: true });
-        for (const button of view.decisionButtons.values())
-          button.disabled = true;
-        void options
-          .onDecision(capture, decision)
-          .then((ok) => {
-            if (!ok) throw new Error('Decision was not saved');
-            if (
-              listenerController.signal.aborted ||
-              canonicalPageUrl(window.location.href) !==
-                canonicalPageUrl(capture.url)
-            )
-              return;
-            if (decision === 'skim' && headings.length > 0) {
-              highlightRecommendedSections(
-                document,
-                headings,
-                currentLanguage(),
-              );
-              scrollToHeading(document, headings[0]!);
-            }
-            hide();
-          })
-          .catch(() => {
-            if (activeSaveCapture?.url !== capture.url) return;
-            view.actionStatus.textContent = readingPlanText(
-              currentLanguage(),
-              'decisionFailed',
-            );
-            view.actionStatus.hidden = false;
-          })
-          .finally(() => {
-            decisionPending = false;
-            for (const button of view.decisionButtons.values())
-              button.disabled = false;
-          });
-      },
-      { signal: listenerController.signal },
-    );
-  }
 
   view.passagesButton.addEventListener(
     'click',
@@ -1620,10 +1577,19 @@ export function installHoverPreview(
       if (!isTrustedUserInteraction(event)) return;
       event.preventDefault();
       event.stopPropagation();
-      if (!activeNovelCapture || activeNovelMatches.length === 0) return;
-      novelPassages.show(activeNovelMatches, activeNovelCapture, {
+      if (
+        contextPending ||
+        !activeNovelCapture ||
+        activeNovelMatches.length === 0
+      )
+        return;
+      const capture = activeNovelCapture;
+      const matches = activeNovelMatches.slice();
+      const readwiseConnected = activeReadwiseConnected;
+      hide();
+      novelPassages.show(matches, capture, {
         language: currentLanguage(),
-        readwiseConnected: activeReadwiseConnected,
+        readwiseConnected,
       });
     },
     { signal: listenerController.signal },
@@ -1663,6 +1629,10 @@ export function installHoverPreview(
     const erased =
       Array.isArray(changedKeys) &&
       changedKeys.includes('attentionDataGeneration');
+    if (erased) {
+      saveRevision += 1;
+      savingUrl = null;
+    }
     const onlyPassageFeedbackChanged =
       type === ATTENTION_INPUTS_INVALIDATED_TYPE &&
       Array.isArray(changedKeys) &&
@@ -1834,14 +1804,40 @@ export function installHoverPreview(
     activeNovelCapture =
       activeNovelMatches.length > 0 ? cachedPageCapture : null;
     activeReadwiseConnected = cachedResponse?.readwiseConnected === true;
-    view.passagesButton.hidden = activeNovelMatches.length === 0;
-    view.passagesButton.textContent = uiText(language, 'showPotentialNew', {
-      count: activeNovelMatches.length,
-    });
+    const hasPassages = activeNovelMatches.length > 0;
+    view.passagesButton.hidden = !hasPassages;
+    view.passagesButton.disabled = contextPending;
+    view.passagesButton.dataset.primary = String(hasPassages);
+    view.passagesButton.textContent = cardText(
+      language,
+      activeNovelMatches.length === 1 ? 'passageOne' : 'passages',
+      {
+        count: activeNovelMatches.length,
+      },
+    );
+    const passageMinutes = Math.max(
+      1,
+      calculateReadingTime(
+        countWords(
+          [...new Set(activeNovelMatches.map((match) => match.excerpt))].join(
+            ' ',
+          ),
+        ),
+      ),
+    );
+    view.passageHint.hidden = !hasPassages;
+    view.passageHint.textContent = hasPassages
+      ? cardText(language, 'passageHint', { minutes: passageMinutes })
+      : '';
     const isSaved = savedUrls.has(canonicalPageUrl(details.url));
+    const isSaving = savingUrl === canonicalPageUrl(details.url);
     view.host.dataset.attentionSaved = String(isSaved);
-    view.saveButton.disabled = isSaved || contextPending;
-    view.saveButton.textContent = uiText(language, isSaved ? 'saved' : 'save');
+    view.saveButton.dataset.primary = String(!hasPassages);
+    view.saveButton.disabled = isSaved || isSaving || contextPending;
+    view.saveButton.textContent =
+      isSaved || isSaving
+        ? uiText(language, isSaved ? 'saved' : 'saving')
+        : cardText(language, 'saveForLater');
     const promise = expanded ? personalValuePromise(preview, language) : '';
     const reason = expanded ? personalValueReason(preview, language) : '';
     view.score.textContent = reason;
@@ -1865,31 +1861,12 @@ export function installHoverPreview(
         ? materialHoverReadingPlan(preview, pageCapture, language)
         : null;
     activeRecommendedHeadings = readingPlan?.headings ?? [];
-    const readingTime = pageCapture
-      ? uiText(language, 'readingDuration', {
-          count: Math.max(1, pageCapture.readingTimeMinutes),
-        })
-      : '';
-    const skimMinutes =
-      readingPlan && pageCapture
-        ? Math.max(
-            1,
-            Math.round(
-              (pageCapture.readingTimeMinutes * readingPlan.headings.length) /
-                Math.max(
-                  readingPlan.headings.length,
-                  pageCapture.headings.length,
-                ),
-            ),
-          )
-        : null;
-    view.usefulTime.textContent = expanded
-      ? primaryDecision === 'skim' &&
-        skimMinutes !== null &&
-        skimMinutes < (pageCapture?.readingTimeMinutes ?? 0)
-        ? `${readingPlanText(language, 'skim')} ~${uiText(language, 'minutesShort', { count: skimMinutes })} · ${readingTime}`
-        : readingTime
-      : '';
+    view.usefulTime.textContent =
+      expanded && pageCapture
+        ? cardText(language, 'fullReading', {
+            minutes: Math.max(1, pageCapture.readingTimeMinutes),
+          })
+        : '';
     view.readingPlanSections.replaceChildren();
     if (readingPlan) {
       view.readingPlanTitle.textContent = cardText(language, 'sections');
@@ -1929,16 +1906,7 @@ export function installHoverPreview(
       'highlight',
     );
     view.actionStatus.hidden = true;
-    for (const [decision, button] of view.decisionButtons) {
-      button.dataset.primary = String(decision === primaryDecision);
-      if (decision !== 'save') {
-        button.textContent = readingPlanText(language, decision);
-        button.disabled = decisionPending || contextPending;
-      }
-    }
-    const primaryButton = view.decisionButtons.get(primaryDecision)!;
-    if (view.decisionActions.firstElementChild !== primaryButton)
-      view.decisionActions.prepend(primaryButton);
+    const primaryButton = hasPassages ? view.passagesButton : view.saveButton;
     view.host.dataset.attentionPlan = readingPlan?.title ?? '';
     const weakExtraction =
       expanded && preview.insights?.reliability?.weakExtraction === true;
@@ -1996,7 +1964,7 @@ export function installHoverPreview(
         !focusAfterRefresh.matches(':disabled')
           ? focusAfterRefresh
           : primaryButton.disabled
-            ? view.decisionButtons.get('read')!
+            ? view.closeButton
             : primaryButton;
       focusAfterRefresh = null;
       focusTarget.focus({ preventScroll: true });
@@ -2166,11 +2134,10 @@ export function installHoverPreview(
         keyboardOpening = true;
         if (view.host.style.display === 'block' && activeDetails?.currentPage) {
           keyboardOpening = false;
-          const primary = view.decisionButtons.get(primaryDecision)!;
-          (primary.disabled
-            ? view.decisionButtons.get('read')!
-            : primary
-          ).focus();
+          const primary = view.passagesButton.hidden
+            ? view.saveButton
+            : view.passagesButton;
+          (primary.disabled ? view.closeButton : primary).focus();
         } else {
           schedulePreview(title);
         }

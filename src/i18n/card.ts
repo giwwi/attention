@@ -1,6 +1,11 @@
 import type { UiLanguage } from './ui';
 
 const en = {
+  saveForLater: 'Save for later',
+  passageOne: 'Go to 1 passage',
+  passages: 'Go to {count} passages',
+  passageHint: 'May be new to you · ~{minutes} min',
+  fullReading: 'Full article · ~{minutes} min',
   readHeadline: 'Worth reading',
   skimHeadline: 'A quick skim is enough',
   saveHeadline: 'Save for later',
@@ -24,6 +29,11 @@ type CardCopy = Record<CardTextKey, string>;
 const copy: Record<UiLanguage, CardCopy> = {
   en,
   ru: {
+    saveForLater: 'Сохранить на потом',
+    passageOne: 'Перейти к 1 фрагменту',
+    passages: 'Перейти к {count} фрагментам',
+    passageHint: 'Могут быть новыми для вас · ~{minutes} мин',
+    fullReading: 'Вся статья · ~{minutes} мин',
     readHeadline: 'Стоит прочитать',
     skimHeadline: 'Достаточно просмотреть',
     saveHeadline: 'Сохранить на потом',
@@ -41,6 +51,11 @@ const copy: Record<UiLanguage, CardCopy> = {
     more: 'Подробнее',
   },
   de: {
+    saveForLater: 'Für später speichern',
+    passageOne: 'Zu 1 Textstelle',
+    passages: 'Zu {count} Textstellen',
+    passageHint: 'Vielleicht neu für Sie · ~{minutes} Min.',
+    fullReading: 'Ganzer Artikel · ~{minutes} Min.',
     readHeadline: 'Lesenswert',
     skimHeadline: 'Überfliegen reicht',
     saveHeadline: 'Für später speichern',
@@ -59,6 +74,11 @@ const copy: Record<UiLanguage, CardCopy> = {
     more: 'Mehr Details',
   },
   es: {
+    saveForLater: 'Guardar para después',
+    passageOne: 'Ir a 1 fragmento',
+    passages: 'Ir a {count} fragmentos',
+    passageHint: 'Pueden ser nuevos para ti · ~{minutes} min',
+    fullReading: 'Artículo completo · ~{minutes} min',
     readHeadline: 'Vale la pena leerlo',
     skimHeadline: 'Basta con ojearlo',
     saveHeadline: 'Guardar para más tarde',
@@ -76,6 +96,11 @@ const copy: Record<UiLanguage, CardCopy> = {
     more: 'Más detalles',
   },
   fr: {
+    saveForLater: 'Enregistrer pour plus tard',
+    passageOne: 'Aller à 1 passage',
+    passages: 'Aller à {count} passages',
+    passageHint: 'Peut-être nouveaux pour vous · ~{minutes} min',
+    fullReading: 'Article entier · ~{minutes} min',
     readHeadline: 'Mérite d’être lu',
     skimHeadline: 'Un survol suffit',
     saveHeadline: 'Enregistrer pour plus tard',
@@ -93,6 +118,11 @@ const copy: Record<UiLanguage, CardCopy> = {
     more: 'En savoir plus',
   },
   it: {
+    saveForLater: 'Salva per dopo',
+    passageOne: 'Vai a 1 passaggio',
+    passages: 'Vai a {count} passaggi',
+    passageHint: 'Potrebbero essere nuovi per te · ~{minutes} min',
+    fullReading: 'Articolo completo · ~{minutes} min',
     readHeadline: 'Vale la pena leggerlo',
     skimHeadline: 'Basta una lettura rapida',
     saveHeadline: 'Salva per dopo',
@@ -110,6 +140,11 @@ const copy: Record<UiLanguage, CardCopy> = {
     more: 'Altri dettagli',
   },
   zh: {
+    saveForLater: '保存以便稍后阅读',
+    passageOne: '跳转到 1 处片段',
+    passages: '跳转到 {count} 处片段',
+    passageHint: '可能是你尚未了解的内容 · 约 {minutes} 分钟',
+    fullReading: '全文 · 约 {minutes} 分钟',
     readHeadline: '值得一读',
     skimHeadline: '略读即可',
     saveHeadline: '保存以便稍后阅读',
@@ -127,6 +162,11 @@ const copy: Record<UiLanguage, CardCopy> = {
     more: '更多详情',
   },
   ar: {
+    saveForLater: 'حفظ لوقت لاحق',
+    passageOne: 'الانتقال إلى مقطع واحد',
+    passages: 'الانتقال إلى {count} مقاطع',
+    passageHint: 'قد تكون جديدة لك · نحو {minutes} دقيقة',
+    fullReading: 'المقالة كاملة · نحو {minutes} دقيقة',
     readHeadline: 'تستحق القراءة',
     skimHeadline: 'تكفي قراءة سريعة',
     saveHeadline: 'حفظ لوقت لاحق',
@@ -144,6 +184,11 @@ const copy: Record<UiLanguage, CardCopy> = {
     more: 'مزيد من التفاصيل',
   },
   hi: {
+    saveForLater: 'बाद के लिए सहेजें',
+    passageOne: '1 अंश पर जाएँ',
+    passages: '{count} अंशों पर जाएँ',
+    passageHint: 'आपके लिए नए हो सकते हैं · लगभग {minutes} मिनट',
+    fullReading: 'पूरा लेख · लगभग {minutes} मिनट',
     readHeadline: 'पढ़ने लायक है',
     skimHeadline: 'सरसरी पढ़ना काफ़ी है',
     saveHeadline: 'बाद के लिए सहेजें',

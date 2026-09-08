@@ -1,21 +1,17 @@
 /* global document */
-// An explanation of the four actions, not a simulated article assessment.
+// Product guidance; the website does not analyze the visitor's articles.
 const choices = {
-  read: [
-    'Give a good fit your full attention.',
-    'See the recommendation, the reason, and the reading time together. Then decide whether to dive in.',
+  preview: [
+    'A first signal before you open.',
+    'Hover over an article link in your feed for a first indication of whether it fits your interests. Open the article for a fuller assessment.',
   ],
-  skim: [
-    'Go straight to the useful parts.',
-    'Use the reading guidance to find sections worth a closer look when you don’t need the whole article.',
+  focus: [
+    'Go straight to what may be new.',
+    'Jump to matching passages in the article. The card moves out of the way, the text is highlighted, and you can step through the passages.',
   ],
   save: [
     'Worth reading. Just not right now.',
-    'Keep the article in Attention’s saved list. Come back when you have the time or the right question.',
-  ],
-  skip: [
-    'Leave room for something better.',
-    'Pass on an article that doesn’t fit this moment. Attention suggests; you decide what deserves your time.',
+    'Save the article to Attention’s reading list and see confirmation immediately. Come back when you are ready.',
   ],
 };
 const heading = document.querySelector('#decision-heading');

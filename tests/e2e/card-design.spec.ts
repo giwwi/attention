@@ -53,7 +53,7 @@ test('the compact article card edits context without a reload and keeps detail o
     await expect(card).toHaveAttribute('data-attention-expanded', 'true');
     await expect
       .poll(() => cardTextContent(context, page, '.context-summary'))
-      .toContain('15 мин');
+      .toContain('Работа');
     const compact = (await card.boundingBox())!;
     expect(compact.width).toBeLessThanOrEqual(360);
     expect(compact.height).toBeLessThan(500);
@@ -72,7 +72,6 @@ test('the compact article card edits context without a reload and keeps detail o
     await selectCardOption(context, page, '.context-scenario', 1);
     await expect(card).toHaveCSS('display', 'block');
     await expect(card).toHaveAttribute('data-attention-scenario', 'work');
-    await selectCardOption(context, page, '.context-minutes', 0);
     await fillCardInput(
       context,
       page,
@@ -85,7 +84,7 @@ test('the compact article card edits context without a reload and keeps detail o
     await expect(card).toHaveAttribute('data-attention-scenario', 'learn');
     await expect
       .poll(() => cardTextContent(context, page, '.context-summary'))
-      .toContain('5 мин');
+      .toContain('Учёба');
     await expect
       .poll(() =>
         worker.evaluate(
@@ -96,7 +95,7 @@ test('the compact article card edits context without a reload and keeps detail o
       )
       .toMatchObject({
         scenario: 'learn',
-        availableMinutes: 5,
+        availableMinutes: 15,
         intent: 'Изучить методы работы с вниманием',
       });
     expect(await page.evaluate(() => performance.timeOrigin)).toBe(

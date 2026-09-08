@@ -246,7 +246,7 @@ describe('hover preview content script', () => {
     expect(hosts).toHaveLength(1);
     expect(hosts[0]?.dataset.attentionVersion).toBe(EXTENSION_RUNTIME_VERSION);
     expect(hosts[0]?.dataset.attentionContract).toBe(
-      'feed-compact-current-title-attention-plan-spa-v16',
+      'feed-compact-article-passages-save-v17',
     );
   });
 
@@ -273,7 +273,7 @@ describe('hover preview content script', () => {
     expect(hosts).toHaveLength(1);
     expect(hosts[0]).not.toBe(staleHost);
     expect(hosts[0]?.dataset.attentionContract).toBe(
-      'feed-compact-current-title-attention-plan-spa-v16',
+      'feed-compact-article-passages-save-v17',
     );
   });
 
@@ -958,7 +958,9 @@ describe('hover preview content script', () => {
     expect(host?.dataset.attentionScore).toBe('78');
     expect(host?.dataset.attentionHeadline).toBe('Worth reading');
     expect(host?.dataset.attentionWeakExtraction).toBe('true');
-    expect(host?.dataset.attentionReadingInfo).toContain('1 min read');
+    expect(host?.dataset.attentionReadingInfo).toContain(
+      'Full article · ~1 min',
+    );
     expect(host?.dataset.attentionPlan).toContain('Read 2 sections in ~1 min.');
     expect(onCurrentPageEvaluation).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -1442,7 +1444,7 @@ describe('hover preview content script', () => {
     expect(host?.style.display).toBe('none');
     expect(host?.dataset.attentionExpanded).toBe('false');
     expect(host?.dataset.attentionContract).toBe(
-      'feed-compact-current-title-attention-plan-spa-v16',
+      'feed-compact-article-passages-save-v17',
     );
   });
 

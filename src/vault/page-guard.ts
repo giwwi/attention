@@ -1,5 +1,5 @@
 import { ensureVaultUnlocked, createVaultLockButton } from './ui';
-import { getVaultEpoch, onVaultStateChanged } from './storage';
+import { getVaultEpoch, getVaultStatus, onVaultStateChanged } from './storage';
 
 /** No private controllers or imports run until this gate resolves. */
 export async function initializeVaultPage(): Promise<void> {
@@ -11,7 +11,11 @@ export async function initializeVaultPage(): Promise<void> {
     invalidated = true;
     // Remove secrets, drafts and rendered private data before navigating.
     document.body.replaceChildren();
-    window.location.reload();
+    // Reset broadcasts its invalidation before erasing the stores. A reload
+    // here can destroy the very page performing that reset. The status read
+    // shares the vault lock, so it waits for the lifecycle operation to settle.
+    const reload = (): void => window.location.reload();
+    void getVaultStatus().then(reload, reload);
   };
   onVaultStateChanged(invalidate);
 }
