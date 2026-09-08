@@ -121,6 +121,62 @@ test('shows only the expanded card on the open article title', async () => {
   await expect(host).toHaveCSS('display', 'none');
 });
 
+test('ignores source citations in a conversation while preserving real table and article titles', async () => {
+  const url = 'http://127.0.0.1:4317/source-citations';
+  // Authored chat-like markup: no access to a real conversation or account.
+  await context.route(url, (route) =>
+    route.fulfill({
+      contentType: 'text/html',
+      body: `<!doctype html><html><head><title>Research assistant conversation</title>
+      <style>body { font: 17px system-ui; padding: 24px; } td { padding: 14px; } h2 { margin: 18px 0; }</style>
+      </head><body><main><article data-message-author-role="assistant">
+      <h2>Tools and their prices</h2><table><tbody>
+      <tr><td>Feedly</td><td>Monthly pricing</td><td>Details about the service. <a id="domain-source" href="https://feedly.com/"><span>feedly.com</span></a></td></tr>
+      <tr><td>Recall</td><td>Monthly pricing</td><td>Related features. <a id="brand-source" href="https://example.com/">Recall</a></td></tr>
+      <tr><td>Research</td><td>References</td><td>Methods behind this comparison. <a id="descriptive-source" href="https://example.com/p/research">See the original source</a></td></tr>
+      </tbody></table>
+      <p>Further evidence: <span data-testid="web-citation"><a id="citation-source" href="https://example.com/articles/research">Research methods and practical findings</a></span></p>
+      </article>
+      <section><h2>Reading list</h2><table><tbody><tr>
+      <td>1.</td><td><span class="titleline"><a id="table-title" href="/view?id=42">How researchers evaluate language models</a>
+      <span>(<a id="table-domain" href="https://example.com/">example.com</a>)</span></span></td>
+      </tr></tbody></table></section></main></body></html>`,
+    }),
+  );
+  await page.goto(url);
+  const host = await previewHost();
+  for (const selector of [
+    '#domain-source span',
+    '#brand-source',
+    '#descriptive-source',
+    '#citation-source',
+    '#table-domain',
+  ]) {
+    await page.locator(selector).hover();
+    await page.waitForTimeout(650);
+    await expect(host).toHaveCSS('display', 'none');
+  }
+  await page.keyboard.press('Tab');
+  await expect(page.locator('#domain-source')).toBeFocused();
+  await page.waitForTimeout(650);
+  await expect(host).toHaveCSS('display', 'none');
+  await page.locator('#table-title').hover();
+  await expect(host).toHaveCSS('display', 'block');
+  await expect(host).toHaveAttribute('data-attention-source', 'title-preview');
+  await page.locator('#domain-source').hover();
+  await expect(host).toHaveCSS('display', 'none');
+
+  await page.goto('http://127.0.0.1:4317/feed');
+  await page.locator('#feed-link').hover();
+  await expect(await previewHost()).toHaveCSS('display', 'block');
+  await page.goto('http://127.0.0.1:4317/article/one');
+  await page.locator('h1').hover();
+  await expect(await previewHost()).toHaveAttribute(
+    'data-attention-expanded',
+    'true',
+  );
+});
+
 test('activates on a hydrated SPA article without a reload', async () => {
   await page.goto('http://127.0.0.1:4317/spa');
   const host = await previewHost();

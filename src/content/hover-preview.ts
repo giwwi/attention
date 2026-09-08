@@ -59,7 +59,7 @@ interface HoverPreviewGlobal {
 }
 
 const hoverGlobal = globalThis as typeof globalThis & HoverPreviewGlobal;
-const HOVER_CONTRACT_VERSION = 'feed-compact-article-passages-save-v17';
+const HOVER_CONTRACT_VERSION = 'feed-compact-article-passages-save-v18';
 const MATERIAL_TITLE_SELECTOR = [
   'h1',
   'h2',
@@ -730,6 +730,21 @@ function uniqueLinkedUrls(
   return Array.from(unique, ([url, anchor]) => ({ anchor, url }));
 }
 
+const CITATION_SELECTOR =
+  '[data-citation], [data-citation-id], [data-testid*="citation" i], [role="doc-biblioref"], [role="doc-noteref"], .citation, .citation-link';
+
+function isSourceCitation(element: Element): boolean {
+  if (element.closest(CITATION_SELECTOR)) return true;
+  const anchor = element.closest<HTMLAnchorElement>('a[href]');
+  if (!anchor) return false;
+  // Source chips often expose only a domain (with no citation attributes).
+  // That label is not an article title, even inside an <article> or table row.
+  const label = normalizedText(anchor.innerText || anchor.textContent);
+  return /^(?:https?:\/\/)?(?:[\p{L}\p{N}-]+\.)+[\p{L}]{2,}(?::\d+)?\/?$/iu.test(
+    label,
+  );
+}
+
 function isExcludedUiRegion(element: Element | null): boolean {
   const region = element?.closest(
     'nav, header, footer, aside, [role="navigation"], [role="menubar"], [role="menu"]',
@@ -778,7 +793,8 @@ function findCardLink(element: Element): {
         : semanticCard && links.length === 1
           ? links[0]
           : undefined;
-    if (candidate) {
+    const heading = element.closest<HTMLElement>(MATERIAL_TITLE_SELECTOR);
+    if (candidate && isLikelyMaterialAnchor(candidate.anchor, heading)) {
       return { card: current, anchor: candidate.anchor, url: candidate.url };
     }
     current = current.parentElement;
@@ -796,10 +812,20 @@ function isLikelyMaterialAnchor(
   anchor: HTMLAnchorElement,
   heading: HTMLElement | null,
 ): boolean {
-  if (isExcludedUiRegion(anchor)) return false;
+  if (isExcludedUiRegion(anchor) || isSourceCitation(anchor)) return false;
   if (heading) return true;
   const title = usefulTitle(anchor);
   if (title.length < 12) return false;
+  const titleRegion = anchor.closest(
+    '.titleline, [class*="headline" i], [data-testid*="title" i]',
+  );
+  const tableCell = anchor.closest('td, th, [role="cell"], [role="gridcell"]');
+  if (tableCell && !titleRegion) {
+    // A link embedded in an explanatory/comparison cell is a reference, not
+    // a feed item. Keep descriptive title links in their own cells eligible,
+    // without requiring a particular URL shape (including query-based URLs).
+    return normalizedText(tableCell.textContent) === title && /\s/u.test(title);
+  }
   if (
     anchor.closest(
       'article, [role="article"], .titleline, [class*="headline" i], [data-testid*="post" i], [data-testid*="title" i]',
@@ -822,6 +848,7 @@ export function resolveHoverTargetDetails(
   element: Element,
   point?: HoverPoint,
 ): HoverTargetDetails | null {
+  if (isSourceCitation(element)) return null;
   // Subtitles and other decorations commonly share a wrapper whose class
   // contains "post-title". Suppress that wrapper before the broad heading
   // resolver can mistake it for the article title itself.

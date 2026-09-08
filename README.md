@@ -2,7 +2,7 @@
 
 **A local-first Chrome extension that estimates whether an article is worth your attention right now.**
 
-[Website](https://giwwi.github.io/attention/) · [Download the extension](https://giwwi.github.io/attention/releases/attention-0.25.0.zip)
+[Website](https://giwwi.github.io/attention/) · [Download the extension](https://giwwi.github.io/attention/releases/attention-0.25.1.zip)
 
 ![Attention demo](docs/attention-demo.gif)
 
@@ -14,7 +14,7 @@ A saved personal profile is required before cards appear. Start with a profile p
 
 ## Try it in Chrome
 
-1. Download and unzip the [version 0.25.0](https://giwwi.github.io/attention/releases/attention-0.25.0.zip).
+1. Download and unzip the [version 0.25.1](https://giwwi.github.io/attention/releases/attention-0.25.1.zip).
 2. Open `chrome://extensions`.
 3. Enable **Developer mode**.
 4. Click **Load unpacked** and select the unzipped `attention-extension` folder.
@@ -82,7 +82,7 @@ pnpm build
 
 Load `dist/` through `chrome://extensions` → **Load unpacked**.
 
-For an existing unpacked installation, rebuild and click **Reload** in `chrome://extensions`, then refresh open article tabs. Version 0.25.0 requires a saved profile before cards activate.
+For an existing unpacked installation, rebuild and click **Reload** in `chrome://extensions`, then refresh open article tabs. Version 0.25.1 requires a saved profile before cards activate.
 
 Useful commands:
 

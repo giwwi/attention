@@ -246,7 +246,7 @@ describe('hover preview content script', () => {
     expect(hosts).toHaveLength(1);
     expect(hosts[0]?.dataset.attentionVersion).toBe(EXTENSION_RUNTIME_VERSION);
     expect(hosts[0]?.dataset.attentionContract).toBe(
-      'feed-compact-article-passages-save-v17',
+      'feed-compact-article-passages-save-v18',
     );
   });
 
@@ -273,7 +273,7 @@ describe('hover preview content script', () => {
     expect(hosts).toHaveLength(1);
     expect(hosts[0]).not.toBe(staleHost);
     expect(hosts[0]?.dataset.attentionContract).toBe(
-      'feed-compact-article-passages-save-v17',
+      'feed-compact-article-passages-save-v18',
     );
   });
 
@@ -511,6 +511,73 @@ describe('hover preview content script', () => {
       title: 'A linked material inside a feed card',
       currentPage: false,
     });
+  });
+
+  it.each([
+    ['feedly.com', 'https://feedly.com/'],
+    ['readwise.io', 'https://readwise.io/read'],
+    ['research.example.com', 'https://research.example.com/p/some-article'],
+    ['Recall', 'https://recall.example.com/'],
+    ['See the original source', 'https://example.com/news/research'],
+  ])('ignores a comparison-table source labelled %s', (label, href) => {
+    document.title = 'Conversation';
+    document.body.innerHTML = `<main><article>
+      <h2>Tools and their prices</h2>
+      <table><tbody><tr>
+        <td>Product name</td><td>Monthly price</td>
+        <td>More information about the service. <a href="${href}"><span>${label}</span></a></td>
+      </tr></tbody></table>
+    </article></main>`;
+    for (const selector of ['a', 'a span', 'tr', 'td:last-child']) {
+      expect(
+        resolveHoverTargetDetails(document.querySelector(selector)!),
+      ).toBeNull();
+    }
+  });
+
+  it.each([
+    'https://example.com/research',
+    'https://example.com/?id=42',
+    'https://example.com/p/a-useful-paper',
+  ])('preserves a standalone article title in a table: %s', (href) => {
+    document.body.innerHTML = `<table><tbody><tr>
+      <td>1.</td><td><a href="${href}">How researchers evaluate language models</a></td>
+      <td>Research Journal</td>
+    </tr></tbody></table>`;
+    expect(
+      resolveHoverTargetDetails(document.querySelector('a')!),
+    ).toMatchObject({
+      url: href,
+      title: 'How researchers evaluate language models',
+      currentPage: false,
+    });
+  });
+
+  it('preserves a Hacker News title next to its domain label', () => {
+    document.body.innerHTML = `<table><tbody><tr class="athing"><td class="title">
+      <span class="titleline"><a href="https://example.com/?id=42">How researchers evaluate language models</a>
+      <span class="sitebit">(<a href="https://news.ycombinator.com/from?site=example.com">example.com</a>)</span></span>
+    </td></tr></tbody></table>`;
+    const links = document.querySelectorAll('a');
+    expect(resolveHoverTargetDetails(links[0]!)?.title).toBe(
+      'How researchers evaluate language models',
+    );
+    expect(resolveHoverTargetDetails(links[1]!)).toBeNull();
+  });
+
+  it.each([
+    'data-citation="42"',
+    'data-testid="web-citation"',
+    'role="doc-biblioref"',
+  ])('ignores explicit citation chips outside a table: %s', (attribute) => {
+    document.body.innerHTML = `<article><h2>Research findings</h2>
+        <p>Evidence is available here: <span ${attribute}><a href="https://example.com/p/reading-methods">Research methods and practical findings</a></span></p>
+      </article>`;
+    for (const selector of ['a', 'span']) {
+      expect(
+        resolveHoverTargetDetails(document.querySelector(selector)!),
+      ).toBeNull();
+    }
   });
 
   it('uses the current page URL for an unlinked article h1', () => {
@@ -1444,7 +1511,7 @@ describe('hover preview content script', () => {
     expect(host?.style.display).toBe('none');
     expect(host?.dataset.attentionExpanded).toBe('false');
     expect(host?.dataset.attentionContract).toBe(
-      'feed-compact-article-passages-save-v17',
+      'feed-compact-article-passages-save-v18',
     );
   });
 
