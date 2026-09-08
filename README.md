@@ -1,12 +1,12 @@
 # Attention
 
-**A local-first Chrome extension that estimates whether an article is worth your attention right now.**
+**A local-first Chrome extension that helps you find passages relevant to your task, with their context.**
 
-[Website](https://giwwi.github.io/attention/) · [Download the extension](https://giwwi.github.io/attention/releases/attention-0.27.0.zip)
+[Website](https://giwwi.github.io/attention/) · [Download the extension](https://giwwi.github.io/attention/releases/attention-0.28.0.zip)
 
 ![Attention demo](docs/attention-demo.gif)
 
-Attention combines the article, your personal profile, and your current goal to suggest **Read, Skim, Save, or Skip**. The decision lives in a card on the article page. The extension popup is a short launcher with access to **Saved** and **Settings**; it does not show or calculate a second assessment.
+Attention combines the article, your personal profile, and your current goal to suggest **Read, Skim, or Skip**. **Save for later** is a separate choice, not a lower score on that scale. The decision lives in a card on the article page. The extension popup is a short launcher with access to **Saved** and **Settings**; it does not show or calculate a second assessment.
 
 The **Utility Score** is an estimate on a 0–100 scale, shown as **/100** in the card's details. It is not a probability that the article will be useful or correct. Article and passage reading durations are estimates, not measured time savings. Later feedback can calibrate future predictions locally.
 
@@ -14,12 +14,12 @@ Before a profile is saved, cards invite you to create one. Personal reading reco
 
 ## Try it in Chrome
 
-1. Download and unzip the [version 0.27.0](https://giwwi.github.io/attention/releases/attention-0.27.0.zip).
+1. Download and unzip the [version 0.28.0](https://giwwi.github.io/attention/releases/attention-0.28.0.zip).
 2. Open `chrome://extensions`.
 3. Enable **Developer mode**.
 4. Click **Load unpacked** and select the unzipped `attention-extension` folder.
 5. Pin **Attention**, open an article, and click the extension icon.
-6. On first use, create your local vault with a password of at least 12 characters. Keep the password: Attention cannot recover it. Then choose **ChatGPT** or **Claude**, follow the handoff instructions, paste the returned profile, review it and choose **Use this profile**. Before setup, hovering over a feed headline or the title of an open article shows a friendly **Create my profile** card. Its button opens setup, including vault creation on a fresh installation. Until a meaningful profile is saved, Attention does not extract articles, evaluate them or track reading. Saving the profile enables recommendations in already open tabs. Start with either ChatGPT or Claude; you can add the other profile later. A detailed manual profile is available under **Other ways**; the short AI questionnaire is offered only to existing users.
+6. You can open **See an example first** before setup: a clearly labeled fictional article shows a useful paragraph with its limitation. It uses no personal data and makes no AI request. To evaluate your own articles, create your local vault with a password of at least 12 characters. Keep the password: Attention cannot recover it. Then choose **ChatGPT** or **Claude**, follow the handoff instructions, paste the returned profile, review it and choose **Use this profile**. Before setup, hovering over a feed headline or the title of an open article shows a friendly **Create my profile** card. Its button opens setup, including vault creation on a fresh installation. Until a meaningful profile is saved, Attention does not extract articles, evaluate them or track reading. Saving the profile enables recommendations in already open tabs. Start with either ChatGPT or Claude; you can add the other profile later. A detailed manual profile is available under **Other ways**; the short AI questionnaire is offered only to existing users.
 
 Deleting the profile returns article and feed cards to the setup invitation. A locked existing vault stays silent until you unlock it. An old “onboarding complete” flag, an unfinished import, empty profile or format preferences alone does not enable recommendations. Existing saved profiles with personal context continue to work.
 
@@ -35,15 +35,17 @@ To save a selected passage with context to Readwise, enable **Settings → Highl
 
 No API key is required for the local evaluation. To configure optional AI analysis, open **Settings → AI**, paste a Vercel AI Gateway key, and keep the suggested Gemini model or enter another `provider/model` identifier. Choose **Check with AI** directly on the article card. The same visible row shows **Checked with AI** after success or lets you retry after an error. If AI is not connected or local-only mode is enabled, the disabled control explains why it is unavailable. Opening the card, popup, or details does not itself send an AI request.
 
-## Contextual passages (0.27.0)
+## Contextual passages and cautious assessments (0.28.0)
 
 Local selection scans paragraphs, lists and tables across the extracted article and ranks their connection to your current goal and selected profile interests or learning topics. Examples, procedures and limitations can qualify even when they are not central claims. A highlight keeps whole neighboring blocks needed for context, within the same section; the core paragraph is more prominent. If the context cannot fit without clipping, that candidate is omitted. The panel saves the full selected text to Readwise, including its context.
 
 Local matches are described as related to your goal or interests. Missing knowledge evidence does not make a passage “new.” The card says when no clear matches were found. Local selection is a lexical heuristic: it can miss paraphrases and cannot reliably establish what a person knows or whether every reference has enough context.
 
-An explicit **Check with AI** also asks the model to select passage IDs and necessary neighboring blocks, separately from the article assessment. The source text comes from those exact blocks. Invented IDs and selections with insufficient context are rejected. An AI passage may be labeled as a possible addition to your knowledge only when the model cites concrete, explicitly stated knowledge from the selected profile; this remains an estimate.
+An explicit **Check with AI** asks for the article assessment and passage IDs in **one request**, using the same source blocks for both. The source text comes from those exact blocks. Invented IDs, quotes outside the supplied text and selections with insufficient context are rejected or left uncertain. An AI passage may be labeled as a possible addition to your knowledge only when the model cites concrete, explicitly stated knowledge from the selected profile; this remains an estimate.
 
-Passage selection uses up to four additional AI requests, with at most 16,000 characters of core blocks plus up to two 6,000-character neighboring blocks per request. Very long articles receive a bounded sample spread across the article; incomplete coverage or failed requests are reported. If all passage requests fail, local selection is used with an explanation. Local-only mode makes no AI requests. A map is bounded to 800 blocks / 240,000 characters, and a displayed passage to 6,000 characters. Changes to the article invalidate its highlights and cached selection.
+The shared source budget is 24,000 characters of whole blocks and their context, distributed across sections and their beginnings, middles and endings. If the article does not fit, the card says **Part of the article assessed** and avoids a confident Read or Skip. This sampling can miss important content. There are no automatic retries or extra passage-selection requests. A failed AI check falls back to local evaluation with an explanation. Successful results retain request count, token usage when returned by the provider, and elapsed time in the encrypted evaluation; these are not a price quote or analytics sent to the developer. Local-only mode makes no AI requests. A map is bounded to 800 blocks / 240,000 characters, and a displayed passage to 6,000 characters. Changes to the article invalidate its highlights and cached selection.
+
+Local relevance uses weighted coverage of the task, with each concept and its aliases counted once. A title match can suggest a topic, but applicability requires evidence in the body. For Work, absent task evidence is shown as **Not sure yet**, rather than a confident recommendation. Browsing history cannot silently replace the current goal. Quality wording describes visible explanations, links and other textual markers; it does not claim fact-checking. These remain heuristics, not demonstrated measures of usefulness.
 
 ## What it does
 
@@ -92,7 +94,7 @@ pnpm build
 
 Load `dist/` through `chrome://extensions` → **Load unpacked**.
 
-For an existing unpacked installation, rebuild and click **Reload** in `chrome://extensions`, then refresh open article tabs. Version 0.27.0 replaces sentence highlights with contextual passages. A saved profile is still required for evaluation.
+For an existing unpacked installation, rebuild and click **Reload** in `chrome://extensions`, then refresh open article tabs. Version 0.28.0 recalculates cached assessments with task evidence and one shared AI source set. Earlier raw-score versions are excluded from the new calibration fit. A saved profile is still required for evaluation.
 
 Useful commands:
 

@@ -1,3 +1,4 @@
+import { createProfileDemo } from '../onboarding/profile-demo';
 import { vaultLocale, vaultText } from '../i18n/vault';
 import type { UiLanguage } from '../i18n/ui';
 import {
@@ -117,7 +118,11 @@ export function ensureVaultUnlocked(): Promise<void> {
     description.textContent = t(creating ? 'createDescription' : 'description');
     description.hidden = false;
     sessionHint.hidden = false;
-    if (creating) content.append(element('p', t('createHint'), 'vault-hint'));
+    if (creating)
+      content.append(
+        createProfileDemo(language),
+        element('p', t('createHint'), 'vault-hint'),
+      );
     const form = element('form');
     form.noValidate = true;
     const passwordLabel = element('label', t('password'));

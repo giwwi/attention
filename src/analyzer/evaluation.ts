@@ -18,6 +18,7 @@ import {
   estimateUsefulMinutes,
   normalizeUtilityComponents,
   utilityRecommendation,
+  uncertainAssessment,
   type UtilityComponents,
 } from './utility';
 import {
@@ -105,7 +106,10 @@ export function finalizeMaterialEvaluation({
       ? { suggestedScenario: scenarioFit.suggestedScenario }
       : {}),
     recommendedAction:
-      recommendedActionOverride ?? utilityRecommendation(utilityScore),
+      recommendedActionOverride ??
+      (uncertainAssessment(insights)
+        ? 'skim'
+        : utilityRecommendation(utilityScore)),
     utilityScore,
     prediction: createRawUtilityPrediction(
       utilityScore,

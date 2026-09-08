@@ -70,7 +70,7 @@ export function createEvaluationCacheVersion(
 ): EvaluationCacheVersion {
   return {
     // Revision 7 selects contextual passages independently of summary claims.
-    schemaVersion: 7,
+    schemaVersion: 8,
     ...sources,
     articleText: features.articleTextFingerprint,
     analysisContext: analysisContextFingerprint(context),
@@ -83,7 +83,7 @@ function sameSources(
   context: AnalysisContext,
 ): boolean {
   return Boolean(
-    stored?.schemaVersion === 7 &&
+    stored?.schemaVersion === 8 &&
     stored.profile === sources.profile &&
     stored.history === sources.history &&
     stored.readwise === sources.readwise &&

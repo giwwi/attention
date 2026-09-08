@@ -22,7 +22,6 @@ export const QUALITY_WEIGHTS = {
 /** Limits that control the size and latency of a cloud analysis request. */
 export const AI_ANALYSIS_LIMITS = {
   contentCharacters: 24_000,
-  retainedEndingCharacters: 6_000,
   outputReasonCharacters: 700,
   requestTimeoutMs: 25_000,
   claims: 8,

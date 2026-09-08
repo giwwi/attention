@@ -40,9 +40,7 @@ describe('LocalAnalyzer', () => {
     expect(result.utilityScore).toBeLessThan(70);
     expect(result.components.quality).toBeLessThan(60);
     expect(result.confidence).toBeGreaterThan(0.5);
-    expect(result.analyzerId).toBe(
-      'local-claim-assessment-v6-contextual-passages',
-    );
+    expect(result.analyzerId).toBe('local-claim-assessment-v7-task-evidence');
     expect(result.profileSignals).toEqual([]);
   });
 
@@ -58,7 +56,8 @@ describe('LocalAnalyzer', () => {
 
     expect(result.recommendedAction).toBe('skim');
     expect(result.recommendedSections[0]).toBe('Практическая модель выбора');
-    expect(result.expectedValue).toContain('выглядит релевантным');
+    expect(result.insights?.taskEvidence).toBe('metadata-only');
+    expect(result.expectedValue).toContain('пока не удалось подтвердить');
   });
 
   it('matches common Russian word forms in the stated intent', async () => {
@@ -68,7 +67,8 @@ describe('LocalAnalyzer', () => {
       scenario: 'work',
     });
 
-    expect(result.expectedValue).toContain('выглядит релевантным');
+    expect(result.insights?.taskEvidence).toBe('metadata-only');
+    expect(result.expectedValue).toContain('пока не удалось подтвердить');
     expect(result.recommendedSections[0]).toBe('Почему внимание ограничено');
   });
 
@@ -82,7 +82,7 @@ describe('LocalAnalyzer', () => {
     expect(result.reason).toContain('Не удалось выделить');
   });
 
-  it('uses an active goal to explain personal value', async () => {
+  it('does not let a profile goal stand in for missing body evidence', async () => {
     const result = await analyzer.analyze(
       material({
         title: 'Новые исследования AI-агентов',
@@ -108,8 +108,8 @@ describe('LocalAnalyzer', () => {
     );
 
     expect(['read', 'skim']).toContain(result.recommendedAction);
-    expect(result.reason).toContain('текущей задаче');
-    expect(result.expectedValue).toContain('продвинуть активную цель');
+    expect(result.reason).toContain('пока не удалось подтвердить');
+    expect(result.insights?.taskEvidence).toBe('metadata-only');
     expect(result.profileSignals).toHaveLength(1);
   });
 

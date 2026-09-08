@@ -1,7 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   buildAiAnalysisPrompt,
-  compactContent,
   normalizeOutput,
 } from '../src/analyzer/ai-gateway-analyzer';
 import { FallbackAnalyzer } from '../src/analyzer/fallback-analyzer';
@@ -267,15 +266,6 @@ describe('AI analyzer input and output boundary', () => {
     expect(prompt).not.toContain('PRIVATE_NOTION_TEXT');
     expect(prompt).not.toContain('Private Vault note');
     expect(prompt).not.toContain('Private Notion page');
-  });
-
-  it('bounds long article input while retaining its ending', () => {
-    const content = `${'a'.repeat(30_000)}THE_END`;
-    const compacted = compactContent(content);
-
-    expect(compacted.length).toBeLessThanOrEqual(24_100);
-    expect(compacted).toContain('ЧАСТЬ ТЕКСТА ПРОПУЩЕНА');
-    expect(compacted.endsWith('THE_END')).toBe(true);
   });
 
   it('drops hallucinated section names and clamps confidence', () => {

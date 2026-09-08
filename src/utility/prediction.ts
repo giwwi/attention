@@ -6,7 +6,7 @@ import type {
 } from '../shared/types';
 
 /** Increment when the raw scoring policy changes; old policies do not train this one. */
-export const RAW_UTILITY_SCORE_VERSION = 'scenario-utility-v1';
+export const RAW_UTILITY_SCORE_VERSION = 'scenario-utility-v2-task-evidence';
 export const UTILITY_CALIBRATION_VERSION = 'utility-calibration-v2';
 
 function score(value: unknown): value is number {

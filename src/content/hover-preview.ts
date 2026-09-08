@@ -1,3 +1,5 @@
+import { uncertainAssessment } from '../analyzer/utility';
+import { assessmentNote } from '../i18n/assessment-notes';
 import { passageText } from '../i18n/passages';
 import { isTrustedUserInteraction } from './user-interaction';
 import { installCardHost } from './card-view';
@@ -102,6 +104,7 @@ function verdictLabel(
 const extractedPageCache = new PageCaptureCache<PageCapture | null>();
 
 export function previewVerdict(preview: HoverPreview): HoverPreviewVerdict {
+  if (uncertainAssessment(preview.insights)) return 'maybe';
   if (preview.recommendedAction === 'open') return 'read';
   if (preview.recommendedAction === 'skip') return 'skip';
   return 'maybe';
@@ -1324,6 +1327,10 @@ export function personalValueReason(
   preview: HoverPreview,
   language: UiLanguage = DEFAULT_UI_LANGUAGE,
 ): string {
+  if (preview.insights?.analysisCoverage === 'partial')
+    return assessmentNote(language, 'partialNote');
+  if (uncertainAssessment(preview.insights))
+    return assessmentNote(language, 'goal');
   if (preview.suggestedScenario === 'learn') {
     return uiText(language, 'betterForLearn');
   }
@@ -1976,7 +1983,14 @@ export function installHoverPreview(
       skip: 'skipHeadline',
     };
     view.verdict.textContent = expanded
-      ? cardText(language, headlineKeys[primaryDecision])
+      ? uncertainAssessment(preview.insights)
+        ? assessmentNote(
+            language,
+            preview.insights?.analysisCoverage === 'partial'
+              ? 'partial'
+              : 'unclear',
+          )
+        : cardText(language, headlineKeys[primaryDecision])
       : label;
     view.card.classList.toggle('expanded', expanded);
     view.host.dataset.attentionExpanded = String(expanded);

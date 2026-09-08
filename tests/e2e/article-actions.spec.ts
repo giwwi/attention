@@ -79,45 +79,33 @@ test('article actions jump to real passages without section headings and save wi
         const prompt = strings(JSON.parse(String(init?.body ?? '{}'))).find(
           (text) => text.includes('"coreIds"'),
         );
-        if (prompt) {
-          const batch = JSON.parse(prompt.slice(prompt.lastIndexOf('\n') + 1));
-          return Response.json({
-            content: [
-              {
-                type: 'text',
-                text: JSON.stringify({
-                  passages: batch.blocks
-                    .filter(
-                      (block: { text: string; id: string }) =>
-                        batch.coreIds.includes(block.id) &&
-                        claims.includes(block.text),
-                    )
-                    .map((block: { id: string }) => ({
-                      coreBlockId: block.id,
-                      contextBlockIds: [block.id],
-                      queryIndex: 0,
-                      relevance: 0.9,
-                      confidence: 0.8,
-                      contextSufficient: true,
-                      contribution: 'Evidence relevant to structured review.',
-                      knowledgeEvidenceIds: [],
-                      possiblyNew: false,
-                    })),
-                }),
-              },
-            ],
-            finishReason: { unified: 'stop', raw: 'stop' },
-            usage: {
-              inputTokens: { total: 100 },
-              outputTokens: { total: 100 },
-            },
-          });
-        }
+        const batch = JSON.parse(
+          prompt!
+            .split('BEGIN_UNTRUSTED_MATERIAL_JSON\n')[1]!
+            .split('\nEND_UNTRUSTED_MATERIAL_JSON')[0]!,
+        ).material;
+        const passages = batch.blocks
+          .filter(
+            (block: { text: string; id: string }) =>
+              batch.coreIds.includes(block.id) && claims.includes(block.text),
+          )
+          .map((block: { id: string }) => ({
+            coreBlockId: block.id,
+            contextBlockIds: [block.id],
+            queryIndex: 0,
+            relevance: 0.9,
+            confidence: 0.8,
+            contextSufficient: true,
+            contribution: 'Evidence relevant to structured review.',
+            knowledgeEvidenceIds: [],
+            possiblyNew: false,
+          }));
         return Response.json({
           content: [
             {
               type: 'text',
               text: JSON.stringify({
+                passages,
                 relevance: 75,
                 actionability: 70,
                 keyClaims: claims.map((claim) => ({

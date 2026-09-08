@@ -1,3 +1,4 @@
+import { createProfileDemo } from './profile-demo';
 import {
   mergeProfiles,
   resolveMerge,
@@ -327,6 +328,7 @@ export class ProfileOnboarding {
     this.options = options;
     this.bindEvents();
     this.translateStatic();
+    this.renderExample();
     new MutationObserver(() => {
       if (this.root.isConnected) this.translate();
     }).observe(document.documentElement, {
@@ -335,8 +337,17 @@ export class ProfileOnboarding {
     });
   }
 
+  private renderExample(): void {
+    this.root
+      .querySelector('#profile-example-slot')
+      ?.replaceChildren(
+        createProfileDemo(normalizeUiLanguage(document.documentElement.lang)),
+      );
+  }
+
   translate(): void {
     this.translateStatic();
+    this.renderExample();
     this.renderProfileBar();
     // Changing the interface language must not reopen an inactive import view.
     if (this.root.hidden) return;

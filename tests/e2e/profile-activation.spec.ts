@@ -89,6 +89,25 @@ test('cold cards guide setup; profile save activates existing tabs; deletion res
     let popup = await opened;
     await expect(popup).toHaveURL(popupUrl);
     await popup.setViewportSize({ width: 380, height: 850 });
+    const demo = popup.locator('[data-profile-demo]');
+    await expect(demo).toBeVisible();
+    const beforeDemo = await worker.evaluate(() =>
+      chrome.storage.local.get(null),
+    );
+    await demo.locator('summary').click();
+    await expect(demo).toContainText('made-up example');
+    await demo.getByRole('button', { name: 'Show the useful passage' }).click();
+    await expect(demo.getByRole('status')).toBeVisible();
+    await expect(demo.locator('article p').last()).toBeFocused();
+    await expect(demo.locator('article p').last()).toContainText('However');
+    expect(await worker.evaluate(() => chrome.storage.local.get(null))).toEqual(
+      beforeDemo,
+    );
+    await popup.screenshot({
+      path: 'output/playwright/profile-demo-before-vault.png',
+      fullPage: true,
+    });
+    await demo.locator('summary').click();
     await createVaultThroughUi(popup);
     await expect(popup.locator('#profile-source-step')).toBeVisible();
     await expect(

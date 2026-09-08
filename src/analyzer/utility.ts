@@ -1,4 +1,7 @@
-import type { MaterialDecision } from '../shared/types';
+import type {
+  MaterialDecision,
+  MaterialEvaluationInsights,
+} from '../shared/types';
 
 export interface UtilityComponents {
   relevance: number;
@@ -43,8 +46,7 @@ export function calculateUtilityScore(components: UtilityComponents): number {
 export function utilityRecommendation(score: number): MaterialDecision {
   const normalized = normalizeScore(score);
   if (normalized >= 70) return 'read';
-  if (normalized >= 50) return 'skim';
-  if (normalized >= 35) return 'save';
+  if (normalized >= 35) return 'skim';
   return 'skip';
 }
 
@@ -57,5 +59,15 @@ export function estimateUsefulMinutes(
   return Math.max(
     1,
     Math.round(fullReadingTime * (normalizeScore(utilityScore) / 100)),
+  );
+}
+
+/** Saving is a user action. Incomplete evidence must not produce a confident Read/Skip. */
+export function uncertainAssessment(
+  insights?: MaterialEvaluationInsights,
+): boolean {
+  return (
+    insights?.analysisCoverage === 'partial' ||
+    (insights?.taskEvidence !== undefined && insights.taskEvidence !== 'body')
   );
 }

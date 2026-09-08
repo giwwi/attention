@@ -328,6 +328,7 @@ test('refreshes context and AI availability in the same open document', async ()
             text: JSON.stringify({
               relevance: 75,
               actionability: 70,
+              passages: [],
               keyClaims: [
                 {
                   claim:
@@ -456,6 +457,19 @@ test('completes reading feedback from actual reading without a Read button', asy
     'display',
     'none',
   );
+  // Start reading, let its session attach, then move to the end. A single
+  // instant jump could finish before asynchronous session creation and never
+  // include any movement during the actual reading session.
+  await page.mouse.wheel(0, 180);
+  await expect
+    .poll(() =>
+      worker.evaluate(
+        async () =>
+          (await attentionVault.privateStorage.get('attentionSessions'))
+            .attentionSessions?.length,
+      ),
+    )
+    .toBe(1);
   await page.keyboard.press('End');
   const prompt = page.locator('[data-attention-outcome-prompt]');
   // Exercise the actual visible-time threshold and heartbeat in the isolated

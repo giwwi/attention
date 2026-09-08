@@ -289,6 +289,14 @@ export interface AssessmentReliability {
 }
 
 export interface MaterialEvaluationInsights {
+  taskEvidence?: 'body' | 'metadata-only' | 'no-match' | 'no-context';
+  analysisCoverage?: 'complete' | 'partial';
+  analysisUsage?: {
+    requests: number;
+    inputTokens: number | null;
+    outputTokens: number | null;
+    elapsedMs: number;
+  };
   readingPassages?: ReadingPassages;
   keyClaims: KeyClaimAssessment[];
   likelyNewClaims: string[];
@@ -369,7 +377,7 @@ export interface StoredEvaluation {
 }
 
 export interface EvaluationCacheVersion {
-  schemaVersion: 6 | 7;
+  schemaVersion: 6 | 7 | 8;
   profile: string;
   history: string;
   readwise: string;

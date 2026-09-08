@@ -17,8 +17,10 @@ import { extractKeyClaims } from './claims';
 import { finalizeMaterialEvaluation } from './evaluation';
 import { calibrateLocalConfidence } from './reliability';
 import { textTokens, tokenOverlap } from './text-match';
+import { assessGoalEvidence, type GoalEvidence } from './goal-match';
 import { normalizeScore, type UtilityComponents } from './utility';
 import { measureAsync } from '../performance/metrics';
+import { assessMaterialScenarioFit } from '../scenario/material-activity';
 import { scenarioSignalWeight } from '../scenario/signal-weights';
 
 function rankSections(
@@ -115,6 +117,7 @@ function expectedValue(
   material: PageCapture,
   context: AnalysisContext,
   signals: PersonalizationSignal[],
+  evidence: GoalEvidence,
 ): string {
   const utility = utilityScores(signals, context.scenario);
   const negative = strongestSignal(signals, context.scenario, 'negative');
@@ -127,7 +130,11 @@ function expectedValue(
   if (utility.negative > utility.positive && negative?.kind === 'expertise') {
     return 'Материал может быстро освежить основы, но, вероятно, даст мало нового относительно указанного уровня экспертизы.';
   }
-  const goal = signals.find((signal) => signal.kind === 'goal');
+  if (evidence.body === 0)
+    return 'По тексту пока не удалось подтвердить, что материал поможет с вашей задачей.';
+  const goal = signals.find(
+    (signal) => signal.kind === 'goal' && signal.effect === 'positive',
+  );
   if (goal) {
     return `Материал может помочь продвинуть активную цель «${goal.label}».`;
   }
@@ -154,6 +161,7 @@ function confidenceScore(
   material: PageCapture,
   context: AnalysisContext,
   signals: PersonalizationSignal[],
+  evidence: GoalEvidence,
 ): number {
   let score = 0.42;
   if (material.isArticle) score += 0.08;
@@ -161,15 +169,7 @@ function confidenceScore(
   if (material.headings.length > 0) score += 0.05;
   if (material.readingTimeMinutes > 0) score += 0.05;
 
-  if (context.intent) {
-    const overlap = tokenOverlap(
-      textTokens(context.intent),
-      textTokens(
-        [material.title, material.excerpt, ...material.headings].join(' '),
-      ),
-    );
-    score += overlap > 0 ? 0.08 : -0.1;
-  }
+  if (context.intent) score += evidence.body >= 0.5 ? 0.08 : -0.1;
   const usefulSignals = signals.filter((signal) => signal.effect !== 'neutral');
   if (usefulSignals.length > 0) {
     score += Math.min(0.12, (usefulSignals[0]?.confidence ?? 0) * 0.12);
@@ -187,25 +187,11 @@ function localComponents(
   material: PageCapture,
   context: AnalysisContext,
   signals: PersonalizationSignal[],
+  evidence: GoalEvidence,
 ): UtilityComponents {
   const weighted = utilityScores(signals, context.scenario);
-  const positiveSignals = signals.filter(
-    (signal) => signal.effect === 'positive',
-  );
   const negativeSignals = signals.filter(
     (signal) => signal.effect === 'negative',
-  );
-  const intentOverlap = context.intent
-    ? tokenOverlap(
-        textTokens(context.intent),
-        textTokens(
-          [material.title, material.excerpt, ...material.headings].join(' '),
-        ),
-      )
-    : 0;
-  const hasGoal = positiveSignals.some((signal) => signal.kind === 'goal');
-  const hasInterest = positiveSignals.some(
-    (signal) => signal.kind === 'interest',
   );
   const repetitionRisk = negativeSignals.some(
     (signal) => signal.kind === 'expertise' || signal.kind === 'lowValueTopic',
@@ -216,11 +202,11 @@ function localComponents(
 
   return {
     relevance: normalizeScore(
-      42 +
-        Math.min(48, weighted.positive * 15) -
-        Math.min(42, weighted.negative * 14) +
-        intentOverlap * 30 +
-        (hasGoal ? 10 : hasInterest ? 5 : 0),
+      38 +
+        evidence.metadata * 12 +
+        evidence.body * 38 +
+        Math.min(14, weighted.positive * 8) * (0.25 + 0.75 * evidence.body) -
+        Math.min(38, weighted.negative * 14),
     ),
     novelty: normalizeScore(
       58 -
@@ -228,12 +214,8 @@ function localComponents(
         (preferenceRisk ? 14 : 0) +
         (material.headings.length >= 4 ? 5 : 0),
     ),
-    actionability: normalizeScore(
-      43 +
-        (hasGoal ? 30 : 0) +
-        intentOverlap * 24 +
-        (material.headings.length > 0 ? 8 : 0),
-    ),
+    // Metadata, headings and a profile topic are not evidence of practical help.
+    actionability: normalizeScore(32 + evidence.practical * 58),
     quality: normalizeScore(
       42 +
         (material.extractionMethod === 'readability' ? 22 : 8) +
@@ -245,7 +227,7 @@ function localComponents(
 }
 
 export class LocalAnalyzer implements Analyzer {
-  readonly id = 'local-claim-assessment-v6-contextual-passages';
+  readonly id = 'local-claim-assessment-v7-task-evidence';
 
   async analyze(
     material: PageCapture,
@@ -254,6 +236,24 @@ export class LocalAnalyzer implements Analyzer {
   ): Promise<MaterialEvaluation> {
     return measureAsync('analysis.local', async () => {
       const signals = profileContext?.signals ?? [];
+      const goal =
+        context.intent.trim() ||
+        strongestSignal(
+          signals.filter((signal) => signal.kind === 'goal'),
+          context.scenario,
+          'positive',
+        )?.label ||
+        strongestSignal(
+          signals.filter((signal) =>
+            ['interest', 'learningArea', 'leisurePreference'].includes(
+              signal.kind,
+            ),
+          ),
+          context.scenario,
+          'positive',
+        )?.label ||
+        '';
+      const evidence = assessGoalEvidence(material, goal);
       const insights = buildLocalInsights(
         material,
         extractKeyClaims(material.content, material.title, material.language),
@@ -264,12 +264,25 @@ export class LocalAnalyzer implements Analyzer {
         context,
         profileContext,
       );
+      if (context.scenario === 'work')
+        insights.taskEvidence = !goal
+          ? 'no-context'
+          : evidence.body >= 0.25
+            ? 'body'
+            : evidence.metadata > 0
+              ? 'metadata-only'
+              : 'no-match';
       const components = {
-        ...localComponents(material, context, signals),
+        ...localComponents(material, context, signals, evidence),
         novelty: calculateNoveltyScore(insights.keyClaims),
         quality: calculateQualityScore(insights.qualityBreakdown),
       };
-      const baseConfidence = confidenceScore(material, context, signals);
+      const baseConfidence = confidenceScore(
+        material,
+        context,
+        signals,
+        evidence,
+      );
       const confidence = insights.reliability
         ? calibrateLocalConfidence(baseConfidence, insights.reliability)
         : baseConfidence;
@@ -278,10 +291,15 @@ export class LocalAnalyzer implements Analyzer {
         shouldSkipMaterial(material, signals, context.scenario)
           ? 'skip'
           : undefined;
+      if (recommendedActionOverride === 'skip') delete insights.taskEvidence;
       const reasonOverride =
         !material.isArticle || material.wordCount < 80
           ? 'Не удалось выделить достаточно содержательного материала для уверенной рекомендации.'
-          : undefined;
+          : insights.taskEvidence &&
+              insights.taskEvidence !== 'body' &&
+              !assessMaterialScenarioFit(material, context).reason
+            ? 'По тексту пока не удалось подтвердить связь с вашей задачей.'
+            : undefined;
       return Promise.resolve(
         finalizeMaterialEvaluation({
           analyzerId: this.id,
@@ -292,7 +310,7 @@ export class LocalAnalyzer implements Analyzer {
           insights,
           expectedValue:
             context.scenario === 'work'
-              ? expectedValue(material, context, signals)
+              ? expectedValue(material, context, signals, evidence)
               : undefined,
           recommendedSections: rankSections(
             material.headings,

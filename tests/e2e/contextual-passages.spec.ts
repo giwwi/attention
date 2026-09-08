@@ -69,64 +69,61 @@ for (const mode of ['local', 'ai'] as const)
                   ? Object.values(value).flatMap(strings)
                   : [];
             const prompt = strings(JSON.parse(String(init?.body ?? '{}'))).find(
-              (text) => text.includes('"coreIds"'),
+              (text) => text.includes('BEGIN_UNTRUSTED_MATERIAL_JSON'),
             );
-            let output: unknown;
-            if (prompt) {
-              const batch = JSON.parse(
-                prompt.slice(prompt.lastIndexOf('\n') + 1),
-              );
-              const index = batch.blocks.findIndex(
-                (block: { text: string }) => block.text === useful,
-              );
-              const block = batch.blocks[index];
-              output = {
-                passages: [
-                  {
-                    coreBlockId: block.id,
-                    contextBlockIds: [block.id, batch.blocks[index + 1].id],
-                    queryIndex: 0,
-                    relevance: 0.9,
-                    confidence: 0.9,
-                    contextSufficient: true,
-                    contribution: 'A comparison procedure and its limitation.',
-                    knowledgeEvidenceIds: [],
-                    possiblyNew: true,
-                  },
-                ],
-              };
-            } else {
-              output = {
-                relevance: 85,
-                actionability: 85,
-                keyClaims: [
-                  {
-                    claim: useful,
-                    sourceExcerpt: useful,
-                    type: 'recommendation',
-                    importance: 'supporting',
-                    knownProbability: 0.5,
-                    noveltyReason: 'Unknown familiarity',
-                    confidence: 0.4,
-                  },
-                ],
-                noveltySummary: 'Unknown familiarity',
-                noveltyConfidence: 0.4,
-                qualityBreakdown: {
-                  evidence: 60,
-                  reasoning: 60,
-                  specificity: 60,
-                  calibration: 60,
+            const payload = JSON.parse(
+              prompt!
+                .split('BEGIN_UNTRUSTED_MATERIAL_JSON\n')[1]!
+                .split('\nEND_UNTRUSTED_MATERIAL_JSON')[0]!,
+            );
+            const batch = payload.material;
+            const index = batch.blocks.findIndex(
+              (block: { text: string }) => block.text === useful,
+            );
+            const block = batch.blocks[index];
+            const output = {
+              passages: [
+                {
+                  coreBlockId: block.id,
+                  contextBlockIds: [block.id, batch.blocks[index + 1].id],
+                  queryIndex: 0,
+                  relevance: 0.9,
+                  confidence: 0.9,
+                  contextSufficient: true,
+                  contribution: 'A comparison procedure and its limitation.',
+                  knowledgeEvidenceIds: [],
+                  possiblyNew: true,
                 },
-                qualitySummary: 'A practical explanation.',
-                qualityStrengths: [],
-                qualityLimitations: ['Sources not independently verified.'],
-                qualityConfidence: 0.6,
-                reason: 'Relevant to comparison.',
-                recommendedSections: [],
-                confidence: 0.8,
-              };
-            }
+              ],
+              relevance: 85,
+              actionability: 85,
+              keyClaims: [
+                {
+                  claim: useful,
+                  sourceExcerpt: useful,
+                  type: 'recommendation',
+                  importance: 'supporting',
+                  knownProbability: 0.5,
+                  noveltyReason: 'Unknown familiarity',
+                  confidence: 0.4,
+                },
+              ],
+              noveltySummary: 'Unknown familiarity',
+              noveltyConfidence: 0.4,
+              qualityBreakdown: {
+                evidence: 60,
+                reasoning: 60,
+                specificity: 60,
+                calibration: 60,
+              },
+              qualitySummary: 'A practical explanation.',
+              qualityStrengths: [],
+              qualityLimitations: ['Sources not independently verified.'],
+              qualityConfidence: 0.6,
+              reason: 'Relevant to comparison.',
+              recommendedSections: [],
+              confidence: 0.8,
+            };
             return Response.json({
               content: [{ type: 'text', text: JSON.stringify(output) }],
               finishReason: { unified: 'stop', raw: 'stop' },
@@ -171,7 +168,7 @@ for (const mode of ['local', 'ai'] as const)
           (globalThis as unknown as { passageRequests: number })
             .passageRequests,
       );
-      expect(requests).toBe(mode === 'local' ? 0 : 2);
+      expect(requests).toBe(mode === 'local' ? 0 : 1);
       await clickCardElement(context, page, '.passages-button');
       const panel = page.locator('[data-attention-novel-passages]');
       await expect(panel).toBeVisible();

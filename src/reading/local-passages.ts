@@ -1,5 +1,4 @@
-import { textTokens } from '../analyzer/text-match';
-import { conceptTokens } from '../analyzer/concept-aliases';
+import { goalTerms } from '../analyzer/goal-match';
 import { applyClaimMemoryToClaim } from '../novelty/claim-memory';
 import { applyUnifiedLocalEvidenceToClaim } from '../evidence/unified-evidence';
 import { claimsFactuallyCompatible } from '../analyzer/claim-match';
@@ -17,25 +16,7 @@ import type {
   ReadingPassages,
 } from './types';
 
-const GENERIC = new Set(
-  'want need find learn understand know useful practical article material topic system development technology about into that which their have will more using use current goal хочу найти узнать понять изучить нужно статья материал тема система развитие технология полезный текущая цель'.split(
-    ' ',
-  ),
-);
-const relevantTokens = (text: string) => {
-  const tokens = textTokens(text);
-  // Alias matching also needs unstemmed words (e.g. Russian "исследование").
-  const surfaceWords = new Set(
-    text
-      .normalize('NFKC')
-      .toLocaleLowerCase()
-      .match(/[\p{L}\p{N}]+/gu) ?? [],
-  );
-  for (const concept of conceptTokens(text, surfaceWords)) tokens.add(concept);
-  return new Set(
-    [...tokens].filter((token) => !GENERIC.has(token) && !/^\d+$/u.test(token)),
-  );
-};
+const relevantTokens = goalTerms;
 
 export function readingQueries(
   context: AnalysisContext,

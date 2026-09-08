@@ -349,7 +349,7 @@ describe('hover preview content script', () => {
       'Relevant to you, but probably little is new',
     );
     expect(personalValueReason(preview)).toBe(
-      'The topic fits you, but the conclusions may be unreliable',
+      'The topic fits you · few explicit explanations were found',
     );
   });
 

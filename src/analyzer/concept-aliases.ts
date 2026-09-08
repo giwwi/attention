@@ -3,7 +3,7 @@
  * translations: they only let equivalent high-level topics meet in local
  * matching and connector indices when their surface language differs.
  */
-const CONCEPT_ALIASES = {
+export const CONCEPT_ALIASES = {
   ai: [
     'ai',
     'artificial intelligence',
