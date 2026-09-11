@@ -39,7 +39,9 @@
       <nav aria-label="Main navigation">
         <a href="#how-it-works">The idea</a>
         <a href="#demo">The demo</a>
-        <a class="nav-try" href="#install"
+        <a
+          class="nav-try"
+          href="https://chromewebstore.google.com/detail/attention/fcclhejgaklnkfgalglcmhmledgefhhp"
           >Try Attention <span aria-hidden="true">↗</span></a
         >
       </nav>
@@ -64,7 +66,9 @@
             passages deserve a closer look.
           </p>
           <div class="actions">
-            <a class="button primary" href="#install"
+            <a
+              class="button primary"
+              href="https://chromewebstore.google.com/detail/attention/fcclhejgaklnkfgalglcmhmledgefhhp"
               >Get Attention for Chrome <span aria-hidden="true">↗</span></a
             >
             <a class="quiet-link" href="#demo"
@@ -72,7 +76,9 @@
             >
           </div>
           <p class="microcopy">
-            Free prototype. Profile required. Local evaluation.
+            Free prototype. Local evaluation.<br />
+            Store: v0.23.0 · v0.28.0 is under review.
+            <a href="#install">Get the latest version manually.</a>
           </p>
         </div>
         <figure class="reading-proof">
@@ -395,12 +401,14 @@
             </h2>
             <a
               class="button primary"
-              href="releases/attention-0.28.0.zip"
-              download
-              >Download for Chrome <span aria-hidden="true">↓</span></a
+              href="https://chromewebstore.google.com/detail/attention/fcclhejgaklnkfgalglcmhmledgefhhp"
+              >Add to Chrome <span aria-hidden="true">↗</span></a
             >
             <p class="microcopy">
-              Free prototype · v0.28.0 · Manual installation
+              Free · Install from the Chrome Web Store.<br />
+              The store currently offers v0.23.0. The demo shows the newer
+              interface; v0.28.0 is awaiting approval.
+              <a href="#manual-install">Try v0.28.0 manually below.</a>
             </p>
           </div>
           <div class="install-guide">
@@ -409,51 +417,56 @@
               <li>
                 <span>01</span>
                 <div>
-                  <strong>Download & unzip.</strong>
-                  <p>Save the extension above and extract the ZIP.</p>
+                  <strong>Add Attention to Chrome.</strong>
+                  <p>
+                    Open the store page, choose <b>Add to Chrome</b> and pin
+                    Attention beside your address bar.
+                  </p>
                 </div>
               </li>
               <li>
                 <span>02</span>
                 <div>
-                  <strong>Add it to Chrome.</strong>
+                  <strong>Start with ChatGPT or Claude.</strong>
                   <p>
-                    Open <code>chrome://extensions</code>, switch on Developer
-                    mode, then choose <b>Load unpacked</b> and select the
-                    extracted folder.
+                    Open Attention and create your local vault. Ask a chat that
+                    already knows you to prepare a profile, then review and save
+                    it. You can add a profile from the other service later.
                   </p>
                 </div>
               </li>
               <li>
                 <span>03</span>
                 <div>
-                  <strong>Start with ChatGPT or Claude.</strong>
-                  <p>
-                    Open Attention to try a fictional example first, then create
-                    your local vault. Ask a chat that already knows you to
-                    prepare a profile, then review and save it. Start with
-                    ChatGPT or Claude; you can add the other later.
-                  </p>
-                </div>
-              </li>
-              <li>
-                <span>04</span>
-                <div>
                   <strong>Now bring an article.</strong>
                   <p>
-                    Before setup, cards invite you to create your profile.
-                    Recommendations start after you save it. Hover over a link
-                    in a feed or the title of an open article for your
-                    recommendation.
+                    With your profile saved, hover over a link in a feed or the
+                    title of an open article for your recommendation.
                   </p>
                 </div>
               </li>
             </ol>
-            <p class="keyboard-note">
-              Updating? Replace the files in your existing extension folder,
-              then reload Attention at <code>chrome://extensions</code>. Your
-              saved profile stays in place.
-            </p>
+            <details class="keyboard-note" id="manual-install">
+              <summary>Latest version: v0.28.0 · Manual installation</summary>
+              <p>
+                <a href="releases/attention-0.28.0.zip" download
+                  >Download v0.28.0 (ZIP)</a
+                >, unzip it, then open <code>chrome://extensions</code>. Switch
+                on Developer mode, choose <b>Load unpacked</b> and select the
+                extracted <code>attention-extension</code> folder.
+              </p>
+              <p>
+                Updating a manual installation? Replace the files in your
+                existing extension folder and click <b>Reload</b>. Installing
+                from the store separately does not transfer your local profile.
+              </p>
+              <p>
+                <a
+                  href="https://github.com/giwwi/attention/releases/tag/v0.28.0"
+                  >Release notes on GitHub</a
+                >
+              </p>
+            </details>
             <p class="keyboard-note">
               At your keyboard: Tab to the Attention button beside an article
               title, then Enter to open. Escape to close.
@@ -469,7 +482,7 @@
       <p>Made for the reader.</p>
       <nav aria-label="Footer navigation">
         <a href="privacy.html">Privacy</a
-        ><a href="https://github.com/giwwi/attention">Source code</a
+        ><a href="https://github.com/giwwi/attention">GitHub · Source code</a
         ><a href="https://ko-fi.com/alekseyvoloschuk"
           >Donate via Ko-fi <span aria-hidden="true">↗</span></a
         >
