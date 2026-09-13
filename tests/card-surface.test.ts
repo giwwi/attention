@@ -3,6 +3,9 @@ import {
   fullCardDecision,
   installHoverPreview,
 } from '../src/content/hover-preview';
+import { captureDocument } from '../src/content/capture';
+import { LocalAnalyzer } from '../src/analyzer/local-analyzer';
+import { createFullAnalysisHoverPreview } from '../src/analyzer/preview';
 import { CardContextControl } from '../src/content/card-context';
 import {
   ATTENTION_CONTEXT_UPDATE_TYPE,
@@ -216,6 +219,105 @@ async function openCard(response = previewResponse()) {
 }
 
 describe('large article card surface', () => {
+  it('shows the partial AI explanation and one visible coverage note instead of a disclaimer headline', async () => {
+    const capture = captureDocument(document, window.location.href);
+    const evaluation = await new LocalAnalyzer().analyze(capture, context);
+    const response = previewResponse();
+    response.analysisSource = 'ai';
+    response.novelPassageHighlightsEnabled = true;
+    response.preview = createFullAnalysisHoverPreview(evaluation);
+    response.preview.recommendedAction = 'maybe';
+    const insights = response.preview.insights!;
+    insights.analysisCoverage = 'partial';
+    insights.assessmentReason = {
+      text: 'The examples explain how to compare competing hypotheses.',
+      language: 'en',
+    };
+    insights.readingPassages = {
+      ...insights.readingPassages!,
+      items: [],
+      coverage: 'partial',
+      status: 'no-match',
+    };
+    const { shadow, host, api } = await openCard(response);
+    expect(element(shadow, '.verdict').textContent).toBe(
+      'Start with a quick skim',
+    );
+    expect(element(shadow, '.score').textContent).toBe(
+      insights.assessmentReason.text,
+    );
+    expect(
+      element(shadow, '.reliability-note').classList.contains('has-warning'),
+    ).toBe(true);
+    expect(element(shadow, '.reliability-note').textContent).toContain(
+      'preliminary assessment',
+    );
+    expect(element(shadow, '.passage-hint').textContent).not.toContain(
+      'Part of',
+    );
+    expect(element<HTMLDetailsElement>(shadow, 'details.details').open).toBe(
+      false,
+    );
+    expect(host.dataset.attentionDecision).toBe('skim');
+    // Changing articles/inputs must remove the old limitation.
+    delete insights.analysisCoverage;
+    api.setResponse(response);
+    api.invalidate(['analysisContext']);
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(
+      element(shadow, '.reliability-note').classList.contains('has-warning'),
+    ).toBe(false);
+  });
+
+  it('offers actual passages for a topic match without claiming it solves the explicit task', async () => {
+    for (const paragraph of document.querySelectorAll('p'))
+      paragraph.textContent = paragraph.textContent!.replace(
+        'This article',
+        'The article',
+      );
+    const capture = captureDocument(document, window.location.href);
+    const evaluation = await new LocalAnalyzer().analyze(
+      capture,
+      {
+        ...context,
+        scenario: 'work',
+        intent: 'coral restoration',
+      },
+      {
+        profileUpdatedAt: '2026-09-13',
+        signals: [
+          {
+            id: 'research',
+            profileEntryId: null,
+            kind: 'interest',
+            effect: 'positive',
+            label: 'compare observations',
+            explanation: '',
+            confidence: 0.9,
+            matchScore: 1,
+          },
+        ],
+      },
+    );
+    const response = previewResponse();
+    expect(evaluation.insights?.readingPassages?.items.length).toBeGreaterThan(
+      0,
+    );
+    response.preview = createFullAnalysisHoverPreview(evaluation);
+    response.novelPassageHighlightsEnabled = true;
+    const { shadow } = await openCard(response);
+    expect(element(shadow, '.verdict').textContent).toBe(
+      'Start with the passages',
+    );
+    expect(element(shadow, '.score').textContent).toContain(
+      'compare observations',
+    );
+    expect(element(shadow, '.score').textContent).toContain('selective look');
+    expect(element<HTMLButtonElement>(shadow, '.passages-button').hidden).toBe(
+      false,
+    );
+  });
+
   it.each([
     {
       placement: 'right',

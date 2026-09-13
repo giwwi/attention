@@ -6,8 +6,13 @@ import { createTestExtension, initializeTestVault } from './helpers/vault';
 import { initializeTestProfile } from './helpers/profile';
 import { cardTextContent, clickCardElement } from './helpers/card';
 
-for (const mode of ['title-only', 'partial-ai'] as const)
-  test(`${mode}: an uncertain assessment stays visibly uncertain`, async () => {
+for (const mode of [
+  'title-only',
+  'local-topic',
+  'partial-ai',
+  'partial-low',
+] as const)
+  test(`${mode}: shows a decision with its evidence limits`, async () => {
     test.setTimeout(60_000);
     const directory = await mkdtemp(path.join(tmpdir(), 'attention-trust-'));
     const extension = await createTestExtension(directory);
@@ -27,13 +32,17 @@ for (const mode of ['title-only', 'partial-ai'] as const)
       await worker.evaluate(async (mode) => {
         await attentionVault.privateStorage.set({
           interfaceLanguage: 'ru',
+          novelPassageHighlightsEnabled: true,
           analysisContext: {
             scenario: 'work',
-            intent: 'Reduce AI inference latency in our production service',
+            intent:
+              mode === 'local-topic'
+                ? 'искусственный интеллект исследование'
+                : 'Reduce AI inference latency in our production service',
             availableMinutes: 15,
           },
           privacySettings: {
-            localOnly: mode === 'title-only',
+            localOnly: mode === 'title-only' || mode === 'local-topic',
             updatedAt: new Date().toISOString(),
           },
           aiAnalyzerSettings: {
@@ -66,15 +75,15 @@ for (const mode of ['title-only', 'partial-ai'] as const)
               {
                 type: 'text',
                 text: JSON.stringify({
-                  relevance: 100,
-                  actionability: 100,
+                  relevance: mode === 'partial-low' ? 5 : 100,
+                  actionability: mode === 'partial-low' ? 5 : 100,
                   keyClaims: [
                     {
                       claim: source,
                       sourceExcerpt: source,
                       type: 'fact',
                       importance: 'primary',
-                      knownProbability: 0.5,
+                      knownProbability: mode === 'partial-low' ? 0.95 : 0.5,
                       noveltyReason: 'Unknown familiarity',
                       confidence: 0.8,
                     },
@@ -92,7 +101,9 @@ for (const mode of ['title-only', 'partial-ai'] as const)
                   qualityLimitations: ['Sources not verified.'],
                   qualityConfidence: 0.8,
                   reason:
-                    'A highly rated fixture must not override incomplete source coverage.',
+                    mode === 'partial-low'
+                      ? 'В рассмотренных частях описан фестиваль. Приёмов сокращения задержки модели здесь нет.'
+                      : 'В рассмотренных частях есть приёмы кеширования запросов и измерения задержки модели.',
                   recommendedSections: [],
                   confidence: 1,
                   passages: [],
@@ -108,9 +119,13 @@ for (const mode of ['title-only', 'partial-ai'] as const)
         };
       }, mode);
       const paragraph =
-        'The community festival brings musicians and artists together for a weekend of food, music and performances. Visitors can explore the stalls and enjoy the evening lantern walk.';
+        mode === 'local-topic'
+          ? 'Artificial intelligence research compares evaluation procedures on separate examples and records their limitations before deployment.'
+          : mode === 'partial-ai'
+            ? 'To reduce AI inference latency in our production service, configure caching for repeated requests and measure response times on representative workloads. However, the cached result must remain valid for each request.'
+            : 'The community festival brings musicians and artists together for a weekend of food, music and performances. Visitors can explore the stalls and enjoy the evening lantern walk.';
       const body =
-        mode === 'title-only'
+        mode === 'title-only' || mode === 'local-topic'
           ? Array.from({ length: 8 }, () => `<p>${paragraph}</p>`).join('')
           : Array.from(
               { length: 45 },
@@ -129,7 +144,7 @@ for (const mode of ['title-only', 'partial-ai'] as const)
       await page.locator('h1').hover();
       const card = page.locator('[data-attention-preview]');
       await expect(card).toBeVisible();
-      if (mode === 'partial-ai') {
+      if (mode === 'partial-ai' || mode === 'partial-low') {
         await clickCardElement(context, page, '.ai-button');
         await expect(card).toHaveAttribute(
           'data-attention-analysis-source',
@@ -139,8 +154,28 @@ for (const mode of ['title-only', 'partial-ai'] as const)
       await expect
         .poll(() => cardTextContent(context, page, '.verdict'))
         .toContain(
-          mode === 'title-only' ? 'Пока неясно' : 'Оценена часть статьи',
+          mode === 'local-topic'
+            ? 'Начните с фрагментов'
+            : mode === 'partial-ai'
+              ? 'Скорее стоит прочитать'
+              : 'Скорее можно пропустить',
         );
+      if (mode === 'partial-ai' || mode === 'partial-low') {
+        await expect
+          .poll(() => cardTextContent(context, page, '.reliability-note'))
+          .toContain('Вывод предварительный');
+        await expect
+          .poll(() => cardTextContent(context, page, '.score'))
+          .toContain(mode === 'partial-ai' ? 'кеширования' : 'фестиваль');
+      }
+      if (mode === 'local-topic') {
+        await expect
+          .poll(() => cardTextContent(context, page, '.score'))
+          .toContain('искусственный интеллект исследование');
+        await expect
+          .poll(() => cardTextContent(context, page, '.passages-button'))
+          .toContain('Перейти к');
+      }
       await page.screenshot({ path: `output/playwright/trust-${mode}.png` });
     } finally {
       await context.close();

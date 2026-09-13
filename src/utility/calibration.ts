@@ -1,8 +1,7 @@
 import {
   estimateUsefulMinutes,
   normalizeScore,
-  utilityRecommendation,
-  uncertainAssessment,
+  assessmentRecommendation,
 } from '../analyzer/utility';
 import type { AttentionScenario, MaterialEvaluation } from '../shared/types';
 import type { UtilityFeedbackRecord } from './storage';
@@ -246,9 +245,7 @@ export function calibrateMaterialEvaluation(
     recommendedAction:
       evaluation.recommendationConstraint === 'skip'
         ? 'skip'
-        : uncertainAssessment(evaluation.insights)
-          ? 'skim'
-          : utilityRecommendation(utilityScore),
+        : assessmentRecommendation(utilityScore, evaluation.insights),
     estimatedUsefulMinutes: estimateUsefulMinutes(
       utilityScore,
       readingTimeMinutes,

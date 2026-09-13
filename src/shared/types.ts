@@ -290,6 +290,14 @@ export interface AssessmentReliability {
 
 export interface MaterialEvaluationInsights {
   taskEvidence?: 'body' | 'metadata-only' | 'no-match' | 'no-context';
+  /** A focus matched in the body; topic-level matches do not establish task utility. */
+  readingFocus?: {
+    label: string;
+    basis: 'goal' | 'learning' | 'interest';
+    match: 'specific' | 'topic';
+  };
+  /** Model explanation, in the explicitly requested response language. */
+  assessmentReason?: { text: string; language: string };
   analysisCoverage?: 'complete' | 'partial';
   analysisUsage?: {
     requests: number;
@@ -377,7 +385,7 @@ export interface StoredEvaluation {
 }
 
 export interface EvaluationCacheVersion {
-  schemaVersion: 6 | 7 | 8;
+  schemaVersion: 6 | 7 | 8 | 9;
   profile: string;
   history: string;
   readwise: string;

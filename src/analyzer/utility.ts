@@ -62,12 +62,38 @@ export function estimateUsefulMinutes(
   );
 }
 
-/** Saving is a user action. Incomplete evidence must not produce a confident Read/Skip. */
-export function uncertainAssessment(
+/** Missing context prevents a personal decision; incomplete coverage only qualifies it. */
+export function assessmentNeedsContext(
+  insights?: MaterialEvaluationInsights,
+): boolean {
+  return insights?.taskEvidence === 'no-context';
+}
+
+export function preliminaryAssessment(
   insights?: MaterialEvaluationInsights,
 ): boolean {
   return (
     insights?.analysisCoverage === 'partial' ||
+    insights?.reliability?.weakExtraction === true ||
     (insights?.taskEvidence !== undefined && insights.taskEvidence !== 'body')
   );
+}
+
+/** Direction and confidence are separate: limited evidence must not erase every recommendation. */
+export function assessmentRecommendation(
+  score: number,
+  insights?: MaterialEvaluationInsights,
+): MaterialDecision {
+  if (assessmentNeedsContext(insights)) return 'skim';
+  if (
+    insights?.taskEvidence === 'metadata-only' ||
+    insights?.taskEvidence === 'no-match'
+  ) {
+    // A body-level profile/topic match justifies a selective look, not a claim
+    // that the whole article solves the current task. No match is a weak skip.
+    return insights.readingFocus || insights.readingPassages?.items.length
+      ? 'skim'
+      : 'skip';
+  }
+  return utilityRecommendation(score);
 }

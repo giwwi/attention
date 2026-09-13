@@ -1,4 +1,4 @@
-import { selectLocalPassages } from '../reading/local-passages';
+import { readingQueries, selectLocalPassages } from '../reading/local-passages';
 import type {
   AnalysisContext,
   MaterialEvaluation,
@@ -17,7 +17,7 @@ import { extractKeyClaims } from './claims';
 import { finalizeMaterialEvaluation } from './evaluation';
 import { calibrateLocalConfidence } from './reliability';
 import { textTokens, tokenOverlap } from './text-match';
-import { assessGoalEvidence, type GoalEvidence } from './goal-match';
+import { createGoalEvidenceAssessor, type GoalEvidence } from './goal-match';
 import { normalizeScore, type UtilityComponents } from './utility';
 import { measureAsync } from '../performance/metrics';
 import { assessMaterialScenarioFit } from '../scenario/material-activity';
@@ -133,12 +133,17 @@ function expectedValue(
   if (evidence.body === 0)
     return 'По тексту пока не удалось подтвердить, что материал поможет с вашей задачей.';
   const goal = signals.find(
-    (signal) => signal.kind === 'goal' && signal.effect === 'positive',
+    (signal) =>
+      signal.kind === 'goal' &&
+      signal.effect === 'positive' &&
+      signal.label === context.intent,
   );
   if (goal) {
     return `Материал может помочь продвинуть активную цель «${goal.label}».`;
   }
-  const interest = signals.find((signal) => signal.kind === 'interest');
+  const interest = signals.find(
+    (signal) => signal.kind === 'interest' && signal.label === context.intent,
+  );
   if (interest) {
     return `Материал развивает отмеченный интерес «${interest.label}», но локальная оценка пока не подтверждает новизну всех тезисов.`;
   }
@@ -227,7 +232,7 @@ function localComponents(
 }
 
 export class LocalAnalyzer implements Analyzer {
-  readonly id = 'local-claim-assessment-v7-task-evidence';
+  readonly id = 'local-claim-assessment-v8-reading-focus';
 
   async analyze(
     material: PageCapture,
@@ -236,29 +241,48 @@ export class LocalAnalyzer implements Analyzer {
   ): Promise<MaterialEvaluation> {
     return measureAsync('analysis.local', async () => {
       const signals = profileContext?.signals ?? [];
-      const goal =
-        context.intent.trim() ||
-        strongestSignal(
-          signals.filter((signal) => signal.kind === 'goal'),
-          context.scenario,
-          'positive',
-        )?.label ||
-        strongestSignal(
-          signals.filter((signal) =>
-            ['interest', 'learningArea', 'leisurePreference'].includes(
-              signal.kind,
-            ),
-          ),
-          context.scenario,
-          'positive',
-        )?.label ||
-        '';
-      const evidence = assessGoalEvidence(material, goal);
+      // Use the same full reading profile as passage selection. An explicit
+      // current task still takes priority over incidental profile interests.
+      const assess = createGoalEvidenceAssessor(material);
+      const candidates = readingQueries(context, profileContext).map(
+        (query) => ({
+          ...query,
+          evidence: assess(query.text),
+        }),
+      );
+      const ranked = [...candidates].sort(
+        (a, b) =>
+          b.evidence.body - a.evidence.body ||
+          b.evidence.topic - a.evidence.topic ||
+          b.weight - a.weight,
+      );
+      const selected = context.intent.trim()
+        ? {
+            text: context.intent,
+            evidence: assess(context.intent),
+          }
+        : ranked[0];
+      const goal = selected?.text ?? '';
+      const evidence = selected?.evidence ?? {
+        metadata: 0,
+        body: 0,
+        practical: 0,
+        topic: 0,
+      };
+      const focus = ranked.find(
+        (query) => query.evidence.body > 0 || query.evidence.topic > 0,
+      );
       const insights = buildLocalInsights(
         material,
         extractKeyClaims(material.content, material.title, material.language),
         profileContext,
       );
+      if (focus)
+        insights.readingFocus = {
+          label: focus.text,
+          basis: focus.basis,
+          match: focus.evidence.body > 0 ? 'specific' : 'topic',
+        };
       insights.readingPassages = selectLocalPassages(
         material,
         context,
@@ -310,7 +334,12 @@ export class LocalAnalyzer implements Analyzer {
           insights,
           expectedValue:
             context.scenario === 'work'
-              ? expectedValue(material, context, signals, evidence)
+              ? expectedValue(
+                  material,
+                  { ...context, intent: goal },
+                  signals,
+                  evidence,
+                )
               : undefined,
           recommendedSections: rankSections(
             material.headings,

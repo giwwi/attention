@@ -246,7 +246,7 @@ describe('hover preview content script', () => {
     expect(hosts).toHaveLength(1);
     expect(hosts[0]?.dataset.attentionVersion).toBe(EXTENSION_RUNTIME_VERSION);
     expect(hosts[0]?.dataset.attentionContract).toBe(
-      'feed-compact-article-profile-prompt-v19',
+      'article-decision-confidence-v20',
     );
   });
 
@@ -273,7 +273,7 @@ describe('hover preview content script', () => {
     expect(hosts).toHaveLength(1);
     expect(hosts[0]).not.toBe(staleHost);
     expect(hosts[0]?.dataset.attentionContract).toBe(
-      'feed-compact-article-profile-prompt-v19',
+      'article-decision-confidence-v20',
     );
   });
 
@@ -1023,7 +1023,7 @@ describe('hover preview content script', () => {
     expect(host?.getAttribute('role')).toBe('dialog');
     expect(host?.getAttribute('aria-label')).toBe('Attention');
     expect(host?.dataset.attentionScore).toBe('78');
-    expect(host?.dataset.attentionHeadline).toBe('Worth reading');
+    expect(host?.dataset.attentionHeadline).toBe('Probably worth reading');
     expect(host?.dataset.attentionWeakExtraction).toBe('true');
     expect(host?.dataset.attentionReadingInfo).toContain(
       'Full article · ~1 min',
@@ -1511,7 +1511,7 @@ describe('hover preview content script', () => {
     expect(host?.style.display).toBe('none');
     expect(host?.dataset.attentionExpanded).toBe('false');
     expect(host?.dataset.attentionContract).toBe(
-      'feed-compact-article-profile-prompt-v19',
+      'article-decision-confidence-v20',
     );
   });
 

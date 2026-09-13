@@ -40,11 +40,11 @@ describe('LocalAnalyzer', () => {
     expect(result.utilityScore).toBeLessThan(70);
     expect(result.components.quality).toBeLessThan(60);
     expect(result.confidence).toBeGreaterThan(0.5);
-    expect(result.analyzerId).toBe('local-claim-assessment-v7-task-evidence');
+    expect(result.analyzerId).toBe('local-claim-assessment-v8-reading-focus');
     expect(result.profileSignals).toEqual([]);
   });
 
-  it('recommends skimming and prioritizes relevant sections', async () => {
+  it('tentatively skips unsupported body text even when the headings match', async () => {
     const result = await analyzer.analyze(
       material({ readingTimeMinutes: 22 }),
       {
@@ -54,7 +54,7 @@ describe('LocalAnalyzer', () => {
       },
     );
 
-    expect(result.recommendedAction).toBe('skim');
+    expect(result.recommendedAction).toBe('skip');
     expect(result.recommendedSections[0]).toBe('Практическая модель выбора');
     expect(result.insights?.taskEvidence).toBe('metadata-only');
     expect(result.expectedValue).toContain('пока не удалось подтвердить');
@@ -107,7 +107,7 @@ describe('LocalAnalyzer', () => {
       },
     );
 
-    expect(['read', 'skim']).toContain(result.recommendedAction);
+    expect(result.recommendedAction).toBe('skip');
     expect(result.reason).toContain('пока не удалось подтвердить');
     expect(result.insights?.taskEvidence).toBe('metadata-only');
     expect(result.profileSignals).toHaveLength(1);

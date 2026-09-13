@@ -1,4 +1,4 @@
-import { goalTerms } from '../analyzer/goal-match';
+import { goalTerms, readingTermMatch } from '../analyzer/goal-match';
 import { applyClaimMemoryToClaim } from '../novelty/claim-memory';
 import { applyUnifiedLocalEvidenceToClaim } from '../evidence/unified-evidence';
 import { claimsFactuallyCompatible } from '../analyzer/claim-match';
@@ -179,34 +179,8 @@ export function selectLocalPassages(
     let best: { score: number; basis: ReadingPassage['basis'] } | undefined;
     for (const query of queries) {
       const matches = [...query.tokens].filter((token) => tokens.has(token));
-      const lexicalMatches = matches.filter(
-        (token) => !token.startsWith('concept:'),
-      );
-      // Several specific terms must occur in the passage itself, not merely its heading.
-      const lexicalMatch =
-        lexicalMatches.length > 0 &&
-        lexicalMatches.length >=
-          Math.min(
-            2,
-            [...query.tokens].filter((token) => !token.startsWith('concept:'))
-              .length,
-          );
-      // A small existing multilingual alias dictionary can bridge languages,
-      // but a single broad topic (e.g. AI) is insufficient for this fallback.
-      const concepts = [...query.tokens].filter((token) =>
-        token.startsWith('concept:'),
-      );
-      const conceptMatches = matches.filter((token) =>
-        token.startsWith('concept:'),
-      );
-      const conceptCoverage =
-        conceptMatches.length / Math.max(1, concepts.length);
-      const conceptMatch = conceptMatches.length >= 2 && conceptCoverage >= 0.5;
-      if (!lexicalMatch && !conceptMatch) continue;
-      const coverage = lexicalMatch
-        ? matches.length / query.tokens.size
-        : conceptCoverage * 0.6;
-      if (coverage < 0.25) continue;
+      const coverage = readingTermMatch(query.tokens, tokens);
+      if (coverage === 0) continue;
       const rarity =
         matches.reduce(
           (sum, token) =>

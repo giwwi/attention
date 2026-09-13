@@ -5,7 +5,10 @@ import { goalTerms } from '../src/analyzer/goal-match';
 import { AiGatewayAnalyzer } from '../src/analyzer/ai-gateway-analyzer';
 import { sharedAnalysisInput } from '../src/analyzer/shared-input';
 import { createArticleMap } from '../src/reading/blocks';
-import { utilityRecommendation } from '../src/analyzer/utility';
+import {
+  assessmentRecommendation,
+  utilityRecommendation,
+} from '../src/analyzer/utility';
 import { createFullAnalysisHoverPreview } from '../src/analyzer/preview';
 import {
   previewVerdict,
@@ -15,7 +18,11 @@ import { createProfileDemo } from '../src/onboarding/profile-demo';
 import { calibrateMaterialEvaluation } from '../src/utility/calibration';
 import { RAW_UTILITY_SCORE_VERSION } from '../src/utility/prediction';
 import { assertExtensionCloudAiAllowed } from '../src/privacy/settings';
-import type { AnalysisContext, PageCapture } from '../src/shared/types';
+import type {
+  AnalysisContext,
+  PageCapture,
+  RelevantProfileContext,
+} from '../src/shared/types';
 
 vi.mock('ai', async (original) => ({
   ...(await original<typeof import('ai')>()),
@@ -88,7 +95,7 @@ describe('task evidence rather than title keywords', () => {
     expect(matched.utilityScore - baseline.utilityScore).toBeLessThan(5);
     expect(matched.insights?.taskEvidence).toBe('metadata-only');
     expect(previewVerdict(createFullAnalysisHoverPreview(matched))).toBe(
-      'maybe',
+      'skip',
     );
     expect(matched.prediction?.rawScoreVersion).toBe(RAW_UTILITY_SCORE_VERSION);
   });
@@ -113,15 +120,151 @@ describe('task evidence rather than title keywords', () => {
     expect(actual.insights?.readingPassages?.items.length).toBeGreaterThan(0);
     expect(titleOnly.recommendedAction).not.toBe('read');
   });
-  it('keeps absent evidence uncertain after calibration and never recommends saving by score', async () => {
+  it('evaluates all reading-profile goals, including a useful goal missed by the metadata shortlist', async () => {
+    const signal = (id: string, label: string) => ({
+      id,
+      label,
+      kind: 'goal' as const,
+      effect: 'positive' as const,
+      profileEntryId: id,
+      explanation: '',
+      confidence: 0.9,
+      matchScore: 1,
+    });
+    const irrelevant = signal('first', 'underwater coral restoration');
+    const relevant = signal('second', context.intent);
+    const profile: RelevantProfileContext = {
+      profileUpdatedAt: '2026-09-13',
+      signals: [irrelevant],
+      readingProfile: { signals: [irrelevant, relevant] },
+    };
+    const result = await new LocalAnalyzer().analyze(
+      material(`${useful}\n\n${caveat}`),
+      { ...context, intent: '' },
+      profile,
+    );
+    expect(result.insights?.taskEvidence).toBe('body');
+    expect(result.insights?.readingFocus?.label).toBe(context.intent);
+    expect(result.insights?.readingPassages?.items.length).toBeGreaterThan(0);
+    expect(result.components.actionability).toBeGreaterThan(70);
+    expect(result.expectedValue).not.toContain('coral');
+  });
+
+  it('keeps an explicit task in charge when passages match a different profile goal', async () => {
+    const unrelatedTask = 'underwater coral restoration';
+    const profile: RelevantProfileContext = {
+      profileUpdatedAt: '2026-09-13',
+      signals: [
+        {
+          id: 'goal',
+          profileEntryId: null,
+          kind: 'goal',
+          effect: 'positive',
+          label: context.intent,
+          explanation: '',
+          confidence: 0.9,
+          matchScore: 1,
+        },
+      ],
+    };
+    const result = await new LocalAnalyzer().analyze(
+      material(`${useful}\n\n${caveat}`),
+      { ...context, intent: unrelatedTask },
+      profile,
+    );
+    expect(result.insights?.taskEvidence).toBe('no-match');
+    expect(result.recommendedAction).toBe('skim');
+    expect(result.components.actionability).toBe(32);
+    expect(result.insights?.readingPassages?.items.length).toBeGreaterThan(0);
+    const reason = personalValueReason(
+      createFullAnalysisHoverPreview(result),
+      'ru',
+    );
+    expect(reason).toContain(context.intent);
+    expect(reason).toContain('выборочного чтения');
+    expect(reason).not.toContain(unrelatedTask);
+  });
+
+  it('explains cross-language topic matches without inventing task-specific usefulness', async () => {
+    const text =
+      'Artificial intelligence research compares evaluation procedures on separate examples and records their limitations before deployment.';
+    const result = await new LocalAnalyzer().analyze(material(text), {
+      ...context,
+      intent: 'искусственный интеллект исследование',
+    });
+    expect(result.insights?.readingFocus).toMatchObject({
+      label: 'искусственный интеллект исследование',
+      match: 'topic',
+    });
+    expect(result.insights?.readingPassages?.items.length).toBeGreaterThan(0);
+    expect(result.recommendedAction).toBe('skim');
+    expect(result.components.actionability).toBe(32);
+    expect(
+      personalValueReason(createFullAnalysisHoverPreview(result), 'ru'),
+    ).toContain('искусственный интеллект исследование');
+    const unrelated = await new LocalAnalyzer().analyze(material(text), {
+      ...context,
+      intent: 'искусственный интеллект инвестиции',
+    });
+    expect(unrelated.insights?.readingFocus).toBeUndefined();
+    expect(unrelated.insights?.readingPassages?.items).toEqual([]);
+  });
+
+  it('gives a tentative skip when no connection was found and never recommends saving by score', async () => {
     const evaluation = await new LocalAnalyzer().analyze(material(), context);
     const calibrated = calibrateMaterialEvaluation(evaluation, 5, null);
-    expect(calibrated.recommendedAction).toBe('skim');
+    expect(calibrated.recommendedAction).toBe('skip');
     expect(
       personalValueReason(createFullAnalysisHoverPreview(calibrated), 'ru'),
-    ).toContain('пока неясно');
+    ).toContain('не нашлось явной связи');
     for (let score = 0; score <= 100; score++)
       expect(utilityRecommendation(score)).not.toBe('save');
+  });
+});
+
+describe('a recommendation is distinct from its certainty', () => {
+  it.each([
+    [20, 'skip'],
+    [50, 'skim'],
+    [90, 'read'],
+  ] as const)(
+    'keeps the %i-point direction %s for partial coverage, including after calibration',
+    async (score, action) => {
+      const evaluation = await new LocalAnalyzer().analyze(
+        material(`${useful}\n\n${caveat}`),
+        context,
+      );
+      const insights = {
+        ...evaluation.insights!,
+        analysisCoverage: 'partial' as const,
+      };
+      delete insights.taskEvidence;
+      expect(assessmentRecommendation(score, insights)).toBe(action);
+      evaluation.insights = insights;
+      evaluation.utilityScore = score;
+      evaluation.prediction = {
+        ...evaluation.prediction!,
+        rawUtility: score,
+        displayedUtility: score,
+      };
+      expect(
+        calibrateMaterialEvaluation(evaluation, 5, null).recommendedAction,
+      ).toBe(action);
+    },
+  );
+  it('reserves abstention for a missing focus and treats weak extraction as a confidence limit', async () => {
+    const result = await new LocalAnalyzer().analyze(material(), {
+      ...context,
+      intent: '',
+    });
+    expect(result.insights?.taskEvidence).toBe('no-context');
+    expect(assessmentRecommendation(95, result.insights)).toBe('skim');
+    expect(previewVerdict(createFullAnalysisHoverPreview(result))).toBe(
+      'maybe',
+    );
+    result.insights!.reliability!.weakExtraction = true;
+    result.insights!.taskEvidence = 'body';
+    expect(assessmentRecommendation(95, result.insights)).toBe('read');
   });
 });
 
@@ -204,6 +347,13 @@ describe('one source set for AI verdict and passages', () => {
       capture,
       context,
     );
+    expect(result.insights?.assessmentReason).toEqual({
+      text: 'There is a procedure with a limitation.',
+      language: 'ru',
+    });
+    expect(
+      personalValueReason(createFullAnalysisHoverPreview(result), 'ru'),
+    ).toBe('There is a procedure with a limitation.');
     expect(generateText).toHaveBeenCalledTimes(1);
     expect(result.insights?.analysisCoverage).toBe('complete');
     expect(result.insights?.analysisUsage).toMatchObject({
@@ -245,10 +395,12 @@ describe('one source set for AI verdict and passages', () => {
     );
     expect(result.insights?.analysisCoverage).toBe('partial');
     expect(result.insights?.readingPassages?.coverage).toBe('partial');
-    expect(result.recommendedAction).toBe('skim');
+    expect(result.recommendedAction).toBe(
+      utilityRecommendation(result.utilityScore),
+    );
     expect(result.confidence).toBeLessThan(0.45);
     expect(calibrateMaterialEvaluation(result, 5, null).recommendedAction).toBe(
-      'skim',
+      utilityRecommendation(result.utilityScore),
     );
   });
   it('rejects a quote from omitted content even when it exists in the full article', async () => {

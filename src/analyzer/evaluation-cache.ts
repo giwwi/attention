@@ -69,8 +69,8 @@ export function createEvaluationCacheVersion(
   sources: EvaluationSourceVersions,
 ): EvaluationCacheVersion {
   return {
-    // Revision 7 selects contextual passages independently of summary claims.
-    schemaVersion: 8,
+    // Revision 9 aligns profile evidence with passages and shows useful assessment reasons.
+    schemaVersion: 9,
     ...sources,
     articleText: features.articleTextFingerprint,
     analysisContext: analysisContextFingerprint(context),
@@ -83,7 +83,7 @@ function sameSources(
   context: AnalysisContext,
 ): boolean {
   return Boolean(
-    stored?.schemaVersion === 8 &&
+    stored?.schemaVersion === 9 &&
     stored.profile === sources.profile &&
     stored.history === sources.history &&
     stored.readwise === sources.readwise &&

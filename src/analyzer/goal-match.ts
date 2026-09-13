@@ -63,47 +63,82 @@ export interface GoalEvidence {
   metadata: number;
   body: number;
   practical: number;
+  topic: number;
+}
+
+/** Shared with passage selection. A topic match is not proof of practical help. */
+export function readingTermMatch(
+  query: Set<string>,
+  target: Set<string>,
+): number {
+  const matches = [...query].filter((term) => target.has(term));
+  const lexical = matches.filter((term) => !term.startsWith('concept:'));
+  const lexicalCount = [...query].filter(
+    (term) => !term.startsWith('concept:'),
+  ).length;
+  const concepts = [...query].filter((term) => term.startsWith('concept:'));
+  const conceptMatches = matches.length - lexical.length;
+  const conceptCoverage = conceptMatches / Math.max(1, concepts.length);
+  const coverage =
+    lexical.length > 0 && lexical.length >= Math.min(2, lexicalCount)
+      ? matches.length / query.size
+      : conceptMatches >= 2 && conceptCoverage >= 0.5
+        ? conceptCoverage * 0.6
+        : 0;
+  return coverage >= 0.25 ? coverage : 0;
+}
+
+/** Tokenize the article once even when the reading profile contains many goals. */
+export function createGoalEvidenceAssessor(
+  material: PageCapture,
+): (goal: string) => GoalEvidence {
+  const metadataTerms = goalTerms(
+    [material.title, material.excerpt, ...material.headings].join(' '),
+  );
+  const language = resolveHeuristicLanguage(
+    material.language,
+    material.content,
+  );
+  const blocks = articleMap(material)
+    .blocks.filter((block) => block.text.length >= 60)
+    .map((block) => ({
+      terms: goalTerms(block.text),
+      actionable:
+        ['list', 'table', 'code'].includes(block.kind) ||
+        matchesLanguageMarker(block.text, 'recommendation', language) ||
+        /\b(compare|measure|configure|set|run|test|example|because|however|steps?)\b|сравн|измер|настрой|например|потому|однако|шаг/iu.test(
+          block.text,
+        ),
+    }));
+  return (goal) => {
+    const query = goalTerms(goal);
+    const metadata = goalCoverage(query, metadataTerms);
+    let body = 0;
+    let practical = 0;
+    let topic = 0;
+    for (const block of blocks) {
+      topic = Math.max(topic, readingTermMatch(query, block.terms));
+      const matched = [...query].filter((term) => block.terms.has(term));
+      // Topic aliases can find passages but cannot alone prove a multi-part task is addressed.
+      const specific = matched.filter(
+        (term) => !term.startsWith('concept:'),
+      ).length;
+      const coverage = goalCoverage(query, block.terms);
+      const supported =
+        matched.length >= Math.min(2, query.size) &&
+        (specific > 0 || query.size === 1) &&
+        coverage >= 0.25;
+      if (!supported) continue;
+      body = Math.max(body, coverage);
+      if (block.actionable) practical = Math.max(practical, coverage);
+    }
+    return { metadata, body, practical, topic };
+  };
 }
 
 export function assessGoalEvidence(
   material: PageCapture,
   goal: string,
 ): GoalEvidence {
-  const query = goalTerms(goal);
-  const metadata = goalCoverage(
-    query,
-    goalTerms(
-      [material.title, material.excerpt, ...material.headings].join(' '),
-    ),
-  );
-  let body = 0;
-  let practical = 0;
-  const language = resolveHeuristicLanguage(
-    material.language,
-    material.content,
-  );
-  for (const block of articleMap(material).blocks) {
-    if (block.text.length < 60) continue;
-    const terms = goalTerms(block.text);
-    const matched = [...query].filter((term) => terms.has(term));
-    // One broad topic cannot establish a solution to a multi-part task.
-    const specific = matched.filter(
-      (term) => !term.startsWith('concept:'),
-    ).length;
-    const coverage = goalCoverage(query, terms);
-    const supported =
-      matched.length >= Math.min(2, query.size) &&
-      (specific > 0 || query.size === 1) &&
-      coverage >= 0.25;
-    if (!supported) continue;
-    body = Math.max(body, coverage);
-    const actionable =
-      ['list', 'table', 'code'].includes(block.kind) ||
-      matchesLanguageMarker(block.text, 'recommendation', language) ||
-      /\b(compare|measure|configure|set|run|test|example|because|however|steps?)\b|сравн|измер|настрой|например|потому|однако|шаг/iu.test(
-        block.text,
-      );
-    if (actionable) practical = Math.max(practical, coverage);
-  }
-  return { metadata, body, practical };
+  return createGoalEvidenceAssessor(material)(goal);
 }

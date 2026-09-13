@@ -2,7 +2,7 @@
 
 **A local-first Chrome extension that helps you find passages relevant to your task, with their context.**
 
-[Website](https://giwwi.github.io/attention/) · [Download the extension](https://giwwi.github.io/attention/releases/attention-0.28.0.zip)
+[Website](https://giwwi.github.io/attention/) · [Chrome Web Store](https://chromewebstore.google.com/detail/attention/fcclhejgaklnkfgalglcmhmledgefhhp) · [Latest release](https://github.com/giwwi/attention/releases/tag/v0.28.1)
 
 ![Attention demo](docs/attention-demo.gif)
 
@@ -14,7 +14,7 @@ Before a profile is saved, cards invite you to create one. Personal reading reco
 
 ## Try it in Chrome
 
-1. Download and unzip the [version 0.28.0](https://giwwi.github.io/attention/releases/attention-0.28.0.zip).
+1. Download and unzip the [version 0.28.1](https://github.com/giwwi/attention/releases/download/v0.28.1/attention-0.28.1.zip).
 2. Open `chrome://extensions`.
 3. Enable **Developer mode**.
 4. Click **Load unpacked** and select the unzipped `attention-extension` folder.
@@ -35,7 +35,7 @@ To save a selected passage with context to Readwise, enable **Settings → Highl
 
 No API key is required for the local evaluation. To configure optional AI analysis, open **Settings → AI**, paste a Vercel AI Gateway key, and keep the suggested Gemini model or enter another `provider/model` identifier. Choose **Check with AI** directly on the article card. The same visible row shows **Checked with AI** after success or lets you retry after an error. If AI is not connected or local-only mode is enabled, the disabled control explains why it is unavailable. Opening the card, popup, or details does not itself send an AI request.
 
-## Contextual passages and cautious assessments (0.28.0)
+## Contextual passages and actionable assessments (0.28.1)
 
 Local selection scans paragraphs, lists and tables across the extracted article and ranks their connection to your current goal and selected profile interests or learning topics. Examples, procedures and limitations can qualify even when they are not central claims. A highlight keeps whole neighboring blocks needed for context, within the same section; the core paragraph is more prominent. If the context cannot fit without clipping, that candidate is omitted. The panel saves the full selected text to Readwise, including its context.
 
@@ -43,9 +43,9 @@ Local matches are described as related to your goal or interests. Missing knowle
 
 An explicit **Check with AI** asks for the article assessment and passage IDs in **one request**, using the same source blocks for both. The source text comes from those exact blocks. Invented IDs, quotes outside the supplied text and selections with insufficient context are rejected or left uncertain. An AI passage may be labeled as a possible addition to your knowledge only when the model cites concrete, explicitly stated knowledge from the selected profile; this remains an estimate.
 
-The shared source budget is 24,000 characters of whole blocks and their context, distributed across sections and their beginnings, middles and endings. If the article does not fit, the card says **Part of the article assessed** and avoids a confident Read or Skip. This sampling can miss important content. There are no automatic retries or extra passage-selection requests. A failed AI check falls back to local evaluation with an explanation. Successful results retain request count, token usage when returned by the provider, and elapsed time in the encrypted evaluation; these are not a price quote or analytics sent to the developer. Local-only mode makes no AI requests. A map is bounded to 800 blocks / 240,000 characters, and a displayed passage to 6,000 characters. Changes to the article invalidate its highlights and cached selection.
+The shared source budget is 24,000 characters of whole blocks and their context, distributed across sections and their beginnings, middles and endings. If the article does not fit, the card keeps a preliminary Read, Skim or Skip direction, caps confidence and shows a short note that only part of the article was assessed. In Russian, the card also displays the model’s concrete explanation of usefulness or limitations. This sampling can miss important content. There are no automatic retries or extra passage-selection requests. A failed AI check falls back to local evaluation with an explanation. Successful results retain request count, token usage when returned by the provider, and elapsed time in the encrypted evaluation; these are not a price quote or analytics sent to the developer. Local-only mode makes no AI requests. A map is bounded to 800 blocks / 240,000 characters, and a displayed passage to 6,000 characters. Changes to the article invalidate its highlights and cached selection.
 
-Local relevance uses weighted coverage of the task, with each concept and its aliases counted once. A title match can suggest a topic, but applicability requires evidence in the body. For Work, absent task evidence is shown as **Not sure yet**, rather than a confident recommendation. Browsing history cannot silently replace the current goal. Quality wording describes visible explanations, links and other textual markers; it does not claim fact-checking. These remain heuristics, not demonstrated measures of usefulness.
+Local relevance uses weighted coverage of the task, with each concept and its aliases counted once. A title match can suggest a topic, but applicability requires evidence in the body. Local assessment considers all relevant goals, learning topics and interests from the profile, while an explicit current task takes priority. A related topic can lead to selective reading without claiming task-specific benefit; no detected relation leads to a tentative Skip. **Not sure yet** is reserved for missing user context. Recommendation direction and confidence are handled separately before and after calibration. Browsing history cannot silently replace the current goal. Quality wording describes visible explanations, links and other textual markers; it does not claim fact-checking. These remain heuristics, not demonstrated measures of usefulness.
 
 ## What it does
 
@@ -94,7 +94,7 @@ pnpm build
 
 Load `dist/` through `chrome://extensions` → **Load unpacked**.
 
-For an existing unpacked installation, rebuild and click **Reload** in `chrome://extensions`, then refresh open article tabs. Version 0.28.0 recalculates cached assessments with task evidence and one shared AI source set. Earlier raw-score versions are excluded from the new calibration fit. A saved profile is still required for evaluation.
+For an existing unpacked installation, rebuild and click **Reload** in `chrome://extensions`, then refresh open article tabs. Version 0.28.1 recalculates cached assessments using the updated profile matching and decision policy. Earlier raw-score versions are excluded from the new calibration fit. A saved profile is still required for evaluation.
 
 Useful commands:
 

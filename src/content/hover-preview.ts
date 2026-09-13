@@ -1,4 +1,7 @@
-import { uncertainAssessment } from '../analyzer/utility';
+import {
+  assessmentNeedsContext,
+  preliminaryAssessment,
+} from '../analyzer/utility';
 import { assessmentNote } from '../i18n/assessment-notes';
 import { passageText } from '../i18n/passages';
 import { isTrustedUserInteraction } from './user-interaction';
@@ -64,7 +67,7 @@ interface HoverPreviewGlobal {
 }
 
 const hoverGlobal = globalThis as typeof globalThis & HoverPreviewGlobal;
-const HOVER_CONTRACT_VERSION = 'feed-compact-article-profile-prompt-v19';
+const HOVER_CONTRACT_VERSION = 'article-decision-confidence-v20';
 const MATERIAL_TITLE_SELECTOR = [
   'h1',
   'h2',
@@ -104,7 +107,7 @@ function verdictLabel(
 const extractedPageCache = new PageCaptureCache<PageCapture | null>();
 
 export function previewVerdict(preview: HoverPreview): HoverPreviewVerdict {
-  if (uncertainAssessment(preview.insights)) return 'maybe';
+  if (assessmentNeedsContext(preview.insights)) return 'maybe';
   if (preview.recommendedAction === 'open') return 'read';
   if (preview.recommendedAction === 'skip') return 'skip';
   return 'maybe';
@@ -1327,10 +1330,34 @@ export function personalValueReason(
   preview: HoverPreview,
   language: UiLanguage = DEFAULT_UI_LANGUAGE,
 ): string {
-  if (preview.insights?.analysisCoverage === 'partial')
-    return assessmentNote(language, 'partialNote');
-  if (uncertainAssessment(preview.insights))
-    return assessmentNote(language, 'goal');
+  const explanation = preview.insights?.assessmentReason;
+  if (explanation?.language === language && explanation.text.trim())
+    return normalizedText(explanation.text);
+  const focus = preview.insights?.readingFocus;
+  if (focus && preliminaryAssessment(preview.insights)) {
+    const label = normalizedText(focus.label);
+    return assessmentNote(
+      language,
+      preview.insights?.taskEvidence && preview.insights.taskEvidence !== 'body'
+        ? 'relatedFocus'
+        : 'focus',
+      label.length > 160 ? `${label.slice(0, 157)}…` : label,
+    );
+  }
+  if (
+    preview.insights?.taskEvidence &&
+    preview.insights.taskEvidence !== 'body'
+  )
+    return assessmentNote(
+      language,
+      preview.insights.readingPassages?.items.length
+        ? 'relatedPassages'
+        : preview.insights.taskEvidence === 'no-context'
+          ? 'goal'
+          : preview.insights.taskEvidence === 'metadata-only'
+            ? 'metadataOnly'
+            : 'noMatch',
+    );
   if (preview.suggestedScenario === 'learn') {
     return uiText(language, 'betterForLearn');
   }
@@ -1982,16 +2009,6 @@ export function installHoverPreview(
       save: 'saveHeadline',
       skip: 'skipHeadline',
     };
-    view.verdict.textContent = expanded
-      ? uncertainAssessment(preview.insights)
-        ? assessmentNote(
-            language,
-            preview.insights?.analysisCoverage === 'partial'
-              ? 'partial'
-              : 'unclear',
-          )
-        : cardText(language, headlineKeys[primaryDecision])
-      : label;
     view.card.classList.toggle('expanded', expanded);
     view.host.dataset.attentionExpanded = String(expanded);
     view.host.style.pointerEvents = expanded ? 'auto' : 'none';
@@ -2012,6 +2029,22 @@ export function installHoverPreview(
       activeNovelMatches.length > 0 ? cachedPageCapture : null;
     activeReadwiseConnected = cachedResponse?.readwiseConnected === true;
     const hasPassages = activeNovelMatches.length > 0;
+    view.verdict.textContent = expanded
+      ? assessmentNeedsContext(preview.insights)
+        ? assessmentNote(language, 'unclear')
+        : primaryDecision === 'skim' && hasPassages
+          ? assessmentNote(language, 'passages')
+          : preliminaryAssessment(preview.insights)
+            ? assessmentNote(
+                language,
+                primaryDecision === 'read'
+                  ? 'read'
+                  : primaryDecision === 'skip'
+                    ? 'skip'
+                    : 'partial',
+              )
+            : cardText(language, headlineKeys[primaryDecision])
+      : label;
     view.passagesButton.hidden = !hasPassages;
     view.passagesButton.disabled = contextPending;
     view.passagesButton.dataset.primary = String(hasPassages);
@@ -2046,7 +2079,8 @@ export function installHoverPreview(
     const coverageStatus =
       selection?.status === 'unavailable'
         ? 'unavailable'
-        : selection?.coverage === 'partial'
+        : selection?.coverage === 'partial' &&
+            preview.insights?.analysisCoverage !== 'partial'
           ? 'partial'
           : null;
     view.passageHint.textContent = [
@@ -2136,10 +2170,18 @@ export function installHoverPreview(
     view.host.dataset.attentionPlan = readingPlan?.title ?? '';
     const weakExtraction =
       expanded && preview.insights?.reliability?.weakExtraction === true;
-    view.reliabilityNote.textContent = weakExtraction
-      ? uiText(language, 'weakExtraction')
-      : '';
-    view.reliabilityNote.classList.toggle('has-warning', weakExtraction);
+    const partial =
+      expanded && preview.insights?.analysisCoverage === 'partial';
+    view.reliabilityNote.textContent = [
+      partial ? assessmentNote(language, 'partialNote') : '',
+      weakExtraction ? uiText(language, 'weakExtraction') : '',
+    ]
+      .filter(Boolean)
+      .join(' ');
+    view.reliabilityNote.classList.toggle(
+      'has-warning',
+      weakExtraction || partial,
+    );
     view.host.dataset.attentionWeakExtraction = String(weakExtraction);
     const analysisSource = cachedResponse?.analysisSource ?? 'local';
     const aiState = cachedResponse?.aiState ?? 'not-connected';

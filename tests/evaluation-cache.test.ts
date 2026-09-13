@@ -111,21 +111,24 @@ describe('evaluation cache versioning', () => {
     ).toBe(false);
   });
 
-  it('rejects evaluations produced before the goal-matching fix', async () => {
-    const features = await buildMaterialFeatures(capture());
-    const legacy = {
-      ...stored(
-        createEvaluationCacheVersion(features, context, sourceVersions),
-      ),
-      cacheVersion: {
-        ...createEvaluationCacheVersion(features, context, sourceVersions),
-        schemaVersion: 4,
-      },
-    } as unknown as StoredEvaluation;
-    expect(
-      isEvaluationCacheCurrent(legacy, sourceVersions, context, features),
-    ).toBe(false);
-  });
+  it.each([4, 8])(
+    'rejects evaluations from scoring/cache revision %i',
+    async (version) => {
+      const features = await buildMaterialFeatures(capture());
+      const legacy = {
+        ...stored(
+          createEvaluationCacheVersion(features, context, sourceVersions),
+        ),
+        cacheVersion: {
+          ...createEvaluationCacheVersion(features, context, sourceVersions),
+          schemaVersion: version,
+        },
+      } as unknown as StoredEvaluation;
+      expect(
+        isEvaluationCacheCurrent(legacy, sourceVersions, context, features),
+      ).toBe(false);
+    },
+  );
 
   it('treats legacy cache entries without version metadata as stale', async () => {
     const features = await buildMaterialFeatures(capture());
