@@ -1,4 +1,4 @@
-# Attention 0.29.1 — English, German and Russian priority (not yet published)
+# Attention 0.29.1 — English, German and Russian priority
 
 - English, Deutsch and Русский are available directly on the first onboarding screen and during profile setup. The selection updates the interface and is saved inside the encrypted vault after creation; other interface languages remain available.
 - German local matching recognizes common inflections, selected topic equivalents and task vocabulary. Passage selection recognizes German examples, instructions and caveats and keeps necessary neighboring context.
