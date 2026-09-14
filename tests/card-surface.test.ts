@@ -219,6 +219,59 @@ async function openCard(response = previewResponse()) {
 }
 
 describe('large article card surface', () => {
+  it('keeps a long AI explanation in details while showing a bounded preview', async () => {
+    const capture = captureDocument(document, window.location.href);
+    const evaluation = await new LocalAnalyzer().analyze(capture, context);
+    const response = previewResponse();
+    response.preview = createFullAnalysisHoverPreview(evaluation);
+    const explanation =
+      'Compare how the study tests competing explanations. ' +
+      'Its findings depend on how representative the original observations were. '.repeat(
+        7,
+      );
+    response.preview.insights!.assessmentReason = {
+      text: explanation.trim(),
+      language: 'en',
+    };
+    const { shadow } = await openCard(response);
+    expect(element(shadow, '.score').textContent!.length).toBeLessThanOrEqual(
+      320,
+    );
+    expect(element(shadow, '.score').textContent).toMatch(/…$/u);
+    expect(element<HTMLDetailsElement>(shadow, 'details.details').open).toBe(
+      false,
+    );
+    const full = element<HTMLElement>(shadow, '.full-reason');
+    expect(full.closest('details')).not.toBeNull();
+    expect(full.hidden).toBe(false);
+    expect(full.textContent).toBe(explanation.trim());
+  });
+
+  it.each([0, 6])(
+    'distinguishes no AI selections from rejected selections: %s',
+    async (modelCandidates) => {
+      const capture = captureDocument(document, window.location.href);
+      const evaluation = await new LocalAnalyzer().analyze(capture, context);
+      const response = previewResponse();
+      response.analysisSource = 'ai';
+      response.novelPassageHighlightsEnabled = true;
+      response.preview = createFullAnalysisHoverPreview(evaluation);
+      response.preview.insights!.readingPassages = {
+        ...response.preview.insights!.readingPassages!,
+        source: 'ai',
+        status: 'no-match',
+        items: [],
+        modelCandidates,
+      };
+      const { shadow } = await openCard(response);
+      expect(element(shadow, '.passage-hint').textContent).toBe(
+        modelCandidates
+          ? 'Could not show the selected passages. Try checking with AI again.'
+          : 'No clearly relevant passages found.',
+      );
+    },
+  );
+
   it('shows the partial AI explanation and one visible coverage note instead of a disclaimer headline', async () => {
     const capture = captureDocument(document, window.location.href);
     const evaluation = await new LocalAnalyzer().analyze(capture, context);
@@ -571,8 +624,9 @@ describe('large article card surface', () => {
     expect(api.previews()).toHaveLength(3);
     expect(source.textContent).toBe('Checked with AI ✓');
     expect(source.dataset.source).toBe('ai');
-    expect(ai.hidden).toBe(true);
-    expect(ai.disabled).toBe(true);
+    expect(ai.hidden).toBe(false);
+    expect(ai.disabled).toBe(false);
+    expect(ai.textContent).toContain('Retry with AI');
     expect(details.open).toBe(false);
   });
 

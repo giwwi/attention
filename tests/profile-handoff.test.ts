@@ -73,6 +73,9 @@ function handoffEnvironment(options?: {
 function onboardingFixture(): void {
   document.body.innerHTML = `
     <section id="profile-onboarding" hidden>
+      <div id="profile-welcome-step" hidden><div id="profile-welcome-demo"></div><button id="profile-start"></button></div>
+      <div id="profile-question-step" hidden></div>
+      <div id="profile-complete-step" hidden><button id="profile-return"></button><p id="profile-return-status"></p><button id="profile-finish"></button><button id="profile-add-provider"></button></div>
       <div id="profile-source-step"></div>
       <div id="profile-quick-step" hidden></div>
       <div id="profile-quick-review-step" hidden></div>
@@ -91,7 +94,7 @@ function onboardingFixture(): void {
     <textarea id="profile-import-json"></textarea>
     <ul id="profile-validation-errors"></ul>
     <p id="profile-review-source"></p>
-    <div id="profile-review-content"></div>
+    <div id="profile-review-brief"></div><details id="profile-review-details"><div id="profile-review-content"></div></details>
     <ul id="profile-review-errors"></ul>
     <div id="profile-conflicts"></div>
     <div id="profile-bar" hidden></div>
@@ -123,6 +126,7 @@ function onboardingFixture(): void {
 
 beforeEach(() => {
   document.documentElement.lang = 'ru';
+  document.documentElement.dataset.profileDemoSeen = 'true';
   installDataLocks();
 });
 
@@ -263,6 +267,15 @@ describe('profile handoff persistence', () => {
       document.getElementById('profile-import-json') as HTMLTextAreaElement
     ).value = JSON.stringify({
       schema_version: '2.0',
+      goals: [
+        {
+          goal: 'Choose tools for software testing',
+          priority: 'high',
+          status: 'active',
+          confidence: 1,
+        },
+      ],
+      learning_areas: [{ topic: 'Software quality', confidence: 1 }],
       interests: [
         { topic: 'Software quality', confidence: 0.9, strength: 0.8 },
       ],
@@ -284,6 +297,8 @@ describe('profile handoff persistence', () => {
     document.getElementById('save-profile')!.click();
     await vi.waitFor(() => expect(onComplete).toHaveBeenCalledOnce());
     expect(storage.values.personalProfile).toBeDefined();
+    document.getElementById('profile-onboarding')!.hidden = true;
+    document.body.classList.remove('profile-flow-active');
     document.documentElement.lang = 'en';
     onboarding.translate();
     expect(document.getElementById('profile-onboarding')!.hidden).toBe(true);
@@ -487,5 +502,153 @@ describe('profile imports after data erasure', () => {
       ).toContain('данные были удалены'),
     );
     expect(storage.values[PROFILE_IMPORT_HANDOFF_KEY]).toBeUndefined();
+  });
+});
+
+describe('guided profile onboarding', () => {
+  async function startManual() {
+    const storage = new MemoryStorage();
+    vi.stubGlobal('chrome', { storage: { local: storage } });
+    onboardingFixture();
+    const button = document.createElement('button');
+    button.dataset.profileSource = 'manual';
+    document.getElementById('profile-source-step')!.append(button);
+    const onComplete = vi.fn();
+    const onboarding = new ProfileOnboarding({ onComplete });
+    await onboarding.initialize(true);
+    button.click();
+    await vi.waitFor(() =>
+      expect(document.getElementById('profile-question-step')!.hidden).toBe(
+        false,
+      ),
+    );
+    return { storage, onComplete, onboarding };
+  }
+  function answer(value: string, topic?: string) {
+    (document.getElementById('profile-answer') as HTMLTextAreaElement).value =
+      value;
+    if (topic)
+      (
+        document.getElementById('profile-answer-topic') as HTMLInputElement
+      ).value = topic;
+    document
+      .querySelector('#profile-question-step form')!
+      .dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+  }
+  it('builds a manual profile step by step and preserves answers across language changes', async () => {
+    const { storage, onComplete, onboarding } = await startManual();
+    expect(
+      document.getElementById('profile-question-title')!.textContent,
+    ).toContain('Зачем');
+    answer('');
+    expect(
+      document
+        .querySelector('#profile-question-step [role=alert]')!
+        .hasAttribute('hidden'),
+    ).toBe(false);
+    (document.getElementById('profile-answer') as HTMLTextAreaElement).value =
+      'Выбираю инструменты для оценки AI';
+    document.documentElement.lang = 'en';
+    onboarding.translate();
+    expect(
+      (document.getElementById('profile-answer') as HTMLTextAreaElement).value,
+    ).toBe('Выбираю инструменты для оценки AI');
+    answer('Выбираю инструменты для оценки AI');
+    answer('AI evaluation\nSoftware quality');
+    answer('I understand pairwise ranking', 'AI evaluation');
+    expect(document.getElementById('profile-review-step')!.hidden).toBe(false);
+    expect(
+      (document.getElementById('profile-review-details') as HTMLDetailsElement)
+        .open,
+    ).toBe(false);
+    expect(
+      document.querySelectorAll('#profile-review-brief textarea'),
+    ).toHaveLength(4);
+    expect(storage.values.personalProfile).toBeUndefined();
+    document.getElementById('save-profile')!.click();
+    await vi.waitFor(() => expect(onComplete).toHaveBeenCalledOnce());
+    expect(document.getElementById('profile-complete-step')!.hidden).toBe(
+      false,
+    );
+    const saved = storage.values.personalProfile as ReturnType<
+      typeof createEmptyProfile
+    >;
+    expect(saved.demonstratedKnowledge[0]?.statement).toBe(
+      'I understand pairwise ranking',
+    );
+    expect(saved.expertise).toHaveLength(0);
+  });
+  it('never saves a guided draft after erasure', async () => {
+    const { storage, onComplete } = await startManual();
+    answer('Learn to evaluate AI');
+    answer('Model evaluation');
+    document.getElementById('profile-beginner')!.click();
+    await storage.set({ [DATA_GENERATION_KEY]: 'erased' });
+    document.getElementById('save-profile')!.click();
+    await vi.waitFor(() =>
+      expect(
+        document.getElementById('profile-review-errors')!.textContent,
+      ).toContain('данные были удалены'),
+    );
+    expect(storage.values.personalProfile).toBeUndefined();
+    expect(onComplete).not.toHaveBeenCalled();
+  });
+  it('asks for missing context after an incomplete AI answer, without discarding the answer', async () => {
+    const storage = new MemoryStorage();
+    vi.stubGlobal('chrome', { storage: { local: storage } });
+    onboardingFixture();
+    const onComplete = vi.fn();
+    const onboarding = new ProfileOnboarding({ onComplete });
+    await onboarding.initialize(true);
+    document
+      .querySelector<HTMLButtonElement>('[data-profile-source=chatgpt]')!
+      .click();
+    await vi.waitFor(() =>
+      expect(document.getElementById('profile-prompt-step')!.hidden).toBe(
+        false,
+      ),
+    );
+    (
+      document.getElementById('profile-import-json') as HTMLTextAreaElement
+    ).value = JSON.stringify({
+      schema_version: '2.0',
+      interests: [
+        { topic: 'History of cities', strength: 0.9, confidence: 0.8 },
+      ],
+      leisure_profile: {
+        status: 'insufficient_data',
+        preferences: [],
+        confidence: 0,
+      },
+    });
+    document.getElementById('validate-profile')!.click();
+    await vi.waitFor(() =>
+      expect(document.getElementById('profile-review-step')!.hidden).toBe(
+        false,
+      ),
+    );
+    const interest = document.querySelector<HTMLTextAreaElement>(
+      '#profile-review-brief textarea',
+    )!;
+    interest.value = 'History of European cities';
+    interest.dispatchEvent(new Event('input'));
+    document.getElementById('save-profile')!.click();
+    expect(
+      document.getElementById('profile-question-title')!.textContent,
+    ).toContain('Зачем');
+    answer('Read for enjoyment');
+    expect(
+      document.getElementById('profile-question-title')!.textContent,
+    ).toContain('с нуля');
+    document.getElementById('profile-beginner')!.click();
+    document.getElementById('save-profile')!.click();
+    await vi.waitFor(() => expect(onComplete).toHaveBeenCalledOnce());
+    const saved = storage.values.personalProfile as ReturnType<
+      typeof createEmptyProfile
+    >;
+    expect(saved.interests[0]?.topic).toBe('History of European cities');
+    expect(saved.interests[0]?.confidence).toBe(0.8);
+    expect(saved.learningAreas[0]?.topic).toBe('History of European cities');
+    expect(saved.demonstratedKnowledge).toHaveLength(0);
   });
 });

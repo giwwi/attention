@@ -12,7 +12,7 @@ import {
   cardTextContent,
   shadowElementState,
 } from './helpers/card';
-import { importTestProfile, PROFILE_IMPORT } from './helpers/profile';
+import { PROFILE_IMPORT } from './helpers/profile';
 
 test('cold cards guide setup; profile save activates existing tabs; deletion restores setup', async () => {
   test.setTimeout(90_000);
@@ -87,19 +87,20 @@ test('cold cards guide setup; profile save activates existing tabs; deletion res
     const opened = context.waitForEvent('page');
     await clickCardElement(context, feed, '.profile-create-button');
     let popup = await opened;
-    await expect(popup).toHaveURL(popupUrl);
+    await expect(popup).toHaveURL(/popup.html\?sourceTab=\d+$/);
     await popup.setViewportSize({ width: 380, height: 850 });
     const demo = popup.locator('[data-profile-demo]');
     await expect(demo).toBeVisible();
     const beforeDemo = await worker.evaluate(() =>
       chrome.storage.local.get(null),
     );
-    await demo.locator('summary').click();
-    await expect(demo).toContainText('made-up example');
-    await demo.getByRole('button', { name: 'Show the useful passage' }).click();
-    await expect(demo.getByRole('status')).toBeVisible();
-    await expect(demo.locator('article p').last()).toBeFocused();
-    await expect(demo.locator('article p').last()).toContainText('However');
+    await expect(demo).toContainText('Illustrative example');
+    await demo
+      .getByRole('button', { name: 'I already know the basics' })
+      .click();
+    await expect(demo.getByRole('status')).toContainText(
+      'You can skip the basics',
+    );
     expect(await worker.evaluate(() => chrome.storage.local.get(null))).toEqual(
       beforeDemo,
     );
@@ -107,7 +108,6 @@ test('cold cards guide setup; profile save activates existing tabs; deletion res
       path: 'output/playwright/profile-demo-before-vault.png',
       fullPage: true,
     });
-    await demo.locator('summary').click();
     await createVaultThroughUi(popup);
     await expect(popup.locator('#profile-source-step')).toBeVisible();
     await expect(
@@ -166,6 +166,7 @@ test('cold cards guide setup; profile save activates existing tabs; deletion res
     await popup.close();
     popup = await context.newPage();
     await popup.goto(popupUrl);
+    await popup.setViewportSize({ width: 380, height: 850 });
     await expect(popup.locator('#profile-prompt-step')).toBeVisible();
     await popup.locator('#profile-import-json').fill('{broken');
     await popup.locator('#validate-profile').click();
@@ -189,6 +190,20 @@ test('cold cards guide setup; profile save activates existing tabs; deletion res
       'true',
     );
     await popup.locator('#save-profile').click();
+    await expect(popup.locator('#profile-complete-step')).toBeVisible();
+    await expect(popup.locator('#profile-return')).toBeVisible();
+    await popup.locator('#profile-return').click();
+    await expect
+      .poll(() =>
+        worker.evaluate(
+          async () =>
+            (await chrome.tabs.query({ active: true, currentWindow: true }))[0]
+              ?.url,
+        ),
+      )
+      .toContain('/feed');
+    await popup.bringToFront();
+    await popup.locator('#profile-finish').click();
     await expect(popup.locator('#launcher-home')).toBeVisible();
     await expect(popup.locator('#open-page-card')).toBeEnabled();
     await expect(
@@ -242,13 +257,70 @@ test('cold cards guide setup; profile save activates existing tabs; deletion res
     const articleOpened = context.waitForEvent('page');
     await article.keyboard.press('Enter');
     const articleSetup = await articleOpened;
+    await expect(articleSetup.locator('#profile-welcome-step')).toBeVisible();
+    await articleSetup.locator('#profile-start').click();
     await expect(articleSetup.locator('#profile-source-step')).toBeVisible();
     await articleSetup.close();
-    await expect(popup.locator('#profile-source-step')).toBeVisible();
+    await expect(popup.locator('#profile-welcome-step')).toBeVisible();
+    await popup.locator('#profile-start').click();
     await expect(popup.locator('#open-page-card')).toBeDisabled();
-    await expect(settings.locator('#profile-source-step')).toBeVisible();
+    await expect(settings.locator('#profile-welcome-step')).toBeVisible();
 
-    await importTestProfile(popup);
+    await popup.bringToFront();
+    await popup.locator('#profile-other-methods > summary').click();
+    await popup.locator('[data-profile-source="manual"]').click();
+    await expect(popup.locator('#profile-question-title')).toContainText(
+      'Зачем',
+    );
+    await popup
+      .locator('#profile-answer')
+      .fill('Хочу выбирать инструменты для оценки моделей');
+    await popup.emulateMedia({ colorScheme: 'dark' });
+    await popup.screenshot({
+      path: 'output/playwright/onboarding-question-dark.png',
+      fullPage: true,
+    });
+    await popup.locator('#profile-question-step button[type=submit]').click();
+    await popup.locator('#profile-answer').fill('Оценка AI\nКачество данных');
+    await popup.locator('#profile-question-step button[type=submit]').click();
+    await popup.locator('#profile-beginner').click();
+    await expect(popup.locator('#profile-review-step')).toBeVisible();
+    await expect(popup.locator('#profile-review-details')).not.toHaveAttribute(
+      'open',
+      '',
+    );
+    await expect
+      .poll(() =>
+        popup
+          .locator('#profile-review-brief textarea')
+          .first()
+          .evaluate((input) => input.scrollHeight <= input.clientHeight + 1),
+      )
+      .toBe(true);
+    await popup.screenshot({
+      path: 'output/playwright/onboarding-review-dark.png',
+      fullPage: true,
+    });
+    await popup.emulateMedia({ colorScheme: 'light' });
+    await popup.screenshot({
+      path: 'output/playwright/onboarding-review-light.png',
+      fullPage: true,
+    });
+    await popup.locator('#save-profile').click();
+    await expect(popup.locator('#profile-complete-step')).toBeVisible();
+    await popup.setViewportSize({ width: 1280, height: 800 });
+    await popup.screenshot({
+      path: 'output/playwright/onboarding-complete.png',
+      fullPage: true,
+    });
+    const savedProfile = (await worker.evaluate(
+      async () =>
+        (await attentionVault.privateStorage.get('personalProfile'))
+          .personalProfile,
+    )) as { learningAreas: unknown[]; demonstratedKnowledge: unknown[] };
+    expect(savedProfile.learningAreas).toHaveLength(2);
+    expect(savedProfile.demonstratedKnowledge).toHaveLength(0);
+    await popup.locator('#profile-finish').click();
     await expect(popup.locator('#launcher-home')).toBeVisible();
     await expect(article.locator('[data-attention-trigger]')).toHaveCount(1);
     await article.bringToFront();

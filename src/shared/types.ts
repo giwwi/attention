@@ -289,6 +289,8 @@ export interface AssessmentReliability {
 }
 
 export interface MaterialEvaluationInsights {
+  /** Random correlation ID for the local, content-free AI diagnostic report. */
+  aiAnalysisId?: string;
   taskEvidence?: 'body' | 'metadata-only' | 'no-match' | 'no-context';
   /** A focus matched in the body; topic-level matches do not establish task utility. */
   readingFocus?: {

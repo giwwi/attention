@@ -28,5 +28,7 @@ export interface ReadingPassages {
   source: 'local' | 'ai';
   coverage: 'complete' | 'partial';
   status: 'ready' | 'no-match' | 'no-context' | 'unavailable';
+  /** Lets the UI distinguish no model suggestions from suggestions it could not display. */
+  modelCandidates?: number;
   items: ReadingPassage[];
 }

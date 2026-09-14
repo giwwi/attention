@@ -1,6 +1,7 @@
 import { privateStorage } from '../vault/storage';
 import { EXTENSION_RUNTIME_VERSION } from '../shared/version';
 import { STORAGE_RETENTION_LIMITS } from '../storage/limits';
+import { AI_ANALYSIS_DIAGNOSTIC_KEY } from './ai-analysis';
 
 export const DIAGNOSTIC_LOG_KEY = 'diagnosticLog';
 
@@ -172,7 +173,7 @@ export async function recordDiagnostic(
 export async function clearDiagnostics(
   storage: chrome.storage.StorageArea = privateStorage,
 ): Promise<void> {
-  await storage.remove(DIAGNOSTIC_LOG_KEY);
+  await storage.remove([DIAGNOSTIC_LOG_KEY, AI_ANALYSIS_DIAGNOSTIC_KEY]);
 }
 
 export function diagnosticsExport(entries: DiagnosticEntry[]): string {

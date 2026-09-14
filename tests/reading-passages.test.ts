@@ -14,6 +14,7 @@ import type {
   PageCapture,
   RelevantProfileContext,
 } from '../src/shared/types';
+import type { PassageValidationTrace } from '../src/diagnostics/ai-analysis-types';
 
 const context: AnalysisContext = {
   scenario: 'work',
@@ -188,8 +189,7 @@ describe('AI passage boundaries', () => {
     const map = material.readingMap!;
     const batch = passageBatches(map).batches[0]!;
     const choice = {
-      coreBlockId: map.blocks[0]!.id,
-      contextBlockIds: map.blocks.map((block) => block.id),
+      passageId: batch.passages[0]!.id,
       queryIndex: 0,
       relevance: 0.9,
       confidence: 0.85,
@@ -213,10 +213,119 @@ describe('AI passage boundaries', () => {
     expect(items[0]?.blockIds).toEqual(map.blocks.map((block) => block.id));
     expect(items[0]?.knowledge).toBe('unknown');
   });
+  it('normalizes six percentage-scale candidates without changing their scores or context checks', () => {
+    const { map, batch, choice } = setup();
+    // Authored regression inputs: the original report did not retain the raw relevance values.
+    const percentages = [95, 91, 82, 77, 90, 96];
+    const percentOutput = {
+      passages: percentages.map((relevance) => ({ ...choice, relevance })),
+    };
+    const unitOutput = {
+      passages: percentages.map((relevance) => ({
+        ...choice,
+        relevance: relevance / 100,
+      })),
+    };
+    const trace: PassageValidationTrace[] = [];
+    const items = validatePassageOutput(
+      percentOutput,
+      batch,
+      map,
+      context,
+      null,
+      trace,
+    );
+    expect(items).toHaveLength(6);
+    expect(items).toEqual(
+      validatePassageOutput(unitOutput, batch, map, context, null),
+    );
+    expect(trace.map((item) => item.relevanceInput)).toEqual(
+      percentages.map((value) => ({ kind: 'number', value, scale: 'percent' })),
+    );
+    expect(
+      trace.every((item) => item.accepted && item.reasons.length === 0),
+    ).toBe(true);
+  });
+  it.each([
+    [0.64, false, 'low-relevance'],
+    [0.65, true, null],
+    [64, false, 'low-relevance'],
+    [65, true, null],
+    [100, true, null],
+    [0, false, 'low-relevance'],
+    [1, true, null],
+    [-1, false, 'invalid-relevance'],
+    [100.1, false, 'invalid-relevance'],
+    ['95', false, 'invalid-relevance'],
+    [null, false, 'invalid-relevance'],
+    [undefined, false, 'invalid-relevance'],
+    [Infinity, false, 'invalid-relevance'],
+    [NaN, false, 'invalid-relevance'],
+    [true, false, 'invalid-relevance'],
+  ])(
+    'preserves the quality threshold for relevance %s',
+    (relevance, accepted, reason) => {
+      const { map, batch, choice } = setup();
+      const trace: PassageValidationTrace[] = [];
+      const items = validatePassageOutput(
+        { passages: [{ ...choice, relevance }] },
+        batch,
+        map,
+        context,
+        null,
+        trace,
+      );
+      expect(items).toHaveLength(accepted ? 1 : 0);
+      expect(trace[0]?.reasons).toEqual(reason ? [reason] : []);
+    },
+  );
+  it('does not promote 1% or mixed fractional scores to full relevance in a percentage batch', () => {
+    const { map, batch, choice } = setup();
+    const trace: PassageValidationTrace[] = [];
+    expect(
+      validatePassageOutput(
+        {
+          passages: [1, 95, 0.9].map((relevance) => ({ ...choice, relevance })),
+        },
+        batch,
+        map,
+        context,
+        null,
+        trace,
+      ),
+    ).toHaveLength(1);
+    expect(trace.map((item) => item.relevance)).toEqual([
+      expect.closeTo(0.01),
+      expect.closeTo(0.95),
+      expect.closeTo(0.009),
+    ]);
+    expect(trace.map((item) => item.accepted)).toEqual([false, true, false]);
+  });
+  it('still rejects bad IDs, insufficient context and low confidence after scale conversion', () => {
+    const { map, batch, choice } = setup();
+    for (const change of [
+      { passageId: 'invented' },
+      { contextBlockIds: ['invented'] },
+      { queryIndex: 91 },
+      { contextSufficient: false },
+      { confidence: 0.64 },
+      { confidence: 95 },
+    ]) {
+      expect(
+        validatePassageOutput(
+          { passages: [{ ...choice, relevance: 95, ...change }] },
+          batch,
+          map,
+          context,
+          null,
+        ),
+      ).toEqual([]);
+    }
+  });
   it('rejects invented block IDs, invented query IDs, non-finite confidence and incomplete context', () => {
     const { map, batch, choice } = setup();
     for (const change of [
-      { coreBlockId: 'invented' },
+      { passageId: 'invented' },
       { contextBlockIds: ['invented'] },
       { queryIndex: 91 },
       { confidence: NaN },
@@ -256,14 +365,22 @@ describe('AI passage boundaries', () => {
     const { batches, complete } = passageBatches(map);
     expect(batches).toHaveLength(4);
     expect(complete).toBe(false);
-    expect(batches.flatMap((batch) => batch.coreIds)).toContain(
-      map.blocks[0]!.id,
-    );
-    expect(batches.flatMap((batch) => batch.coreIds)).toContain(
-      map.blocks.at(-1)!.id,
-    );
     expect(
-      batches.slice(1, -1).flatMap((batch) => batch.coreIds).length,
+      batches.flatMap((batch) =>
+        batch.passages.map((passage) => passage.coreBlockId),
+      ),
+    ).toContain(map.blocks[0]!.id);
+    expect(
+      batches.flatMap((batch) =>
+        batch.passages.map((passage) => passage.coreBlockId),
+      ),
+    ).toContain(map.blocks.at(-1)!.id);
+    expect(
+      batches
+        .slice(1, -1)
+        .flatMap((batch) =>
+          batch.passages.map((passage) => passage.coreBlockId),
+        ).length,
     ).toBeGreaterThan(0);
   });
 });

@@ -54,6 +54,8 @@ export async function importTestProfile(popup: Page): Promise<void> {
   await popup.locator('#validate-profile').click();
   await expect(popup.locator('#profile-review-step')).toBeVisible();
   await popup.locator('#save-profile').click();
+  await expect(popup.locator('#profile-complete-step')).toBeVisible();
+  await popup.locator('#profile-finish').click();
   await expect(popup.locator('#launcher-home')).toBeVisible();
   await expect(popup.locator('#open-page-card')).toBeEnabled();
 }

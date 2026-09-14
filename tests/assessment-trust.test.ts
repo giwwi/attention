@@ -18,6 +18,7 @@ import { createProfileDemo } from '../src/onboarding/profile-demo';
 import { calibrateMaterialEvaluation } from '../src/utility/calibration';
 import { RAW_UTILITY_SCORE_VERSION } from '../src/utility/prediction';
 import { assertExtensionCloudAiAllowed } from '../src/privacy/settings';
+import type { AiAnalysisDiagnostic } from '../src/diagnostics/ai-analysis-types';
 import type {
   AnalysisContext,
   PageCapture,
@@ -276,10 +277,9 @@ function modelAnswer(prompt: string) {
   );
   const blocks = payload.material.blocks as { id: string; text: string }[];
   const core = blocks.find((block) => block.text === useful) ?? blocks[0]!;
-  const ids = [
-    core.id,
-    ...blocks.filter((block) => block.text === caveat).map((block) => block.id),
-  ];
+  const offered = payload.material.passages.find(
+    (passage: { coreBlockId: string }) => passage.coreBlockId === core.id,
+  );
   return {
     output: {
       relevance: 90,
@@ -312,8 +312,7 @@ function modelAnswer(prompt: string) {
       confidence: 0.8,
       passages: [
         {
-          coreBlockId: core.id,
-          contextBlockIds: ids,
+          passageId: offered.id,
           queryIndex: 0,
           relevance: 0.9,
           confidence: 0.9,
@@ -329,6 +328,74 @@ function modelAnswer(prompt: string) {
 }
 
 describe('one source set for AI verdict and passages', () => {
+  it.each([
+    'accepted',
+    'percent-relevance',
+    'empty',
+    'rejected',
+    'schema-error',
+    'network-error',
+  ] as const)('traces the real analyzer pipeline: %s', async (mode) => {
+    const traces: AiAnalysisDiagnostic[] = [];
+    vi.mocked(generateText).mockImplementation(async (options) => {
+      if (mode === 'network-error') throw new Error('Network PRIVATE_SENTINEL');
+      const answer = modelAnswer(String(options.prompt));
+      const output = answer.output as unknown as {
+        passages: { confidence: number; relevance: number }[];
+        reason: unknown;
+      };
+      if (mode === 'empty') output.passages = [];
+      if (mode === 'rejected') output.passages[0]!.confidence = 0.5;
+      if (mode === 'percent-relevance') output.passages[0]!.relevance = 90;
+      if (mode === 'schema-error') output.reason = null;
+      return answer;
+    });
+    const analyzer = new AiGatewayAnalyzer(
+      'PRIVATE_SENTINEL',
+      undefined,
+      async (report) => {
+        traces.push(structuredClone(report));
+      },
+    );
+    const run = analyzer.analyze(material(`${useful}\n\n${caveat}`), context);
+    if (mode.endsWith('error')) await expect(run).rejects.toThrow();
+    else {
+      const result = await run;
+      expect(result.insights?.aiAnalysisId).toBe(traces[0]?.analysisId);
+      expect(result.insights?.readingPassages?.items).toHaveLength(
+        mode === 'accepted' || mode === 'percent-relevance' ? 1 : 0,
+      );
+    }
+    expect(generateText).toHaveBeenCalledTimes(1);
+    expect(traces[0]?.status).toBe('started');
+    const final = traces.at(-1)!;
+    expect(JSON.stringify(final)).not.toContain('PRIVATE_SENTINEL');
+    expect(final.status).toBe(mode.endsWith('error') ? 'failed' : 'complete');
+    expect(final.output.returned).toBe(
+      mode === 'network-error' ? null : mode === 'empty' ? 0 : 1,
+    );
+    if (mode === 'rejected')
+      expect(final.output.candidates[0]?.reasons).toEqual(['low-confidence']);
+    if (mode === 'accepted')
+      expect(final.output).toMatchObject({
+        inspected: 1,
+        accepted: 1,
+        selected: 1,
+      });
+    if (mode === 'percent-relevance') {
+      expect(final.output).toMatchObject({
+        returned: 1,
+        accepted: 1,
+        selected: 1,
+      });
+      expect(final.output.candidates[0]).toMatchObject({
+        relevance: 0.9,
+        relevanceInput: { kind: 'number', value: 90, scale: 'percent' },
+        reasons: [],
+      });
+    }
+    expect(final.display).toBeNull();
+  });
   it('evaluates and selects the middle procedure with its caveat in one request', async () => {
     const capture = material();
     capture.readingMap = createArticleMap([
@@ -453,14 +520,16 @@ describe('one source set for AI verdict and passages', () => {
 it('offers a clearly labelled example without creating a profile or vault', () => {
   const demo = createProfileDemo('ru');
   document.body.append(demo);
-  expect(demo.open).toBe(false);
   expect(demo.textContent).toContain('Учебный пример');
-  demo.querySelector('button')!.click();
-  expect(demo.querySelector('[role=status]')!.hasAttribute('hidden')).toBe(
-    false,
+  expect(demo.querySelector('[role=status]')!.textContent).toContain(
+    'Стоит прочитать',
   );
-  expect(demo.querySelector('article p:last-child')!.textContent).toContain(
-    'Однако',
+  demo.querySelectorAll('button')[1]!.click();
+  expect(demo.querySelector('[role=status]')!.textContent).toContain(
+    'Основы можно пропустить',
+  );
+  expect(demo.querySelectorAll('button')[1]!.getAttribute('aria-pressed')).toBe(
+    'true',
   );
   demo.remove();
 });

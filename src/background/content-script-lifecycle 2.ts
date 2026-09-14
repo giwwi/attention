@@ -7,18 +7,14 @@ export interface ContentScriptReinjectionSummary {
 }
 
 interface TabsQueryApi {
-  query(
-    queryInfo: chrome.tabs.QueryInfo,
-  ): Promise<chrome.tabs.Tab[]>;
+  query(queryInfo: chrome.tabs.QueryInfo): Promise<chrome.tabs.Tab[]>;
 }
 
 interface ScriptInjectionApi {
-  executeScript(
-    injection: {
-      target: chrome.scripting.InjectionTarget;
-      files: string[];
-    },
-  ): Promise<chrome.scripting.InjectionResult[]>;
+  executeScript(injection: {
+    target: chrome.scripting.InjectionTarget;
+    files: string[];
+  }): Promise<chrome.scripting.InjectionResult[]>;
 }
 
 /**

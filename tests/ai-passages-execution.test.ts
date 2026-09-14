@@ -52,8 +52,7 @@ function answer(prompt: unknown) {
     output: {
       passages: [
         {
-          coreBlockId: payload.coreIds[0],
-          contextBlockIds: [payload.coreIds[0]],
+          passageId: payload.passages[0].id,
           queryIndex: 0,
           relevance: 0.9,
           confidence: 0.9,

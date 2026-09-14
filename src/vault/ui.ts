@@ -1,4 +1,5 @@
 import { createProfileDemo } from '../onboarding/profile-demo';
+import { profileText } from '../i18n/profile';
 import { vaultLocale, vaultText } from '../i18n/vault';
 import type { UiLanguage } from '../i18n/ui';
 import {
@@ -49,6 +50,7 @@ export function ensureVaultUnlocked(): Promise<void> {
   installStyles();
   const language = vaultLocale();
   const t = (key: Parameters<typeof vaultText>[1]) => vaultText(language, key);
+  const p = (text: string) => profileText(text, {}, language);
   const original = document.createDocumentFragment();
   while (document.body.firstChild) original.append(document.body.firstChild);
   const gate = gateShell(language);
@@ -114,15 +116,17 @@ export function ensureVaultUnlocked(): Promise<void> {
   function renderForm(error = ''): void {
     content.replaceChildren();
     const creating = state === 'unconfigured';
-    heading.textContent = t(creating ? 'createTitle' : 'unlockTitle');
-    description.textContent = t(creating ? 'createDescription' : 'description');
+    heading.textContent = creating
+      ? p('Защитим ваш профиль')
+      : t('unlockTitle');
+    description.textContent = creating
+      ? p(
+          'Профиль будет храниться в этом браузере в зашифрованном виде. Придумайте пароль, чтобы открывать его после перезапуска браузера.',
+        )
+      : t('description');
     description.hidden = false;
     sessionHint.hidden = false;
-    if (creating)
-      content.append(
-        createProfileDemo(language),
-        element('p', t('createHint'), 'vault-hint'),
-      );
+    if (creating) content.append(element('p', t('createHint'), 'vault-hint'));
     const form = element('form');
     form.noValidate = true;
     const passwordLabel = element('label', t('password'));
@@ -276,7 +280,35 @@ export function ensureVaultUnlocked(): Promise<void> {
       if (current === 'unlocked') finish();
       else {
         state = current;
-        renderForm();
+        if (current === 'unconfigured') {
+          heading.textContent = p('Что стоит вашего времени?');
+          description.textContent = p(
+            'Attention помогает выбрать, что читать и на каких фрагментах остановиться.',
+          );
+          description.hidden = false;
+          const start = element(
+            'button',
+            p('Настроить под меня'),
+            'vault-primary',
+          );
+          start.type = 'button';
+          start.id = 'profile-start';
+          start.addEventListener('click', () => {
+            // Ephemeral flag only; no profile or completed-setup marker is stored.
+            document.documentElement.dataset.profileDemoSeen = 'true';
+            renderForm();
+          });
+          content.append(
+            createProfileDemo(language),
+            element(
+              'p',
+              p(
+                'Чтобы советовать именно вам, Attention нужно немного вас узнать.',
+              ),
+            ),
+            start,
+          );
+        } else renderForm();
       }
     })
     .catch(() => renderForm(t('storageError')));

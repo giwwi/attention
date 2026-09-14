@@ -58,12 +58,14 @@ test.afterEach(async () => {
 test('the real password gate encrypts data, rejects a wrong password without changes, and restores access', async () => {
   const popup = await popupPage();
   const inspector = await openVaultInspector(context);
+  await expect(popup.locator('#vault-gate [data-profile-demo]')).toBeVisible();
+  await popup.locator('#vault-gate #profile-start').click();
   await expect(popup.locator('#vault-confirm-password')).toBeVisible();
   await expect(popup.locator('#profile-onboarding')).toHaveCount(0);
   await expect(popup.locator('#interface-language')).toHaveCount(0);
   // A real extension CSP blocks inline styles, so prove the packaged CSS loaded.
   await expect(popup.locator('#vault-gate')).toHaveCSS('padding', '24px');
-  await expect(popup.locator('#vault-submit')).toHaveCSS('width', '304px');
+  await expect(popup.locator('#vault-submit')).toHaveCSS('width', '392px');
   await expect(popup.locator('.vault-checkbox')).toHaveCSS('display', 'flex');
   await popup
     .locator('#vault-gate')

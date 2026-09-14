@@ -1,6 +1,7 @@
 import { privateStorage } from '../../vault/storage';
 import { evaluationPrediction } from '../../utility/prediction';
 import { createAnalyzer } from '../../analyzer';
+import { saveAiAnalysisDiagnostic } from '../../diagnostics/ai-analysis';
 import { popupText, type PopupTextKey } from '../../i18n/popup';
 import { uiText, type UiLanguage } from '../../i18n/ui';
 import { readingPlanText } from '../../i18n/reading-plan';
@@ -746,16 +747,22 @@ export class EvaluationController {
         claimMemory,
         features,
       );
-      const analyzer = createAnalyzer(aiSettings, (error) =>
-        commitDataOperation(activeOperation, () =>
-          recordDiagnostic({
-            subsystem: 'ai',
-            operation: 'analyze-article',
-            code: 'AI_PRIMARY_FAILED_LOCAL_FALLBACK',
-            severity: 'warning',
-            error,
-          }),
-        ),
+      const analyzer = createAnalyzer(
+        aiSettings,
+        (error) =>
+          commitDataOperation(activeOperation, () =>
+            recordDiagnostic({
+              subsystem: 'ai',
+              operation: 'analyze-article',
+              code: 'AI_PRIMARY_FAILED_LOCAL_FALLBACK',
+              severity: 'warning',
+              error,
+            }),
+          ),
+        (report) =>
+          commitDataOperation(activeOperation, () =>
+            saveAiAnalysisDiagnostic(report, capture.url),
+          ),
       );
       const cancellation = await observeDataOperation(activeOperation);
       let rawEvaluation;

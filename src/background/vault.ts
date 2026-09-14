@@ -62,7 +62,11 @@ export function installVaultMessages(): void {
         return;
       }
       void chrome.tabs
-        .create({ url: chrome.runtime.getURL('popup.html'), active: true })
+        .create({
+          url:
+            chrome.runtime.getURL('popup.html') + '?sourceTab=' + sender.tab.id,
+          active: true,
+        })
         .then(
           () => respond({ ok: true }),
           () => respond({ ok: false }),

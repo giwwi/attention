@@ -143,6 +143,8 @@ import {
 import { upsertSavedMaterial } from '../popup/saved-materials';
 import { isPageCapture } from './message-guards';
 import { createBackgroundMessageRouter } from './message-router';
+import { handleAiPassageDisplay } from './ai-diagnostics';
+import { saveAiAnalysisDiagnostic } from '../diagnostics/ai-analysis';
 import { recordDiagnostic } from '../diagnostics/diagnostics';
 import { loadPrivacySettings } from '../privacy/settings';
 import {
@@ -716,6 +718,10 @@ async function hoverPreviewResponse(
         new AiGatewayAnalyzer(
           pageCapabilities.aiSettings.apiKey,
           pageCapabilities.aiSettings.model,
+          (report) =>
+            commitDataOperation(operation, () =>
+              saveAiAnalysisDiagnostic(report, request.capture!.url),
+            ),
         ),
         context,
         preparation ?? undefined,
@@ -1200,6 +1206,7 @@ async function handleNotionRequest(
 chrome.runtime.onMessage.addListener(
   createCardContextMessageHandler({ storageReady }),
 );
+chrome.runtime.onMessage.addListener(handleAiPassageDisplay);
 
 chrome.runtime.onMessage.addListener(
   createBackgroundMessageRouter({

@@ -1,5 +1,5 @@
 import { collectReadingBlocks } from './reading-blocks';
-import { passageWindow } from '../reading/blocks';
+import { passageWindow, exactPassageWindow } from '../reading/blocks';
 import { passageText } from '../i18n/passages';
 import type { ReadingPassage, ReadingPassages } from '../reading/types';
 import {
@@ -10,9 +10,11 @@ import type { KeyClaimAssessment, PageCapture } from '../shared/types';
 import { uiText, type UiLanguage } from '../i18n/ui';
 import { findCurrentArticleRoot } from './article-root';
 import { CONTENT_THEME_CSS } from './theme';
+import type { PassageDisplayTrace } from '../diagnostics/ai-analysis-types';
+import { clearRecommendedSectionHighlights } from './headings';
+import { READING_HIGHLIGHT_COLOR } from './reading-highlight';
 
 const HIGHLIGHT_NAME = 'attention-potential-new';
-const CORE_HIGHLIGHT_NAME = 'attention-reading-core';
 const MAX_PASSAGES = 3;
 const MAX_CANDIDATE_KNOWN_PROBABILITY = 0.35;
 const MIN_CANDIDATE_CONFIDENCE = 0.65;
@@ -69,11 +71,20 @@ export function findNovelPassageMatches(
   claims: KeyClaimAssessment[] | undefined,
   maximum = MAX_PASSAGES,
   selection?: ReadingPassages,
+  trace?: PassageDisplayTrace,
 ): NovelPassageMatch[] {
   const root = findCurrentArticleRoot(sourceDocument, capture.title);
-  if (!root) return [];
+  if (!root) {
+    if (trace) trace.reason = 'article-root-not-found';
+    return [];
+  }
   const { map, elements } = collectReadingBlocks(root);
-  if (selection && selection.fingerprint !== map.fingerprint) return [];
+  if (trace && selection)
+    trace.fingerprintMatches = selection.fingerprint === map.fingerprint;
+  if (selection && selection.fingerprint !== map.fingerprint) {
+    if (trace) trace.reason = 'fingerprint-changed';
+    return [];
+  }
   const entries: {
     passage: ReadingPassage | undefined;
     claim: KeyClaimAssessment | undefined;
@@ -104,12 +115,17 @@ export function findNovelPassageMatches(
   const result: NovelPassageMatch[] = [];
   for (const entry of entries) {
     if (!entry.passage) continue;
-    const blocks = passageWindow(
-      map,
-      entry.passage.coreBlockId,
-      entry.passage.blockIds,
-    );
-    if (!blocks.length || blocks.some((block) => used.has(block.id))) continue;
+    const blocks = (
+      selection?.source === 'ai' ? exactPassageWindow : passageWindow
+    )(map, entry.passage.coreBlockId, entry.passage.blockIds);
+    if (!blocks.length) {
+      if (trace) trace.invalidWindows++;
+      continue;
+    }
+    if (blocks.some((block) => used.has(block.id))) {
+      if (trace) trace.overlapping++;
+      continue;
+    }
     const nodes = blocks.map((block) => elements.get(block.id)!);
     const ranges = nodes.map((element) => {
       const range = sourceDocument.createRange();
@@ -142,7 +158,18 @@ export function findNovelPassageMatches(
       fingerprint: map.fingerprint,
     });
     blocks.forEach((block) => used.add(block.id));
-    if (result.length >= maximum) break;
+    if (result.length >= maximum) {
+      if (trace) trace.limited = entries.length - (entries.indexOf(entry) + 1);
+      break;
+    }
+  }
+  if (trace) {
+    trace.matched = result.length;
+    trace.reason = result.length
+      ? 'matched'
+      : selection?.items.length
+        ? 'no-dom-matches'
+        : 'no-selection';
   }
   return result;
 }
@@ -252,7 +279,7 @@ export class NovelPassageController {
     this.language = options.language;
     this.readwiseConnected = options.readwiseConnected;
     this.index = 0;
-    this.applyHighlights();
+    clearRecommendedSectionHighlights(document);
     this.view = installPassageView();
     this.view.title.textContent = passageText(this.language, 'title');
     this.view.previous.textContent = uiText(this.language, 'previousPassage');
@@ -286,11 +313,20 @@ export class NovelPassageController {
   clear(): void {
     this.articleObserver?.disconnect();
     this.articleObserver = null;
+    this.clearHighlightPaint();
+    this.view?.host.remove();
+    this.view = null;
+    this.matches = [];
+    this.capture = null;
+  }
+
+  private clearHighlightPaint(): void {
     const css = globalThis.CSS as typeof CSS & {
       highlights?: HighlightRegistry;
     };
     css?.highlights?.delete(HIGHLIGHT_NAME);
-    css?.highlights?.delete(CORE_HIGHLIGHT_NAME);
+    // Remove the old core/context layer when refreshing an existing session.
+    css?.highlights?.delete('attention-reading-core');
     document
       .querySelectorAll<HTMLElement>(
         '[data-attention-novel-highlight-style="true"]',
@@ -300,13 +336,12 @@ export class NovelPassageController {
       element.classList.remove('attention-potential-new-fallback');
     }
     this.fallbackElements = [];
-    this.view?.host.remove();
-    this.view = null;
-    this.matches = [];
-    this.capture = null;
   }
 
   private applyHighlights(): void {
+    this.clearHighlightPaint();
+    const match = this.matches[this.index];
+    if (!match) return;
     const css = globalThis.CSS as typeof CSS & {
       highlights?: HighlightRegistry;
     };
@@ -318,30 +353,19 @@ export class NovelPassageController {
     const style = document.createElement('style');
     style.dataset.attentionNovelHighlightStyle = 'true';
     style.textContent = `
-      ::highlight(${HIGHLIGHT_NAME}) { background-color: rgba(255, 214, 64, .16); }
-      ::highlight(${CORE_HIGHLIGHT_NAME}) { background-color: rgba(255, 214, 64, .34); text-decoration: underline 2px #d9a800; text-underline-offset: 3px; }
-      .attention-potential-new-fallback { background-color: rgba(255, 214, 64, .16) !important; outline: 2px solid rgba(217, 168, 0, .72) !important; outline-offset: 3px !important; }
+      ::highlight(${HIGHLIGHT_NAME}) { background-color: ${READING_HIGHLIGHT_COLOR}; }
+      .attention-potential-new-fallback { background-color: ${READING_HIGHLIGHT_COLOR} !important; }
     `;
     document.head?.append(style);
     if (css?.highlights && HighlightConstructor) {
       css.highlights.set(
         HIGHLIGHT_NAME,
-        new HighlightConstructor(
-          ...this.matches.flatMap((match) => match.ranges ?? [match.range]),
-        ),
-      );
-      css.highlights.set(
-        CORE_HIGHLIGHT_NAME,
-        new HighlightConstructor(
-          ...this.matches.flatMap((match) => match.coreRanges ?? [match.range]),
-        ),
+        new HighlightConstructor(...(match.ranges ?? [match.range])),
       );
       return;
     }
     this.fallbackElements = Array.from(
-      new Set(
-        this.matches.flatMap((match) => match.elements ?? [match.element]),
-      ),
+      new Set(match.elements ?? [match.element]),
     );
     for (const element of this.fallbackElements) {
       element.classList.add('attention-potential-new-fallback');
@@ -387,6 +411,7 @@ export class NovelPassageController {
     if (!this.view) return;
     const match = this.matches[this.index];
     if (!match) return;
+    this.applyHighlights();
     this.view.counter.textContent = uiText(this.language, 'passageCounter', {
       current: this.index + 1,
       total: this.matches.length,

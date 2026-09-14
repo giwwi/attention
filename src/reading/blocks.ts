@@ -3,6 +3,7 @@ import type { PageCapture } from '../shared/types';
 import type { ArticleBlock, ArticleMap } from './types';
 
 export const MAX_PASSAGE_CHARACTERS = 6_000;
+export const MAX_PASSAGE_BLOCKS = 7;
 export const MAX_ARTICLE_BLOCKS = 800;
 export const MAX_ARTICLE_CHARACTERS = 240_000;
 export const cleanBlockText = (text: string): string =>
@@ -113,6 +114,41 @@ export function passageWindow(
   }
   const blocks = map.blocks.slice(start, end + 1);
   if (blocks.some((block) => block.section !== first.section)) return [];
+  return blocks.map((block) => block.text).join('\n\n').length <=
+    MAX_PASSAGE_CHARACTERS
+    ? blocks
+    : [];
+}
+
+/** Validate a frozen window without expanding it a second time. */
+export function exactPassageWindow(
+  map: ArticleMap,
+  coreId: string,
+  ids: string[],
+): ArticleBlock[] {
+  if (!ids.length || ids.length > MAX_PASSAGE_BLOCKS || !ids.includes(coreId))
+    return [];
+  const start = map.blocks.findIndex((block) => block.id === ids[0]);
+  if (start < 0) return [];
+  const blocks = map.blocks.slice(start, start + ids.length);
+  if (
+    blocks.length !== ids.length ||
+    blocks.some(
+      (block, index) =>
+        block.id !== ids[index] || block.section !== blocks[0]!.section,
+    )
+  )
+    return [];
+  if (DEPENDENT_START.test(blocks[0]!.text)) return [];
+  const next = map.blocks[start + ids.length];
+  const last = blocks.at(-1)!;
+  if (
+    next?.section === last.section &&
+    (CAVEAT_START.test(next.text) ||
+      (['list', 'table', 'code'].includes(next.kind) &&
+        /[:：]$/u.test(last.text)))
+  )
+    return [];
   return blocks.map((block) => block.text).join('\n\n').length <=
     MAX_PASSAGE_CHARACTERS
     ? blocks

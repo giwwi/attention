@@ -15,9 +15,17 @@ const useful =
 const caveat =
   'However, this comparison only applies when the test examples represent the actual tasks and users.';
 
-for (const mode of ['local', 'ai'] as const)
+for (const mode of ['local', 'ai', 'ai-long-context'] as const)
   test(`${mode}: contextual passages retain caveats and disappear after article mutation`, async () => {
     test.setTimeout(60_000);
+    const qualifications =
+      mode === 'ai-long-context'
+        ? [
+            'However, the test set also needs enough rare requests to reveal failures hidden by the average.',
+            'In contrast, a single aggregate score cannot show which user groups experience those errors.',
+            'Note that the final comparison must report the sampling method and uncertainty alongside the result.',
+          ]
+        : [];
     const directory = await mkdtemp(
       path.join(tmpdir(), 'attention-context-passages-'),
     );
@@ -84,8 +92,10 @@ for (const mode of ['local', 'ai'] as const)
             const output = {
               passages: [
                 {
-                  coreBlockId: block.id,
-                  contextBlockIds: [block.id, batch.blocks[index + 1].id],
+                  passageId: batch.passages.find(
+                    (passage: { coreBlockId: string }) =>
+                      passage.coreBlockId === block.id,
+                  ).id,
                   queryIndex: 0,
                   relevance: 0.9,
                   confidence: 0.9,
@@ -140,17 +150,20 @@ for (const mode of ['local', 'ai'] as const)
       await context.route(url, (route) =>
         route.fulfill({
           contentType: 'text/html',
-          body: `<!doctype html><html lang="en"><meta charset="utf-8"><title>Evaluation methods</title><style>body{font:18px/1.6 system-ui;margin:0;color:#142b24;background:#f7f8f4}article{max-width:760px;margin:48px auto}p{margin:26px 0}h1{font-size:38px}.intro{min-height:800px}h2{margin-top:50px}</style><article><h1>Evaluation methods</h1><h2>Background</h2><p class="intro">${'General background describes the history of software and offers introductory observations for readers. '.repeat(14)}</p><h2>Practical comparison</h2><p id="core">${useful}</p><p id="caveat">${caveat}</p><h2>Further reading</h2><p>Other publications discuss unrelated questions about industrial history.</p></article></html>`,
+          body: `<!doctype html><html lang="en"><meta charset="utf-8"><title>Evaluation methods</title><style>body{font:18px/1.6 system-ui;margin:0;color:#142b24;background:#f7f8f4}article{max-width:760px;margin:48px auto}p{margin:26px 0}h1{font-size:38px}.intro{min-height:800px}h2{margin-top:50px}</style><article><h1>Evaluation methods</h1><h2>Background</h2><p class="intro">${'General background describes the history of software and offers introductory observations for readers. '.repeat(14)}</p><h2>Practical comparison</h2><p id="core">${useful}</p><p id="caveat">${caveat}</p>${qualifications.map((text) => `<p>${text}</p>`).join('')}<h2>Further reading</h2><p>Other publications discuss unrelated questions about industrial history.</p></article></html>`,
         }),
       );
       const page = await context.newPage();
       await page.goto(url);
+      await page
+        .locator('[data-attention-trigger]')
+        .waitFor({ state: 'attached' });
       await page.locator('h1').hover();
       await expect(page.locator('[data-attention-preview]')).toHaveCSS(
         'display',
         'block',
       );
-      if (mode === 'ai') {
+      if (mode !== 'local') {
         await clickCardElement(context, page, '.ai-button');
         await expect(page.locator('[data-attention-preview]')).toHaveAttribute(
           'data-attention-analysis-source',
@@ -185,7 +198,15 @@ for (const mode of ['local', 'ai'] as const)
           (range) => range.toString(),
         ),
       );
-      expect(ranges).toEqual([useful, caveat]);
+      expect(ranges).toEqual([useful, caveat, ...qualifications]);
+      expect(
+        await page.evaluate(() => CSS.highlights.has('attention-reading-core')),
+      ).toBe(false);
+      await expect(
+        page.locator(
+          '[data-attention-recommended-section], [data-attention-section-label]',
+        ),
+      ).toHaveCount(0);
       await expect
         .poll(() =>
           page
@@ -206,6 +227,15 @@ for (const mode of ['local', 'ai'] as const)
       await page.screenshot({
         path: `output/playwright/contextual-passages-${mode}.png`,
       });
+      for (const colorScheme of ['light', 'dark'] as const) {
+        await page.emulateMedia({ colorScheme });
+        await page.addStyleTag({
+          content: `body { background: ${colorScheme === 'dark' ? '#161819' : '#f7f8f4'}; color: ${colorScheme === 'dark' ? '#edf0ed' : '#142b24'}; }`,
+        });
+        await page.screenshot({
+          path: `output/playwright/reading-focus-${mode}-${colorScheme}.png`,
+        });
+      }
       await page.locator('#caveat').evaluate((element) => {
         element.textContent = 'The article was changed after the analysis.';
       });

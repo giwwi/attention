@@ -1,3 +1,9 @@
+import {
+  addProfileAnswer,
+  nextProfileQuestion,
+  type ProfileQuestion,
+} from './profile-basics';
+import { renderProfileBrief } from './profile-brief';
 import { createProfileDemo } from './profile-demo';
 import {
   mergeProfiles,
@@ -254,6 +260,12 @@ function profileErrors(profile: PersonalProfile): string[] {
 
 export class ProfileOnboarding {
   private readonly root = element<HTMLElement>('profile-onboarding');
+  private readonly welcomeStep = element<HTMLElement>('profile-welcome-step');
+  private readonly questionStep = element<HTMLElement>('profile-question-step');
+  private readonly completeStep = element<HTMLElement>('profile-complete-step');
+  private sourceTabId: number | undefined;
+  private activeQuestion: ProfileQuestion | null = null;
+  private manualSequence = false;
   private readonly sourceStep = element<HTMLElement>('profile-source-step');
   private readonly quickStep = element<HTMLElement>('profile-quick-step');
   private readonly quickReviewStep = element<HTMLElement>(
@@ -329,6 +341,12 @@ export class ProfileOnboarding {
     this.bindEvents();
     this.translateStatic();
     this.renderExample();
+    element<HTMLDetailsElement>('profile-review-details').addEventListener(
+      'toggle',
+      () => {
+        if (!this.reviewStep.hidden) this.renderReviewFields();
+      },
+    );
     new MutationObserver(() => {
       if (this.root.isConnected) this.translate();
     }).observe(document.documentElement, {
@@ -338,11 +356,17 @@ export class ProfileOnboarding {
   }
 
   private renderExample(): void {
-    this.root
-      .querySelector('#profile-example-slot')
-      ?.replaceChildren(
-        createProfileDemo(normalizeUiLanguage(document.documentElement.lang)),
-      );
+    const language = normalizeUiLanguage(document.documentElement.lang);
+    element<HTMLElement>('profile-welcome-demo').replaceChildren(
+      createProfileDemo(language),
+    );
+    const slot = document.getElementById('profile-example-slot');
+    if (!slot) return;
+    const details = document.createElement('details');
+    const summary = document.createElement('summary');
+    summary.textContent = p('Учебный пример');
+    details.append(summary, createProfileDemo(language));
+    slot.replaceChildren(details);
   }
 
   translate(): void {
@@ -354,6 +378,8 @@ export class ProfileOnboarding {
     if (!this.promptStep.hidden && this.handoffState)
       this.renderHandoff(this.handoffState);
     if (!this.reviewStep.hidden && this.draft) this.renderReview();
+    if (!this.questionStep.hidden && this.activeQuestion)
+      this.renderQuestion(this.activeQuestion);
     if (!this.quickReviewStep.hidden && this.draft) this.renderQuickSummary();
     if (!this.mergeStep.hidden && this.pendingMerge)
       this.renderConflicts(this.pendingMerge);
@@ -371,6 +397,10 @@ export class ProfileOnboarding {
     this.quickLeisure.value = '';
     this.reviewContent.replaceChildren();
     this.quickSummary.replaceChildren();
+    element<HTMLElement>('profile-review-brief').replaceChildren();
+    this.questionStep.replaceChildren();
+    this.activeQuestion = null;
+    this.sourceTabId = undefined;
     this.conflictContent.replaceChildren();
     this.clearErrors(this.validationErrors);
     this.clearErrors(this.reviewErrors);
@@ -382,6 +412,20 @@ export class ProfileOnboarding {
   async initialize(showOnboarding: boolean): Promise<boolean> {
     this.existing = await loadProfile();
     this.renderProfileBar();
+    const rawTab = new URLSearchParams(location.search).get('sourceTab');
+    if (rawTab && /^\d+$/u.test(rawTab)) this.sourceTabId = Number(rawTab);
+    else {
+      try {
+        const [tab] = await chrome.tabs.query({
+          active: true,
+          currentWindow: true,
+        });
+        if (tab?.id !== undefined && /^https?:\/\//u.test(tab.url ?? ''))
+          this.sourceTabId = tab.id;
+      } catch {
+        /* Setup works without a source tab. */
+      }
+    }
     const handoff = await loadProfileHandoffState();
     if (handoff) {
       const current = await beginDataOperation();
@@ -391,6 +435,7 @@ export class ProfileOnboarding {
       };
       handoff.vaultEpoch = current.vaultEpoch;
       await assertDataOperationCurrent(this.operation);
+      this.sourceTabId = handoff.sourceTabId ?? this.sourceTabId;
       this.restoreHandoff(handoff);
       return true;
     }
@@ -411,12 +456,35 @@ export class ProfileOnboarding {
     this.handoffState = null;
     document.body.classList.add('profile-flow-active');
     this.root.hidden = false;
-    this.showStep(this.sourceStep);
+    if (
+      !isProfileReady(this.existing) &&
+      document.documentElement.dataset.profileDemoSeen !== 'true'
+    ) {
+      this.showStep(this.welcomeStep);
+    } else this.showStep(this.sourceStep);
     this.response.value = '';
     this.clearErrors(this.validationErrors);
   }
 
   private bindEvents(): void {
+    element<HTMLButtonElement>('profile-start').addEventListener(
+      'click',
+      () => {
+        document.documentElement.dataset.profileDemoSeen = 'true';
+        this.showStep(this.sourceStep);
+      },
+    );
+    element<HTMLButtonElement>('profile-finish').addEventListener('click', () =>
+      this.runAction(Promise.resolve(this.options.onComplete())),
+    );
+    element<HTMLButtonElement>('profile-return').addEventListener('click', () =>
+      this.runAction(this.returnToArticle()),
+    );
+    element<HTMLButtonElement>('profile-add-provider').addEventListener(
+      'click',
+      () => this.runAction(this.openSource()),
+    );
+
     for (const button of document.querySelectorAll<HTMLButtonElement>(
       '[data-profile-source]',
     )) {
@@ -516,6 +584,9 @@ export class ProfileOnboarding {
 
   private showStep(active: HTMLElement): void {
     for (const step of [
+      this.welcomeStep,
+      this.questionStep,
+      this.completeStep,
       this.sourceStep,
       this.quickStep,
       this.quickReviewStep,
@@ -625,6 +696,7 @@ export class ProfileOnboarding {
         ? prepareChatGptProfileHandoff(PROFILE_PROVIDERS.chatgpt.prompt)
         : null;
     const state = createProfileHandoffState(source);
+    state.sourceTabId = this.sourceTabId;
     state.generation = operation.generation;
     state.vaultEpoch = operation.vaultEpoch;
     if (source === 'chatgpt') state.method = 'clipboard-and-web';
@@ -688,8 +760,7 @@ export class ProfileOnboarding {
     let statusText = p('Используйте запрос ниже в любом AI.');
     let instructions = [
       p('Скопируйте запрос и отправьте его выбранному AI.'),
-      p('Скопируйте JSON-ответ.'),
-      p('Вставьте ответ в поле ниже.'),
+      p('Скопируйте весь ответ и вставьте сюда.'),
     ];
 
     if (provider === 'chatgpt') {
@@ -707,8 +778,7 @@ export class ProfileOnboarding {
                 );
       instructions = [
         p('Вставьте запрос в ChatGPT и отправьте его.'),
-        p('Скопируйте полученный JSON-ответ.'),
-        p('Вернитесь сюда и вставьте ответ ниже.'),
+        p('Скопируйте весь ответ и вставьте сюда.'),
       ];
     } else if (provider === 'claude') {
       statusText = usesWebFallback
@@ -719,13 +789,11 @@ export class ProfileOnboarding {
       instructions = usesWebFallback
         ? [
             p('Вставьте запрос в Claude и отправьте его.'),
-            p('Скопируйте полученный JSON-ответ.'),
-            p('Вернитесь сюда и вставьте ответ ниже.'),
+            p('Скопируйте весь ответ и вставьте сюда.'),
           ]
         : [
             p('Отправьте уже подготовленный запрос.'),
-            p('Скопируйте полученный JSON-ответ.'),
-            p('Вернитесь сюда и вставьте ответ ниже.'),
+            p('Скопируйте весь ответ и вставьте сюда.'),
           ];
     }
 
@@ -764,6 +832,7 @@ export class ProfileOnboarding {
       undefined,
       async (prepared) => {
         const preparedState: ProfileHandoffState = {
+          ...state,
           profileImportProvider: state.profileImportProvider,
           profileImportStage: state.profileImportStage,
           startedAt: state.startedAt,
@@ -788,6 +857,7 @@ export class ProfileOnboarding {
   private async reopenProvider(): Promise<void> {
     if (!this.handoffState) return;
     await this.launchProvider({
+      ...this.handoffState,
       profileImportProvider: this.handoffState.profileImportProvider,
       profileImportStage: this.handoffState.profileImportStage,
       startedAt: new Date().toISOString(),
@@ -799,6 +869,7 @@ export class ProfileOnboarding {
   private async openClaudeWebFallback(): Promise<void> {
     if (this.handoffState?.profileImportProvider !== 'claude') return;
     const state: ProfileHandoffState = {
+      ...this.handoffState,
       profileImportProvider: 'claude',
       profileImportStage: 'waiting-for-response',
       startedAt: new Date().toISOString(),
@@ -831,7 +902,8 @@ export class ProfileOnboarding {
     this.handoffState = null;
     this.source = 'manual';
     this.draft = createEmptyProfile();
-    this.renderReview();
+    this.manualSequence = true;
+    this.renderQuestion('goal');
   }
 
   private async copyPrompt(button: HTMLButtonElement): Promise<void> {
@@ -852,10 +924,15 @@ export class ProfileOnboarding {
   private validateImport(): void {
     const validation = validatePortableProfile(this.response.value);
     if (!validation.ok) {
-      this.renderErrors(this.validationErrors, validation.errors);
+      this.renderErrors(this.validationErrors, [
+        p(
+          'Ответ не удалось прочитать. Скопируйте весь ответ на наш запрос, включая начало и конец.',
+        ),
+      ]);
       return;
     }
     this.clearErrors(this.validationErrors);
+    this.manualSequence = false;
     this.draft = normalizePortableProfile(validation.value, this.source);
     this.renderReview();
   }
@@ -863,12 +940,26 @@ export class ProfileOnboarding {
   private renderReview(): void {
     if (!this.draft) return;
     document.body.classList.add('profile-flow-active');
-    this.reviewSource.textContent =
-      this.source === 'manual'
-        ? p('Создайте только полезный минимум. Всё можно изменить позже.')
-        : p('Источник: {source}. Это гипотеза — проверьте каждый пункт.', {
-            source: p(sourceLabels[this.source]),
-          });
+    this.reviewSource.textContent = p(
+      'Исправьте неточности или удалите лишнее. Эти сведения помогут выбирать чтение для вас.',
+    );
+    this.clearErrors(this.reviewErrors);
+    this.renderReviewFields();
+    this.root.hidden = false;
+    this.showStep(this.reviewStep);
+  }
+
+  private renderReviewFields(): void {
+    if (!this.draft) return;
+    renderProfileBrief(
+      element<HTMLElement>('profile-review-brief'),
+      this.draft,
+      () => this.renderReviewFields(),
+      (question) => {
+        this.manualSequence = false;
+        this.renderQuestion(question);
+      },
+    );
     this.reviewContent.replaceChildren();
     this.clearErrors(this.reviewErrors);
     this.renderCollection(p('Интересы'), 'interests');
@@ -880,8 +971,6 @@ export class ProfileOnboarding {
     this.renderPreferences();
     this.renderLeisurePreferences();
     this.renderCollection(p('Обычно малоценные темы'), 'lowValueTopics');
-    this.root.hidden = false;
-    this.showStep(this.reviewStep);
   }
 
   private renderCollection(title: string, collection: ProfileCollection): void {
@@ -1448,6 +1537,14 @@ export class ProfileOnboarding {
 
   private async acceptDraft(): Promise<void> {
     if (!this.draft) return;
+    if (!isProfileReady(this.existing)) {
+      const question = nextProfileQuestion(this.draft);
+      if (question) {
+        this.manualSequence = true;
+        this.renderQuestion(question);
+        return;
+      }
+    }
     const errors = profileErrors(this.draft);
     if (errors.length > 0) {
       this.renderErrors(this.reviewErrors, errors);
@@ -1464,6 +1561,145 @@ export class ProfileOnboarding {
     }
     this.pendingMerge = result;
     this.renderConflicts(result);
+  }
+
+  private renderQuestion(question: ProfileQuestion): void {
+    const same = this.activeQuestion === question && !this.questionStep.hidden;
+    const previousAnswer = same
+      ? (this.questionStep.querySelector<HTMLTextAreaElement>('textarea')
+          ?.value ?? '')
+      : '';
+    const previousTopic = same
+      ? (this.questionStep.querySelector<HTMLInputElement>('input')?.value ??
+        '')
+      : '';
+    this.activeQuestion = question;
+    this.questionStep.replaceChildren();
+    const node = <K extends keyof HTMLElementTagNameMap>(
+      tag: K,
+      text: string,
+    ) => {
+      const result = document.createElement(tag);
+      result.textContent = p(text);
+      return result;
+    };
+    const back = node('button', 'Назад');
+    back.type = 'button';
+    back.className = 'profile-back';
+    back.addEventListener('click', () => {
+      this.activeQuestion = null;
+      this.renderReview();
+    });
+    const labels = {
+      goal: [
+        'Зачем вы обычно читаете статьи?',
+        'Например: выбираю инструменты для работы, учусь оценивать AI или читаю об истории для удовольствия.',
+      ],
+      interests: [
+        'Какие темы вы выбираете сами?',
+        'Укажите конкретные темы, каждую с новой строки. Например: оценка AI, история городов, домашняя выпечка.',
+      ],
+      knowledge: [
+        'Что вам уже не нужно объяснять с нуля?',
+        'Назовите знакомую тему и приведите пример того, что вы уже умеете или понимаете.',
+      ],
+    };
+    const [title, hint] = labels[question];
+    const heading = node('h2', title!);
+    heading.id = 'profile-question-title';
+    const guidance = node('p', hint!);
+    guidance.id = 'profile-question-hint';
+    const form = document.createElement('form');
+    const answer = document.createElement('textarea');
+    answer.id = 'profile-answer';
+    answer.rows = 4;
+    answer.maxLength = 1500;
+    answer.value = previousAnswer;
+    answer.setAttribute('aria-labelledby', heading.id);
+    answer.setAttribute('aria-describedby', guidance.id);
+    const topic = document.createElement('input');
+    topic.id = 'profile-answer-topic';
+    topic.maxLength = 200;
+    topic.value = previousTopic;
+    if (question === 'knowledge') form.append(field(p('Тема'), topic));
+    form.append(answer);
+    const error = node('p', 'Напишите свой ответ.');
+    error.setAttribute('role', 'alert');
+    error.className = 'profile-inline-error';
+    error.hidden = true;
+    const next = node('button', 'Продолжить');
+    next.type = 'submit';
+    next.className = 'profile-primary';
+    form.append(error, next);
+    const accept = (beginner = false): void => {
+      if (!this.draft || !this.operation) return;
+      if (
+        !beginner &&
+        (!answer.value.trim() ||
+          (question === 'knowledge' && !topic.value.trim()))
+      ) {
+        error.hidden = false;
+        (question === 'knowledge' && !topic.value.trim()
+          ? topic
+          : answer
+        ).focus();
+        return;
+      }
+      addProfileAnswer(this.draft, question, answer.value, {
+        topic: topic.value,
+        beginner,
+      });
+      this.activeQuestion = null;
+      const following = this.manualSequence
+        ? nextProfileQuestion(this.draft)
+        : null;
+      if (following) this.renderQuestion(following);
+      else {
+        this.manualSequence = false;
+        this.renderReview();
+      }
+    };
+    form.addEventListener('submit', (event) => {
+      event.preventDefault();
+      accept();
+    });
+    if (
+      question === 'knowledge' &&
+      this.draft &&
+      this.draft.demonstratedKnowledge.length === 0 &&
+      this.draft.expertise.length === 0 &&
+      (this.draft.interests.length ||
+        this.draft.leisureProfile.preferences.some(
+          (item) => item.kind !== 'dislike',
+        ))
+    ) {
+      const beginner = node('button', 'Я только начинаю в этих темах');
+      beginner.id = 'profile-beginner';
+      beginner.type = 'button';
+      beginner.className = 'profile-text-button';
+      beginner.addEventListener('click', () => accept(true));
+      form.append(beginner);
+    }
+    this.questionStep.append(back, heading, guidance, form);
+    this.showStep(this.questionStep);
+    (question === 'knowledge' ? topic : answer).focus();
+  }
+
+  private async returnToArticle(): Promise<void> {
+    const status = element<HTMLElement>('profile-return-status');
+    try {
+      if (this.sourceTabId === undefined) throw new Error('No source');
+      const tab = await chrome.tabs.get(this.sourceTabId);
+      if (!/^https?:\/\//u.test(tab.url ?? ''))
+        throw new Error('Not a web page');
+      await chrome.tabs.update(this.sourceTabId, { active: true });
+      await chrome.windows.update(tab.windowId, { focused: true });
+    } catch {
+      status.textContent = p(
+        'Эта вкладка уже закрыта. Откройте любую статью и наведите курсор на заголовок.',
+      );
+      status.hidden = false;
+    }
   }
 
   private renderConflicts(result: MergeResult): void {
@@ -1562,6 +1798,13 @@ export class ProfileOnboarding {
     document.body.classList.remove('profile-flow-active');
     this.renderProfileBar();
     await this.options.onComplete();
+    if (!isProfileReady(await loadProfile())) return;
+    this.root.hidden = false;
+    document.body.classList.add('profile-flow-active');
+    element<HTMLButtonElement>('profile-return').hidden =
+      this.sourceTabId === undefined;
+    element<HTMLElement>('profile-return-status').hidden = true;
+    this.showStep(this.completeStep);
   }
 
   private async skip(): Promise<void> {

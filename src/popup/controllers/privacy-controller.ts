@@ -1,6 +1,7 @@
 import {
   beginDataOperation,
   assertDataOperationCurrent,
+  withAttentionDataLock,
 } from '../../privacy/data-operations';
 import { loadPublicSession } from '../../auth/session';
 import {
@@ -17,6 +18,10 @@ import {
   downloadDiagnosticProfile,
 } from '../../profile/diagnostic-export';
 import { getElement, setPopupStatus } from '../dom';
+import {
+  loadAiAnalysisDiagnostic,
+  aiAnalysisDiagnosticExport,
+} from '../../diagnostics/ai-analysis';
 
 interface PrivacyCopy {
   navigationTitle: string;
@@ -52,9 +57,21 @@ interface PrivacyCopy {
   deleteButton: string;
   deleteConfirm: string;
   deleted: string;
+  aiReportTitle: string;
+  aiReportDescription: string;
+  aiReportButton: string;
+  aiReportEmpty: string;
+  aiReportSaved: string;
 }
 
 const ru: PrivacyCopy = {
+  aiReportTitle: 'Последняя проверка с ИИ',
+  aiReportDescription:
+    'Если ИИ не показывает фрагменты, скачайте этот отчёт после проверки статьи. Он покажет, на каком шаге они пропали. Без текста статьи, профиля и ключей.',
+  aiReportButton: 'Скачать отчёт ИИ-анализа',
+  aiReportEmpty:
+    'Отчёта пока нет. Откройте статью и нажмите «Проверить с AI» в карточке.',
+  aiReportSaved: 'Отчёт скачан. Его можно прислать для разбора.',
   navigationTitle: 'Приватность и данные',
   navigationDescription: 'Локальный режим, разрешения и удаление',
   eyebrow: 'Контроль пользователя',
@@ -98,6 +115,13 @@ const ru: PrivacyCopy = {
 };
 
 const en: PrivacyCopy = {
+  aiReportTitle: 'Last AI check',
+  aiReportDescription:
+    'If AI shows no passages, download this report after checking an article. It shows where the passages were lost. No article text, profile or keys.',
+  aiReportButton: 'Download AI analysis report',
+  aiReportEmpty:
+    'No report yet. Open an article and select “Check with AI” on its card.',
+  aiReportSaved: 'Report downloaded. You can share it for troubleshooting.',
   navigationTitle: 'Privacy and data',
   navigationDescription: 'Local mode, permissions and deletion',
   eyebrow: 'Your control',
@@ -319,6 +343,10 @@ export class PrivacyController {
       'click',
       () => void this.exportDiagnosticProfile(),
     );
+    getElement<HTMLButtonElement>('export-ai-analysis').addEventListener(
+      'click',
+      () => void this.exportAiAnalysis(),
+    );
     getElement<HTMLButtonElement>('delete-all-data').addEventListener(
       'click',
       () => void this.deleteAll(),
@@ -332,6 +360,9 @@ export class PrivacyController {
   translate(): void {
     const copy = copyFor(this.options.getLanguage());
     const text: Record<string, string> = {
+      'ai-report-title': copy.aiReportTitle,
+      'ai-report-description': copy.aiReportDescription,
+      'export-ai-analysis': copy.aiReportButton,
       'privacy-navigation-title': copy.navigationTitle,
       'privacy-navigation-description': copy.navigationDescription,
       'privacy-eyebrow': copy.eyebrow,
@@ -423,8 +454,37 @@ export class PrivacyController {
   }
 
   private async removeDiagnostics(): Promise<void> {
-    await clearDiagnostics();
+    await withAttentionDataLock(() => clearDiagnostics());
     await this.refresh();
+  }
+
+  private async exportAiAnalysis(): Promise<void> {
+    const copy = copyFor(this.options.getLanguage());
+    const status = getElement<HTMLElement>('ai-report-status');
+    try {
+      const operation = await beginDataOperation();
+      const report = await loadAiAnalysisDiagnostic();
+      await assertDataOperationCurrent(operation);
+      if (!report) {
+        status.textContent = copy.aiReportEmpty;
+        return;
+      }
+      const blob = new Blob([aiAnalysisDiagnosticExport(report)], {
+        type: 'application/json',
+      });
+      const objectUrl = URL.createObjectURL(blob);
+      const anchor = document.createElement('a');
+      anchor.href = objectUrl;
+      anchor.download = `attention-ai-analysis-${new Date().toISOString().replace(/[:.]/gu, '-')}.json`;
+      anchor.hidden = true;
+      document.body.append(anchor);
+      anchor.click();
+      anchor.remove();
+      window.setTimeout(() => URL.revokeObjectURL(objectUrl), 0);
+      status.textContent = copy.aiReportSaved;
+    } catch {
+      status.textContent = copy.profileExportFailed;
+    }
   }
 
   private async exportDiagnosticProfile(): Promise<void> {

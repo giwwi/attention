@@ -8,7 +8,7 @@ import type {
   PageCapture,
   RelevantProfileContext,
 } from '../shared/types';
-import { articleMap, passageWindow } from './blocks';
+import { articleMap, passageWindow, exactPassageWindow } from './blocks';
 import type {
   ArticleBlock,
   ArticleMap,
@@ -98,14 +98,13 @@ export function mergePassages(
   map: ArticleMap,
   candidates: ReadingPassage[],
   maximum = 3,
+  contextMode: 'expand' | 'preserve' = 'expand',
 ): ReadingPassage[] {
   const results: ReadingPassage[] = [];
   for (const candidate of [...candidates].sort((a, b) => b.score - a.score)) {
-    const window = passageWindow(
-      map,
-      candidate.coreBlockId,
-      candidate.blockIds,
-    );
+    const window = (
+      contextMode === 'preserve' ? exactPassageWindow : passageWindow
+    )(map, candidate.coreBlockId, candidate.blockIds);
     if (window.length === 0) continue;
     const normalized = {
       ...candidate,
@@ -115,6 +114,7 @@ export function mergePassages(
       item.blockIds.some((id) => normalized.blockIds.includes(id)),
     );
     if (overlapping) {
+      if (contextMode === 'preserve') continue;
       const union = map.blocks.filter(
         (block) =>
           overlapping.blockIds.includes(block.id) ||

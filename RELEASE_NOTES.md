@@ -1,12 +1,13 @@
-# Attention 0.28.1 — actionable reading recommendations
+# Attention 0.29.0 — clearer setup and contextual AI passages
 
-The article card again gives a reading direction when evidence is incomplete, instead of replacing most recommendations with “Not sure yet.”
+The first launch now demonstrates why a personal profile changes a reading recommendation, then guides the reader through ChatGPT or Claude, an editable profile review and a return to the original article. Existing profiles remain usable.
 
-- Partial AI assessments retain Read, Skim or Skip, with a visible preliminary note and capped confidence. Russian cards show the model’s concrete explanation of the article’s relevance.
-- Local assessment considers all relevant profile goals, learning topics and interests. An explicit current task has priority.
-- Related topics lead to selective reading; no detected relation leads to a tentative skip. Missing user context remains distinct from low usefulness.
-- Article assessment and passage selection share topic matching. Old cached assessments are recalculated, and previous score versions are excluded from new calibration fits.
+- AI now selects prepared passage windows with context by ID, correcting the path that rejected otherwise useful passages. Relevance and confidence use a consistent 0–1 scale.
+- A downloadable diagnostic report shows passage counts and rejection stages without article text, profile content or credentials. Nothing is sent automatically.
+- Short local passages keep neighboring context. Passage and section highlights use one consistent style.
+- The main card uses green, neutral gray or red according to the recommendation, with a concise reason.
+- Store screenshots and the demonstration video show the current interface.
 
-No new permissions, network destinations, automatic AI requests or data migrations are introduced.
+Local matching remains heuristic. AI sampling can omit parts of long articles; partial coverage is marked. No additional permissions were introduced.
 
-Validation: 688 unit/integration tests and four isolated browser scenarios passed during implementation. Browser AI responses are mocked; these checks do not establish recommendation quality on users’ articles.
+Validation: TypeScript and ESLint passed; 751 unit tests passed. Browser checks cover onboarding, article actions, local/AI passages, partial assessments, encryption, migration and locking.

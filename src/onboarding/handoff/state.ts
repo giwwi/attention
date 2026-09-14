@@ -10,6 +10,7 @@ export type ProfileHandoffMethod = 'deep-link' | 'clipboard-and-web' | 'manual';
 export interface ProfileHandoffState {
   /** Snapshot of the import generation, so reopening a popup cannot revive erased data. */
   generation?: string;
+  sourceTabId?: number;
   vaultEpoch?: string;
   profileImportProvider: ProfileHandoffProviderId;
   profileImportStage: 'waiting-for-response';
@@ -29,6 +30,9 @@ function isProfileHandoffState(value: unknown): value is ProfileHandoffState {
   if (!value || typeof value !== 'object') return false;
   const state = value as Record<string, unknown>;
   return (
+    (state.sourceTabId === undefined ||
+      (Number.isSafeInteger(state.sourceTabId) &&
+        Number(state.sourceTabId) >= 0)) &&
     ['chatgpt', 'claude', 'other'].includes(
       String(state.profileImportProvider),
     ) &&

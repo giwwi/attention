@@ -616,8 +616,8 @@ summary {
   outline: 2px solid var(--accent);
   outline-offset: 4px;
 }
-.profile-source-list > [data-profile-source="chatgpt"],
-.profile-source-list > [data-profile-source="claude"] {
+.profile-source-list > [data-profile-source='chatgpt'],
+.profile-source-list > [data-profile-source='claude'] {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -628,4 +628,190 @@ summary {
 .profile-source-list > [data-profile-source] strong {
   color: var(--text);
   font-size: 14px;
+}
+
+/* The first setup is a short conversation; detailed profile controls are optional. */
+.profile-step h2 {
+  line-height: 1.2;
+  margin-bottom: 12px;
+}
+.profile-step p {
+  line-height: 1.55;
+}
+#profile-welcome-step > .profile-primary,
+#profile-question-step .profile-primary,
+#profile-complete-step > button {
+  width: 100%;
+  margin-top: 12px;
+}
+#profile-question-step textarea {
+  margin-bottom: 12px;
+}
+#profile-question-step input {
+  width: 100%;
+  margin: 6px 0 12px;
+}
+#profile-example-slot {
+  margin: 18px 0;
+  font-size: 12px;
+  color: var(--muted);
+}
+#profile-example-slot > details > summary {
+  cursor: pointer;
+}
+#profile-review-details {
+  margin: 18px 0;
+  border-top: 1px solid var(--border);
+  padding-top: 12px;
+}
+#profile-review-details > summary {
+  color: var(--muted);
+  font-size: 12px;
+  cursor: pointer;
+}
+.profile-brief-group {
+  margin: 18px 0;
+}
+.profile-brief-group h3 {
+  font-size: 13px;
+  margin: 0 0 8px;
+}
+.profile-brief-entry {
+  display: flex;
+  align-items: flex-start;
+  gap: 4px;
+  margin: 6px 0;
+}
+.profile-brief-entry label {
+  flex: 1;
+  min-width: 0;
+}
+.profile-brief-entry label > span {
+  display: block;
+  font-size: 11px;
+  color: var(--muted);
+  padding-inline: 7px;
+}
+.profile-brief-entry textarea {
+  margin-top: 2px;
+  padding: 7px;
+  font-size: 13px;
+  line-height: 1.5;
+  resize: vertical;
+  min-height: 36px;
+}
+.profile-brief-remove {
+  flex: 0 0 30px;
+  padding: 7px;
+  font-size: 18px;
+  color: var(--muted);
+}
+.profile-brief-group > details > summary {
+  font-size: 12px;
+  color: var(--muted);
+  cursor: pointer;
+}
+.profile-brief-group .profile-text-button {
+  margin-top: 4px;
+  font-size: 12px;
+}
+#profile-review-step .profile-footer-actions {
+  background: var(--page-background);
+  border-top: 1px solid var(--border);
+  padding: 12px 0 0;
+}
+
+.profile-example {
+  margin: 18px 0;
+  padding: 15px;
+  border: 1px solid var(--border, #ccd7d0);
+  border-radius: 12px;
+  text-align: start;
+  color: var(--text, #24352e);
+}
+.profile-example .profile-demo-note {
+  font-size: 11px;
+  color: var(--muted, #69766e);
+  margin: 0 0 8px;
+}
+.profile-example h3 {
+  font-size: 16px;
+  line-height: 1.3;
+  margin: 0 0 16px;
+}
+.profile-example .profile-demo-article {
+  font-size: 14px;
+  line-height: 1.45;
+  font-weight: 600;
+  margin: 0 0 12px;
+}
+.profile-example .profile-demo-switches {
+  display: grid;
+  gap: 6px;
+  margin-bottom: 14px;
+}
+.profile-example .profile-demo-switches button {
+  width: 100%;
+  min-height: 38px;
+  border: 1px solid var(--border, #ccd7d0);
+  background: transparent;
+  border-radius: 7px;
+  color: inherit;
+  padding: 8px;
+  font-size: 12px;
+  text-align: start;
+  cursor: pointer;
+}
+.profile-example .profile-demo-switches button[aria-pressed='true'] {
+  border-color: var(--accent, #187451);
+  box-shadow: inset 3px 0 0 var(--accent, #187451);
+  font-weight: 650;
+}
+.profile-example .profile-demo-result {
+  padding: 12px;
+  border-radius: 8px;
+  background: var(--subtle-panel-background, #eef2ef);
+  border-inline-start: 3px solid var(--muted, #69766e);
+}
+.profile-example .profile-demo-result[data-verdict='read'] {
+  border-inline-start-color: var(--accent, #187451);
+}
+.profile-example .profile-demo-result strong {
+  font-size: 14px;
+}
+.profile-example .profile-demo-result p {
+  font-size: 12px;
+  line-height: 1.55;
+  margin: 7px 0 0 !important;
+}
+
+.profile-onboarding .profile-primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--on-accent);
+  font-weight: 600;
+}
+.profile-onboarding .profile-primary:hover {
+  background: var(--accent-hover);
+}
+.profile-onboarding .profile-text-button {
+  border-color: transparent;
+  background: transparent;
+  color: var(--muted);
+  padding-inline: 0;
+}
+#profile-complete-step #profile-finish {
+  width: auto;
+}
+@media (min-width: 600px) {
+  body {
+    width: 560px;
+    margin: 28px auto;
+  }
+  .shell {
+    padding: 24px;
+  }
+  .profile-provider-choices {
+    grid-template-columns: 1fr 1fr;
+  }
 }

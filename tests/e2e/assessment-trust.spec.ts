@@ -1,10 +1,15 @@
 import { chromium, expect, test } from '@playwright/test';
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdtemp, rm, readFile, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { createTestExtension, initializeTestVault } from './helpers/vault';
 import { initializeTestProfile } from './helpers/profile';
-import { cardTextContent, clickCardElement } from './helpers/card';
+import {
+  cardTextContent,
+  clickCardElement,
+  shadowElementState,
+} from './helpers/card';
+import { EXTENSION_RUNTIME_VERSION } from '../../src/shared/version';
 
 for (const mode of [
   'title-only',
@@ -106,7 +111,21 @@ for (const mode of [
                       : 'В рассмотренных частях есть приёмы кеширования запросов и измерения задержки модели.',
                   recommendedSections: [],
                   confidence: 1,
-                  passages: [],
+                  passages:
+                    mode === 'partial-ai'
+                      ? [
+                          {
+                            passageId: payload.material.passages[0].id,
+                            queryIndex: 0,
+                            relevance: 90,
+                            confidence: 0.9,
+                            contextSufficient: true,
+                            contribution: 'A concrete caching procedure.',
+                            knowledgeEvidenceIds: [],
+                            possiblyNew: false,
+                          },
+                        ]
+                      : [],
                 }),
               },
             ],
@@ -141,6 +160,10 @@ for (const mode of [
       );
       const page = await context.newPage();
       await page.goto(url);
+      // The fixture can load before the extension finishes installing listeners.
+      await page
+        .locator('[data-attention-trigger]')
+        .waitFor({ state: 'attached' });
       await page.locator('h1').hover();
       const card = page.locator('[data-attention-preview]');
       await expect(card).toBeVisible();
@@ -150,6 +173,20 @@ for (const mode of [
           'data-attention-analysis-source',
           'ai',
         );
+        await expect
+          .poll(() =>
+            worker.evaluate(async () => {
+              const stored = await attentionVault.privateStorage.get(
+                'lastAiAnalysisDiagnostic',
+              );
+              return (
+                stored.lastAiAnalysisDiagnostic as {
+                  report?: { display?: { matched: number } };
+                }
+              )?.report?.display?.matched;
+            }),
+          )
+          .toBe(mode === 'partial-ai' ? 1 : 0);
       }
       await expect
         .poll(() => cardTextContent(context, page, '.verdict'))
@@ -177,6 +214,103 @@ for (const mode of [
           .toContain('Перейти к');
       }
       await page.screenshot({ path: `output/playwright/trust-${mode}.png` });
+      const palettes = [];
+      for (const colorScheme of ['light', 'dark'] as const) {
+        await page.emulateMedia({ colorScheme });
+        const surface = await shadowElementState(context, page, '.card');
+        expect(surface.colorScheme).toBe(colorScheme);
+        palettes.push({
+          colorScheme,
+          verdict: await card.getAttribute('data-attention-verdict'),
+          surface,
+          primary: await shadowElementState(
+            context,
+            page,
+            '[data-primary="true"]',
+          ),
+          muted: await shadowElementState(context, page, '.useful-time'),
+        });
+        await card.screenshot({
+          path: `output/playwright/verdict-${mode}-${colorScheme}.png`,
+        });
+      }
+      await writeFile(
+        `output/playwright/verdict-${mode}-palettes.json`,
+        JSON.stringify(palettes, null, 2),
+      );
+      if (mode === 'partial-ai') {
+        const previousId = await worker.evaluate(async () => {
+          const stored = await attentionVault.privateStorage.get(
+            'lastAiAnalysisDiagnostic',
+          );
+          return (
+            stored.lastAiAnalysisDiagnostic as {
+              report: { analysisId: string };
+            }
+          ).report.analysisId;
+        });
+        await clickCardElement(context, page, '.ai-button');
+        await expect
+          .poll(() =>
+            worker.evaluate(async (previousId) => {
+              const stored = await attentionVault.privateStorage.get(
+                'lastAiAnalysisDiagnostic',
+              );
+              const report = (
+                stored.lastAiAnalysisDiagnostic as {
+                  report?: {
+                    analysisId: string;
+                    display?: { matched: number };
+                  };
+                }
+              )?.report;
+              return (
+                report?.analysisId !== previousId &&
+                report?.display?.matched === 1
+              );
+            }, previousId),
+          )
+          .toBe(true);
+        const popup = await context.newPage();
+        await popup.goto(
+          `chrome-extension://${new URL(worker.url()).host}/popup.html`,
+        );
+        await popup.locator('#open-popup-settings').click();
+        await popup.locator('#open-privacy-settings').click();
+        await popup.locator('#export-ai-analysis').scrollIntoViewIfNeeded();
+        const pending = popup.waitForEvent('download');
+        await popup.locator('#export-ai-analysis').click();
+        const download = await pending;
+        const contents = await readFile((await download.path())!, 'utf8');
+        const report = JSON.parse(contents);
+        expect(report).toMatchObject({
+          version: EXTENSION_RUNTIME_VERSION,
+          status: 'complete',
+          input: { coverage: 'partial' },
+          output: {
+            returned: 1,
+            accepted: 1,
+            selected: 1,
+            candidates: [
+              {
+                relevance: 0.9,
+                relevanceInput: { kind: 'number', value: 90, scale: 'percent' },
+                reasons: [],
+              },
+            ],
+          },
+          display: { reason: 'matched', matched: 1, fingerprintMatches: true },
+        });
+        expect(contents).not.toContain(url);
+        expect(contents).not.toContain(paragraph);
+        expect(contents).not.toContain('test-only-key');
+        await download.saveAs(
+          'output/ai-prepared-passages-20260914/browser-fixture-report.json',
+        );
+        await popup.screenshot({
+          path: 'output/playwright/ai-passage-scale-download.png',
+        });
+      }
     } finally {
       await context.close();
       await rm(directory, { recursive: true, force: true });

@@ -77,7 +77,7 @@ test('article actions jump to real passages without section headings and save wi
               ? Object.values(value).flatMap(strings)
               : [];
         const prompt = strings(JSON.parse(String(init?.body ?? '{}'))).find(
-          (text) => text.includes('"coreIds"'),
+          (text) => text.includes('BEGIN_UNTRUSTED_MATERIAL_JSON'),
         );
         const batch = JSON.parse(
           prompt!
@@ -85,13 +85,14 @@ test('article actions jump to real passages without section headings and save wi
             .split('\nEND_UNTRUSTED_MATERIAL_JSON')[0]!,
         ).material;
         const passages = batch.blocks
-          .filter(
-            (block: { text: string; id: string }) =>
-              batch.coreIds.includes(block.id) && claims.includes(block.text),
+          .filter((block: { text: string; id: string }) =>
+            claims.includes(block.text),
           )
           .map((block: { id: string }) => ({
-            coreBlockId: block.id,
-            contextBlockIds: [block.id],
+            passageId: batch.passages.find(
+              (passage: { coreBlockId: string }) =>
+                passage.coreBlockId === block.id,
+            ).id,
             queryIndex: 0,
             relevance: 0.9,
             confidence: 0.8,
@@ -144,6 +145,9 @@ test('article actions jump to real passages without section headings and save wi
     await page.goto(url);
     const origin = await page.evaluate(() => performance.timeOrigin);
     const card = page.locator('[data-attention-preview]');
+    await page
+      .locator('[data-attention-trigger]')
+      .waitFor({ state: 'attached' });
     await page.locator('h1').hover();
     await expect(card).toHaveCSS('display', 'block');
     await clickCardElement(context, page, '.ai-button');
@@ -191,6 +195,14 @@ test('article actions jump to real passages without section headings and save wi
           Boolean(document.querySelector('.attention-potential-new-fallback')),
       ),
     ).toBe(true);
+    const highlightedText = () =>
+      page.evaluate(() =>
+        [...(CSS.highlights.get('attention-potential-new') ?? [])]
+          .map((range) => range.toString())
+          .join('\n'),
+      );
+    expect(await highlightedText()).toContain(claims[0]);
+    expect(await highlightedText()).not.toContain(claims[1]);
     expect(
       (
         await shadowElementState(
@@ -213,10 +225,13 @@ test('article actions jump to real passages without section headings and save wi
         ),
       )
       .toContain(claims[1]);
+    expect(await highlightedText()).toContain(claims[1]);
+    expect(await highlightedText()).not.toContain(claims[0]);
     await page.screenshot({
       path: 'output/playwright/article-passages-reading.png',
     });
     await page.keyboard.press('Escape');
+    expect(await highlightedText()).toBe('');
     await expect(panel).toHaveCount(0);
     await expect(page.locator('[data-attention-trigger]')).toBeFocused();
     await page.locator('[data-attention-trigger]').scrollIntoViewIfNeeded();

@@ -1,3 +1,5 @@
+import { emptyDisplayTrace } from '../diagnostics/ai-analysis-types';
+import { AI_PASSAGE_DISPLAY_TYPE } from '../diagnostics/ai-analysis-messages';
 import {
   assessmentNeedsContext,
   preliminaryAssessment,
@@ -5,6 +7,7 @@ import {
 import { assessmentNote } from '../i18n/assessment-notes';
 import { passageText } from '../i18n/passages';
 import { isTrustedUserInteraction } from './user-interaction';
+import { compactReason } from './compact-reason';
 import { installCardHost } from './card-view';
 import { installProfilePrompt } from './profile-prompt';
 import { profileCardText } from '../i18n/profile-card';
@@ -1543,6 +1546,7 @@ export function installHoverPreview(
   let pointerEventCount = 0;
   let activeSaveCapture: PageCapture | null = null;
   let activeNovelMatches: NovelPassageMatch[] = [];
+  let lastDiagnosticDisplay = '';
   let activeNovelCapture: PageCapture | null = null;
   let activeReadwiseConnected = false;
   let activeDetails: HoverTargetDetails | null = null;
@@ -1812,12 +1816,8 @@ export function installHoverPreview(
       event.preventDefault();
       event.stopPropagation();
       if (activeRecommendedHeadings.length === 0) return;
-      highlightRecommendedSections(
-        document,
-        activeRecommendedHeadings,
-        currentLanguage(),
-      );
-      scrollToHeading(document, activeRecommendedHeadings[0]!);
+      novelPassages.clear();
+      highlightRecommendedSections(document, activeRecommendedHeadings);
       hide();
     },
     { signal: listenerController.signal },
@@ -2013,6 +2013,9 @@ export function installHoverPreview(
     view.host.dataset.attentionExpanded = String(expanded);
     view.host.style.pointerEvents = expanded ? 'auto' : 'none';
     activeSaveCapture = expanded ? cachedPageCapture : null;
+    const passageDiagnostic = emptyDisplayTrace(
+      preview.insights?.readingPassages?.items.length ?? 0,
+    );
     activeNovelMatches =
       expanded &&
       cachedPageCapture &&
@@ -2023,8 +2026,26 @@ export function installHoverPreview(
             preview.insights?.keyClaims,
             undefined,
             preview.insights?.readingPassages,
+            passageDiagnostic,
           )
         : [];
+    if (expanded && cachedPageCapture && preview.insights?.aiAnalysisId) {
+      if (cachedResponse?.novelPassageHighlightsEnabled !== true)
+        passageDiagnostic.reason = 'highlights-disabled';
+      const message = {
+        type: AI_PASSAGE_DISPLAY_TYPE,
+        analysisId: preview.insights.aiAnalysisId,
+        url: cachedPageCapture.url,
+        display: passageDiagnostic,
+      };
+      const key = JSON.stringify(message);
+      if (lastDiagnosticDisplay !== key) {
+        lastDiagnosticDisplay = key;
+        void chrome.runtime.sendMessage(message).catch(() => {
+          if (lastDiagnosticDisplay === key) lastDiagnosticDisplay = '';
+        });
+      }
+    }
     activeNovelCapture =
       activeNovelMatches.length > 0 ? cachedPageCapture : null;
     activeReadwiseConnected = cachedResponse?.readwiseConnected === true;
@@ -2074,7 +2095,10 @@ export function installHoverPreview(
       selection?.status === 'no-context'
         ? 'noContext'
         : !hasPassages
-          ? 'empty'
+          ? selection?.source === 'ai' &&
+            ((selection.modelCandidates ?? 0) > 0 || selection.items.length > 0)
+            ? 'notShown'
+            : 'empty'
           : 'hint';
     const coverageStatus =
       selection?.status === 'unavailable'
@@ -2100,7 +2124,9 @@ export function installHoverPreview(
         : cardText(language, 'saveForLater');
     const promise = expanded ? personalValuePromise(preview, language) : '';
     const reason = expanded ? personalValueReason(preview, language) : '';
-    view.score.textContent = reason;
+    view.score.textContent = compactReason(reason);
+    view.fullReason.hidden = view.score.textContent === reason;
+    view.fullReason.textContent = view.fullReason.hidden ? '' : reason;
     view.decisionSummary.textContent = promise;
     view.detailsSummary.textContent = cardText(language, 'details');
     view.closeButton.setAttribute('aria-label', cardText(language, 'close'));
@@ -2146,11 +2172,7 @@ export function installHoverPreview(
             if (!isTrustedUserInteraction(event)) return;
             event.preventDefault();
             event.stopPropagation();
-            highlightRecommendedSections(
-              document,
-              readingPlan.headings,
-              currentLanguage(),
-            );
+            novelPassages.clear();
             scrollToHeading(document, heading);
             hide();
           },
@@ -2191,21 +2213,18 @@ export function installHoverPreview(
     );
     view.analysisSource.dataset.source = analysisSource;
     view.aiButton.disabled =
-      analysisSource === 'ai' ||
-      aiState === 'local-only' ||
-      aiState === 'not-connected';
-    view.aiButton.hidden = analysisSource === 'ai';
+      aiState === 'local-only' || aiState === 'not-connected';
+    // A cached AI result has no fresh trace. Rechecking remains an explicit user action.
+    view.aiButton.hidden = false;
     view.aiButton.textContent = uiText(
       language,
-      analysisSource === 'ai'
-        ? 'checkedWithAi'
-        : aiState === 'local-only'
-          ? 'aiBlockedLocalOnly'
-          : aiState === 'not-connected'
-            ? 'aiNotConnected'
-            : aiState === 'error'
-              ? 'retryWithAi'
-              : 'checkWithAi',
+      aiState === 'local-only'
+        ? 'aiBlockedLocalOnly'
+        : aiState === 'not-connected'
+          ? 'aiNotConnected'
+          : aiState === 'error' || analysisSource === 'ai'
+            ? 'retryWithAi'
+            : 'checkWithAi',
     );
     view.host.dataset.attentionAnalysisSource = analysisSource;
     view.host.dataset.attentionAiState = aiState;

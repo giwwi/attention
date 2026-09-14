@@ -152,6 +152,7 @@ describe('vault entry gate', () => {
     const { ensureVaultUnlocked } = await loadUi();
     void ensureVaultUnlocked();
     await flush();
+    button('profile-start').click();
     input('vault-password').value = 'long-safe-password';
     input('vault-confirm-password').value = 'a-different-password';
     submit();
@@ -170,6 +171,7 @@ describe('vault entry gate', () => {
     const { ensureVaultUnlocked } = await loadUi();
     void ensureVaultUnlocked();
     await flush();
+    button('profile-start').click();
     input('vault-password').value = 'short';
     input('vault-confirm-password').value = 'short';
     submit();
@@ -193,6 +195,9 @@ describe('vault entry gate', () => {
     const { ensureVaultUnlocked } = await loadUi();
     const pending = ensureVaultUnlocked();
     await flush();
+    expect(document.querySelector('form')).toBeNull();
+    expect(document.querySelector('[data-profile-demo]')).not.toBeNull();
+    button('profile-start').click();
     input('vault-password').value = 'correct-horse-battery';
     input('vault-confirm-password').value = 'correct-horse-battery';
     submit();

@@ -57,46 +57,83 @@
       </nav>
 
       <section id="profile-onboarding" class="profile-onboarding" hidden>
+        <div id="profile-welcome-step" class="profile-step" hidden>
+          <h2>Что стоит вашего времени?</h2>
+          <p class="profile-intro">
+            Attention помогает выбрать, что читать и на каких фрагментах
+            остановиться.
+          </p>
+          <div id="profile-welcome-demo"></div>
+          <p>
+            Чтобы советовать именно вам, Attention нужно немного вас узнать.
+          </p>
+          <button id="profile-start" class="profile-primary" type="button">
+            Настроить под меня
+          </button>
+        </div>
+        <div id="profile-question-step" class="profile-step" hidden></div>
+        <div id="profile-complete-step" class="profile-step" hidden>
+          <p class="eyebrow">Готово</p>
+          <h2>Профиль сохранён. Попробуем на статье?</h2>
+          <p>
+            Наведите курсор на заголовок статьи. Attention подскажет, стоит ли
+            читать, и предложит фрагменты, если найдёт подходящие.
+          </p>
+          <button
+            id="profile-return"
+            class="profile-primary"
+            type="button"
+            hidden
+          >
+            Вернуться к статье
+          </button>
+          <p id="profile-return-status" role="status" hidden></p>
+          <button id="profile-finish" class="profile-secondary" type="button">
+            Готово
+          </button>
+          <button
+            id="profile-add-provider"
+            class="profile-text-button"
+            type="button"
+          >
+            Добавить профиль из другого AI
+          </button>
+        </div>
         <div id="profile-source-step" class="profile-step">
           <p class="eyebrow">Личный контекст</p>
-          <h2>Сначала — ваш профиль</h2>
+          <h2>Кто уже знает ваши интересы?</h2>
           <p class="profile-intro">
-            Начните с ChatGPT или Claude, с которым вы уже общались. Он поможет
-            описать ваши цели, интересы и знакомые темы. Можно начать с одного,
-            а потом добавить профиль из другого.
+            Выберите AI, с которым обсуждали работу, учёбу или увлечения. Он
+            поможет собрать профиль из знакомого ему контекста. Второй можно
+            добавить позже.
           </p>
-          <div class="profile-source-list">
+          <div class="profile-source-list profile-provider-choices">
             <button type="button" data-profile-source="chatgpt">
               <span>
                 <strong>Пусть ChatGPT представит меня</strong>
-                <small>Использовать уже накопленный контекст</small>
               </span>
               <span aria-hidden="true">→</span>
             </button>
             <button type="button" data-profile-source="claude">
               <span>
                 <strong>Пусть Claude представит меня</strong>
-                <small>Использовать уже накопленный контекст</small>
               </span>
               <span aria-hidden="true">→</span>
             </button>
           </div>
-          <p class="profile-activation-note" data-profile-required>
-            После сохранения профиля появятся рекомендации, что читать.
-          </p>
           <div id="profile-example-slot"></div>
           <details id="profile-other-methods" class="profile-other-methods">
-            <summary>Другие способы</summary>
+            <summary>Я пока не пользуюсь ими</summary>
             <p class="profile-intro">
-              Нет истории чатов? Создайте подробный профиль вручную: укажите
-              интересы, текущие цели и то, что уже знаете.
+              Ответьте на несколько вопросов о своих задачах и опыте. Чем
+              конкретнее примеры, тем полезнее рекомендации.
             </p>
             <div class="profile-source-list">
               <button type="button" data-profile-source="other">
                 Создать профиль с другим AI <span aria-hidden="true">→</span>
               </button>
               <button type="button" data-profile-source="manual">
-                Настроить вручную <span aria-hidden="true">→</span>
+                Ответить на вопросы <span aria-hidden="true">→</span>
               </button>
             </div>
           </details>
@@ -271,7 +308,7 @@
           <p id="profile-handoff-status" class="profile-handoff-status"></p>
           <ol id="profile-handoff-instructions" class="profile-instructions">
             <li>Отправьте запрос выбранному AI.</li>
-            <li>Скопируйте его JSON-ответ.</li>
+            <li>Скопируйте весь ответ и вставьте сюда.</li>
             <li>Вернитесь сюда и вставьте ответ ниже.</li>
           </ol>
           <button
@@ -299,7 +336,7 @@
           </button>
           <div id="profile-manual-prompt" hidden>
             <label class="profile-field" for="profile-export-prompt">
-              <span>Запрос для экспорта</span>
+              <span>Запрос для AI</span>
               <textarea
                 id="profile-export-prompt"
                 rows="8"
@@ -315,12 +352,12 @@
             </button>
           </div>
           <label class="profile-field" for="profile-import-json">
-            <span>Ответ AI в формате JSON</span>
+            <span>Ответ от AI</span>
             <textarea
               id="profile-import-json"
               rows="8"
               spellcheck="false"
-              placeholder='Вставьте объект с "schema_version": "2.0"'
+              placeholder="Вставьте ответ целиком — разберём его за вас."
             ></textarea>
           </label>
           <ul
@@ -330,7 +367,7 @@
             hidden
           ></ul>
           <button id="validate-profile" class="profile-primary" type="button">
-            Проверить и просмотреть
+            Посмотреть мой профиль
           </button>
           <p class="profile-privacy-note">
             Attention не читает переписки и не подключается к аккаунту AI. Ответ
@@ -340,36 +377,45 @@
 
         <div id="profile-review-step" class="profile-step" hidden>
           <p class="eyebrow">Проверка перед сохранением</p>
-          <h2>Ваш начальный профиль</h2>
+          <h2>Всё верно?</h2>
           <p id="profile-review-source" class="profile-intro"></p>
-          <div id="profile-review-content"></div>
-          <div class="profile-add-actions" aria-label="Добавить пункт">
-            <button type="button" data-add-profile-item="interests">
-              + Интерес
-            </button>
-            <button type="button" data-add-profile-item="goals">+ Цель</button>
-            <button type="button" data-add-profile-item="expertise">
-              + Экспертиза
-            </button>
-            <button type="button" data-add-profile-item="demonstratedKnowledge">
-              + Известное
-            </button>
-            <button type="button" data-add-profile-item="learningAreas">
-              + Изучаю
-            </button>
-            <button type="button" data-add-profile-item="uncertainties">
-              + Неопределённость
-            </button>
-            <button type="button" data-add-profile-item="lowValueTopics">
-              + Малоценная тема
-            </button>
-            <button type="button" data-add-profile-item="contentPreferences">
-              + Предпочтения
-            </button>
-            <button type="button" data-add-profile-item="leisurePreferences">
-              + Для отдыха
-            </button>
-          </div>
+          <div id="profile-review-brief"></div>
+          <details id="profile-review-details">
+            <summary>Все подробности профиля</summary>
+            <div id="profile-review-content"></div>
+            <div class="profile-add-actions" aria-label="Добавить пункт">
+              <button type="button" data-add-profile-item="interests">
+                + Интерес
+              </button>
+              <button type="button" data-add-profile-item="goals">
+                + Цель
+              </button>
+              <button type="button" data-add-profile-item="expertise">
+                + Экспертиза
+              </button>
+              <button
+                type="button"
+                data-add-profile-item="demonstratedKnowledge"
+              >
+                + Известное
+              </button>
+              <button type="button" data-add-profile-item="learningAreas">
+                + Изучаю
+              </button>
+              <button type="button" data-add-profile-item="uncertainties">
+                + Неопределённость
+              </button>
+              <button type="button" data-add-profile-item="lowValueTopics">
+                + Малоценная тема
+              </button>
+              <button type="button" data-add-profile-item="contentPreferences">
+                + Предпочтения
+              </button>
+              <button type="button" data-add-profile-item="leisurePreferences">
+                + Для отдыха
+              </button>
+            </div>
+          </details>
           <ul
             id="profile-review-errors"
             class="profile-errors"
@@ -382,10 +428,10 @@
               class="profile-secondary"
               type="button"
             >
-              Отменить импорт
+              Назад
             </button>
             <button id="save-profile" class="profile-primary" type="button">
-              Использовать этот профиль
+              Сохранить и попробовать
             </button>
           </div>
         </div>
@@ -816,6 +862,20 @@
               Скачать безопасный JSON
             </button>
           </div>
+        </section>
+
+        <section class="privacy-panel">
+          <h3 id="ai-report-title">Последняя проверка с ИИ</h3>
+          <p id="ai-report-description">
+            Если ИИ не показывает фрагменты, скачайте отчёт после проверки
+            статьи. Без текста статьи, профиля и ключей.
+          </p>
+          <div class="privacy-actions">
+            <button id="export-ai-analysis" type="button">
+              Скачать отчёт ИИ-анализа
+            </button>
+          </div>
+          <p id="ai-report-status" class="privacy-status" role="status"></p>
         </section>
 
         <section class="privacy-panel">

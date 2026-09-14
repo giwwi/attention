@@ -170,7 +170,11 @@ describe('popup evaluation lifecycle', () => {
       availableMinutes: 5,
     }));
     await instance.evaluateLocal();
-    expect(createAnalyzer).toHaveBeenCalledWith(null, expect.any(Function));
+    expect(createAnalyzer).toHaveBeenCalledWith(
+      null,
+      expect.any(Function),
+      expect.any(Function),
+    );
     expect(refreshAiSettings).not.toHaveBeenCalled();
     expect(document.querySelector<HTMLElement>('#evaluation')?.hidden).toBe(
       false,

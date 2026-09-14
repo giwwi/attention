@@ -1,6 +1,9 @@
-import { articleMap, passageWindow } from '../reading/blocks';
+import { articleMap } from '../reading/blocks';
 import type { ArticleMap } from '../reading/types';
-import type { PassageBatch } from '../reading/ai-passages';
+import {
+  preparePassages,
+  type PassageBatch,
+} from '../reading/prepared-passages';
 import type { PageCapture } from '../shared/types';
 import { AI_ANALYSIS_LIMITS } from './config';
 
@@ -16,6 +19,11 @@ export function sharedAnalysisInput(
   material: PageCapture,
 ): SharedAnalysisInput {
   const map = articleMap(material);
+  const prepared = preparePassages(map);
+  const byCore = new Map(
+    prepared.map((passage) => [passage.coreBlockId, passage]),
+  );
+  const byId = new Map(map.blocks.map((block) => [block.id, block]));
   const selected = new Set<string>();
   let characters = 0;
   const sections = new Map<string, number[]>();
@@ -43,7 +51,9 @@ export function sharedAnalysisInput(
       if (index === undefined) continue;
       const core = map.blocks[index]!;
       if (selected.has(core.id)) continue;
-      const window = passageWindow(map, core.id);
+      const window = (byCore.get(core.id)?.blockIds ?? []).map((id) =>
+        byId.get(id)!,
+      );
       const addition = window.filter((block) => !selected.has(block.id));
       const size = addition.reduce(
         (total, block) => total + block.text.length + 2,
@@ -61,7 +71,12 @@ export function sharedAnalysisInput(
   const blocks = map.blocks.filter((block) => selected.has(block.id));
   return {
     map,
-    batch: { blocks, coreIds: blocks.map((block) => block.id) },
+    batch: {
+      blocks,
+      passages: prepared.filter((passage) =>
+        passage.blockIds.every((id) => selected.has(id)),
+      ),
+    },
     complete: map.complete && blocks.length === map.blocks.length,
     content: blocks.map((block) => block.text).join('\n\n'),
   };

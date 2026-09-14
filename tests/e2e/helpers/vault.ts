@@ -61,6 +61,9 @@ export async function createVaultThroughUi(
   password = TEST_VAULT_PASSWORD,
 ): Promise<void> {
   await expect(page.locator('#vault-gate')).toBeVisible();
+  const start = page.locator('#vault-gate #profile-start');
+  await expect(page.locator('#vault-gate')).not.toContainText('Checking');
+  if (await start.isVisible()) await start.click();
   await page.locator('#vault-password').fill(password);
   await page.locator('#vault-confirm-password').fill(password);
   await page.locator('#vault-submit').click();

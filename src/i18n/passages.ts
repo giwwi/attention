@@ -6,6 +6,7 @@ const en = {
   interest: 'Related to your interests',
   possiblyNew: 'May add to what you know',
   empty: 'No clearly relevant passages found.',
+  notShown: 'Could not show the selected passages. Try checking with AI again.',
   noContext: 'Add a goal to help me find useful passages.',
   partial: 'Part of the article was reviewed.',
   unavailable: 'AI selection unavailable · local selection used.',
@@ -22,6 +23,8 @@ const copies: Record<UiLanguage, Copy> = {
     interest: 'По вашим интересам',
     possiblyNew: 'Возможно, дополняет ваши знания',
     empty: 'Не нашла явно подходящих фрагментов.',
+    notShown:
+      'Не удалось показать выбранные фрагменты. Попробуйте повторить проверку с ИИ.',
     noContext: 'Добавьте цель — так я смогу подобрать фрагменты.',
     partial: 'Рассмотрена часть статьи.',
     unavailable: 'ИИ недоступен · использован локальный отбор.',
@@ -36,6 +39,8 @@ const copies: Record<UiLanguage, Copy> = {
     interest: 'Zu Ihren Interessen',
     possiblyNew: 'Ergänzt möglicherweise Ihr Wissen',
     empty: 'Keine eindeutig passenden Textstellen gefunden.',
+    notShown:
+      'Die ausgewählten Textstellen konnten nicht angezeigt werden. Versuchen Sie die KI-Prüfung erneut.',
     noContext: 'Fügen Sie ein Ziel hinzu, um passende Textstellen zu finden.',
     partial: 'Ein Teil des Artikels wurde geprüft.',
     unavailable: 'KI-Auswahl nicht verfügbar · lokale Auswahl verwendet.',
@@ -49,6 +54,8 @@ const copies: Record<UiLanguage, Copy> = {
     interest: 'En lien avec vos intérêts',
     possiblyNew: 'Peut compléter vos connaissances',
     empty: 'Aucun passage clairement pertinent trouvé.',
+    notShown:
+      'Impossible d’afficher les passages sélectionnés. Relancez l’analyse IA.',
     noContext: 'Ajoutez un objectif pour trouver des passages utiles.',
     partial: 'Une partie de l’article a été examinée.',
     unavailable: 'Sélection IA indisponible · sélection locale utilisée.',
@@ -62,6 +69,8 @@ const copies: Record<UiLanguage, Copy> = {
     interest: 'Relacionado con tus intereses',
     possiblyNew: 'Puede ampliar lo que sabes',
     empty: 'No se encontraron fragmentos claramente relevantes.',
+    notShown:
+      'No se pudieron mostrar los fragmentos seleccionados. Repite el análisis con IA.',
     noContext: 'Añade un objetivo para encontrar fragmentos útiles.',
     partial: 'Se revisó parte del artículo.',
     unavailable: 'Selección con IA no disponible · se usó la selección local.',
@@ -75,6 +84,8 @@ const copies: Record<UiLanguage, Copy> = {
     interest: 'In linea con i tuoi interessi',
     possiblyNew: 'Può arricchire ciò che sai',
     empty: 'Nessun passaggio chiaramente pertinente trovato.',
+    notShown:
+      'Impossibile mostrare i passaggi selezionati. Riprova l’analisi IA.',
     noContext: 'Aggiungi un obiettivo per trovare passaggi utili.',
     partial: 'È stata esaminata parte dell’articolo.',
     unavailable: 'Selezione IA non disponibile · selezione locale utilizzata.',
@@ -88,6 +99,7 @@ const copies: Record<UiLanguage, Copy> = {
     interest: '与你的兴趣相关',
     possiblyNew: '可能补充你的知识',
     empty: '未找到明确相关的段落。',
+    notShown: '无法显示所选段落。请重新进行 AI 分析。',
     noContext: '添加目标以查找有用的段落。',
     partial: '仅分析了部分文章。',
     unavailable: 'AI 段落选择不可用，已使用本地筛选。',
@@ -101,6 +113,8 @@ const copies: Record<UiLanguage, Copy> = {
     interest: 'مرتبط باهتماماتك',
     possiblyNew: 'قد يضيف إلى معرفتك',
     empty: 'لم أجد مقاطع ذات صلة واضحة.',
+    notShown:
+      'تعذّر عرض المقاطع المختارة. حاول إعادة التحليل بالذكاء الاصطناعي.',
     noContext: 'أضف هدفًا للعثور على مقاطع مفيدة.',
     partial: 'تمت مراجعة جزء من المقالة.',
     unavailable:
@@ -115,6 +129,7 @@ const copies: Record<UiLanguage, Copy> = {
     interest: 'आपकी रुचियों से संबंधित',
     possiblyNew: 'आपके ज्ञान में कुछ जोड़ सकता है',
     empty: 'स्पष्ट रूप से प्रासंगिक अंश नहीं मिले।',
+    notShown: 'चुने गए अंश दिखाए नहीं जा सके। AI से दोबारा जाँच करें।',
     noContext: 'उपयोगी अंश खोजने के लिए एक लक्ष्य जोड़ें।',
     partial: 'लेख के कुछ हिस्से की समीक्षा हुई है।',
     unavailable: 'AI चयन उपलब्ध नहीं है · स्थानीय चयन का उपयोग किया गया।',

@@ -58,7 +58,7 @@ describe('profile language switching', () => {
       expect(input.value).toBe('Мои личные русские заметки');
       document.documentElement.lang = 'ru';
       translate();
-      expect(root.textContent).toContain('Сначала — ваш профиль');
+      expect(root.textContent).toContain('Кто уже знает ваши интересы?');
       expect(input.value).toBe('Мои личные русские заметки');
     },
   );

@@ -62,7 +62,7 @@ describe('public setup boundary', () => {
       }),
     ).toEqual({ ok: true });
     expect(create).toHaveBeenCalledWith({
-      url: 'chrome-extension://attention/popup.html',
+      url: 'chrome-extension://attention/popup.html?sourceTab=1',
       active: true,
     });
   });

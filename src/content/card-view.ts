@@ -1,4 +1,4 @@
-import { CONTENT_THEME_CSS } from './theme';
+import { CARD_VERDICT_THEME_CSS, CONTENT_THEME_CSS } from './theme';
 import { DEFAULT_UI_LANGUAGE } from '../i18n/ui';
 import { cardText } from '../i18n/card';
 import { readingPlanText } from '../i18n/reading-plan';
@@ -24,6 +24,7 @@ export interface CardView {
   details: HTMLDetailsElement;
   detailsSummary: HTMLElement;
   scoreDetail: HTMLElement;
+  fullReason: HTMLElement;
   closeButton: HTMLButtonElement;
   contextSlot: HTMLElement;
 }
@@ -62,6 +63,7 @@ export function installCardHost(): CardView {
   const style = document.createElement('style');
   style.textContent = `
     ${CONTENT_THEME_CSS}
+    ${CARD_VERDICT_THEME_CSS}
     *, *::before, *::after { box-sizing: border-box; }
     .card { display: flex; min-width: 164px; align-items: center; justify-content: center; gap: 7px; border: 1px solid #3fcf8e; border-radius: 10px; padding: 10px 12px; color: #dff9ec; background: #0d2d23; box-shadow: 0 10px 28px rgba(0,0,0,.24); font: 800 12px/1.2 Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; letter-spacing: .035em; text-align: center; text-transform: uppercase; }
     .card::before { width: 7px; height: 7px; flex: 0 0 auto; border-radius: 50%; background: #42d392; box-shadow: 0 0 0 3px rgba(66,211,146,.14); content: ""; }
@@ -109,6 +111,7 @@ export function installCardHost(): CardView {
     .details > summary { padding-block: 12px 2px; color: var(--attention-secondary); font-size: 12px; font-weight: 650; cursor: pointer; }
     .details[open] > summary { padding-block-end: 10px; }
     .decision-summary { color: var(--attention-fg); font-size: 14px; line-height: 1.5; }
+    .full-reason { margin-block-start: 10px; font-size: 13px; line-height: 1.5; }
     .score-detail { margin-block-start: 10px; font-size: 12px; }
     .analysis-controls { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; margin-block-start: 12px; }
     .analysis-source { color: var(--attention-muted); font-size: 12px; }
@@ -163,6 +166,8 @@ export function installCardHost(): CardView {
   const detailsSummary = element('summary', 'details-summary');
   detailsSummary.textContent = cardText(DEFAULT_UI_LANGUAGE, 'details');
   const decisionSummary = element('div', 'decision-summary');
+  const fullReason = element('div', 'full-reason');
+  fullReason.hidden = true;
   const scoreDetail = element('div', 'score-detail');
   const analysisControls = element('div', 'analysis-controls');
   const analysisSource = element('span', 'analysis-source');
@@ -180,7 +185,13 @@ export function installCardHost(): CardView {
     readingPlanSections,
     highlightSectionsButton,
   );
-  details.append(detailsSummary, decisionSummary, scoreDetail, readingPlan);
+  details.append(
+    detailsSummary,
+    fullReason,
+    decisionSummary,
+    scoreDetail,
+    readingPlan,
+  );
   card.append(
     header,
     contextSlot,
@@ -216,6 +227,7 @@ export function installCardHost(): CardView {
     details,
     detailsSummary,
     scoreDetail,
+    fullReason,
     closeButton,
     contextSlot,
   };
