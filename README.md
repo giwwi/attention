@@ -14,6 +14,8 @@ Before a profile is saved, cards invite you to create one. Personal reading reco
 
 ## Try it in Chrome
 
+Install the published extension from the [Chrome Web Store](https://chromewebstore.google.com/detail/attention/fcclhejgaklnkfgalglcmhmledgefhhp). As of 14 September 2026, the store serves **0.28.0**, while GitHub provides **0.29.1**. Store updates become available after Google review. The instructions below install the latest GitHub build manually.
+
 1. Download and unzip the [version 0.29.1](https://github.com/giwwi/attention/releases/download/v0.29.1/attention-0.29.1.zip).
 2. Open `chrome://extensions`.
 3. Enable **Developer mode**.
@@ -66,6 +68,8 @@ If an AI analysis shows no passages, **Settings → Privacy and data → Downloa
 - Offers setup, profile controls, decisions, reading plans, and feedback in English, Russian, German, Spanish, French, Italian, Simplified Chinese, Arabic, and Hindi. Article text, quotations, and imported personal content keep their original language.
 
 ## Privacy model
+
+**AI credentials:** the published 0.28.0 package and the 0.29.1 build use your own Vercel AI Gateway key, entered in Settings and kept in the encrypted local vault. No developer-funded shared token is bundled. The optional server code in `api/` is not part of the extension package and is not used by its AI path. It requires a separate deployment and further operational controls before being offered as a hosted service; see [the architecture description](PRODUCT.md#текущая-схема-ai-и-отдельный-серверный-код).
 
 Attention is local-first. Read the [privacy policy](https://giwwi.github.io/attention/privacy.html) for the complete data inventory and service boundaries.
 
