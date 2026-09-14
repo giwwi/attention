@@ -47,6 +47,8 @@ export interface ScenarioState {
 }
 
 export interface AnalysisContext {
+  /** Language for generated explanations; quotations retain the article language. */
+  responseLanguage?: import('../i18n/ui').UiLanguage;
   intent: string;
   availableMinutes: AvailableMinutes;
   scenario: AttentionScenario;
@@ -387,7 +389,7 @@ export interface StoredEvaluation {
 }
 
 export interface EvaluationCacheVersion {
-  schemaVersion: 6 | 7 | 8 | 9;
+  schemaVersion: 6 | 7 | 8 | 9 | 10;
   profile: string;
   history: string;
   readwise: string;

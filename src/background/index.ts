@@ -614,7 +614,14 @@ function evaluationAnalysisSource(
 }
 
 async function loadCurrentAnalysisContext(): Promise<AnalysisContext> {
-  return loadCardContext();
+  const [context, stored] = await Promise.all([
+    loadCardContext(),
+    privateStorage.get(UI_LANGUAGE_KEY),
+  ]);
+  return {
+    ...context,
+    responseLanguage: normalizeUiLanguage(stored[UI_LANGUAGE_KEY]),
+  };
 }
 
 async function saveQuickOutcome(

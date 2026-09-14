@@ -329,6 +329,35 @@ function modelAnswer(prompt: string) {
 
 describe('one source set for AI verdict and passages', () => {
   it.each([
+    ['en', 'Compare the model checks and their limitations.'],
+    ['de', 'Vergleichen Sie die Modellprüfungen und ihre Grenzen.'],
+    ['ru', 'Сравните проверки моделей и их ограничения.'],
+  ] as const)(
+    'shows the model explanation in %s instead of a generic fallback',
+    async (responseLanguage, reason) => {
+      vi.mocked(generateText).mockImplementation(async (options) => {
+        const result = modelAnswer(String(options.prompt));
+        result.output.reason = reason;
+        return result;
+      });
+      const result = await new AiGatewayAnalyzer('test-key').analyze(
+        material(`${useful}\n\n${caveat}`),
+        { ...context, responseLanguage },
+      );
+      expect(result.insights?.assessmentReason).toEqual({
+        text: reason,
+        language: responseLanguage,
+      });
+      expect(
+        personalValueReason(
+          createFullAnalysisHoverPreview(result),
+          responseLanguage,
+        ),
+      ).toBe(reason);
+      expect(generateText).toHaveBeenCalledTimes(1);
+    },
+  );
+  it.each([
     'accepted',
     'percent-relevance',
     'empty',
@@ -416,10 +445,10 @@ describe('one source set for AI verdict and passages', () => {
     );
     expect(result.insights?.assessmentReason).toEqual({
       text: 'There is a procedure with a limitation.',
-      language: 'ru',
+      language: 'en',
     });
     expect(
-      personalValueReason(createFullAnalysisHoverPreview(result), 'ru'),
+      personalValueReason(createFullAnalysisHoverPreview(result), 'en'),
     ).toBe('There is a procedure with a limitation.');
     expect(generateText).toHaveBeenCalledTimes(1);
     expect(result.insights?.analysisCoverage).toBe('complete');

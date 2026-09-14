@@ -1,4 +1,5 @@
 import { goalTerms, readingTermMatch } from '../analyzer/goal-match';
+import { GERMAN_PRACTICAL_MARKERS } from '../analyzer/german-text';
 import { applyClaimMemoryToClaim } from '../novelty/claim-memory';
 import { applyUnifiedLocalEvidenceToClaim } from '../evidence/unified-evidence';
 import { claimsFactuallyCompatible } from '../analyzer/claim-match';
@@ -191,7 +192,8 @@ export function selectLocalPassages(
       const structural =
         block.kind === 'list' || block.kind === 'table'
           ? 0.35
-          : /\b(?:because|however|unless|example|compare|steps|limitation)\b|потому|однако|например|сравн|огранич|исключ|шаг/iu.test(
+          : GERMAN_PRACTICAL_MARKERS.test(block.text) ||
+              /\b(?:because|however|unless|example|compare|steps|limitation)\b|потому|однако|например|сравн|огранич|исключ|шаг/iu.test(
                 block.text,
               )
             ? 0.25

@@ -39,6 +39,7 @@ async function flush(): Promise<void> {
 }
 
 beforeEach(() => {
+  delete document.documentElement.dataset.onboardingLanguage;
   vi.resetModules();
   vi.resetAllMocks();
   document.head.innerHTML = '';
@@ -62,6 +63,37 @@ beforeEach(() => {
 });
 
 describe('vault entry gate', () => {
+  it('offers English, German and Russian before any password or profile is requested', async () => {
+    vault.getVaultStatus.mockResolvedValue('unconfigured');
+    const { ensureVaultUnlocked } = await loadUi();
+    void ensureVaultUnlocked();
+    await flush();
+    const choices = [
+      ...document.querySelectorAll<HTMLButtonElement>('[data-language-choice]'),
+    ];
+    expect(choices.map((choice) => choice.textContent)).toEqual([
+      'English',
+      'Deutsch',
+      'Русский',
+    ]);
+    choices[1]!.click();
+    expect(document.getElementById('vault-gate')?.lang).toBe('de');
+    expect(document.getElementById('profile-start')?.textContent).toBe(
+      'Auf mich abstimmen',
+    );
+    expect(document.documentElement.dataset.onboardingLanguage).toBe('de');
+    expect(vault.createVault).not.toHaveBeenCalled();
+    expect(document.querySelector('[data-vault-password]')).toBeNull();
+    choices[2]!.click();
+    expect(document.getElementById('profile-start')?.textContent).toBe(
+      'Настроить под меня',
+    );
+    expect(choices[2]!.getAttribute('aria-pressed')).toBe('true');
+    choices[0]!.click();
+    expect(document.getElementById('profile-start')?.textContent).toBe(
+      'Make it personal',
+    );
+  });
   it('loads a packaged stylesheet that the extension security policy permits', async () => {
     const { ensureVaultUnlocked } = await loadUi();
     void ensureVaultUnlocked();

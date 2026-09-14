@@ -1,4 +1,5 @@
 import { conceptTokens } from './concept-aliases';
+import { germanLemma, GERMAN_STOP_WORDS } from './german-text';
 
 const STOP_WORDS = new Set([
   'and',
@@ -32,6 +33,7 @@ const STOP_WORDS = new Set([
 const SHORT_MEANINGFUL_TOKENS = new Set([
   'ai',
   'ml',
+  'ki',
   'ui',
   'ux',
   'vr',
@@ -58,7 +60,7 @@ const SHORT_MEANINGFUL_TOKENS = new Set([
 ]);
 
 function normalizeToken(word: string): string {
-  if (!/[а-яё]/u.test(word) || word.length < 6) return word;
+  if (!/[а-яё]/u.test(word) || word.length < 6) return germanLemma(word);
   return word.replace(
     /(иями|ями|ами|его|ого|ему|ому|иях|ах|ях|ия|ие|ий|ый|ая|яя|ое|ее|ов|ев|ам|ям|ом|ем|ы|и|а|я|у|ю|е|о)$/u,
     '',
@@ -74,7 +76,7 @@ export function textTokens(value: string): Set<string> {
       .normalize('NFKC')
       .match(/[+−-]?\p{N}+(?:[.,]\p{N}+)*|[\p{L}\p{N}]+|[%‰$€£¥₹₽<>≤≥]/gu) ??
     [];
-  const tokens = new Set(
+  const uniqueWords = new Set(
     words
       .filter(
         (word) =>
@@ -85,10 +87,9 @@ export function textTokens(value: string): Set<string> {
             word.toLocaleLowerCase() !== word),
       )
       .map((word) => word.toLocaleLowerCase())
-      .filter((word) => !STOP_WORDS.has(word))
-      .map(normalizeToken)
-      .filter(Boolean),
+      .filter((word) => !STOP_WORDS.has(word) && !GERMAN_STOP_WORDS.has(word)),
   );
+  const tokens = new Set([...uniqueWords].map(normalizeToken).filter(Boolean));
   if (tokens.has('artificial') && tokens.has('intelligence')) tokens.add('ai');
   if (tokens.has('machine') && tokens.has('learning')) tokens.add('ml');
   if (

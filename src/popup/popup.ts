@@ -22,7 +22,7 @@ import { NotionController } from './controllers/notion-controller';
 import { closeExtensionPopup, getElement, setPopupStatus } from './dom';
 import { openCardOnActiveTab } from './card-launcher';
 import { popupText, translatePopup } from '../i18n/popup';
-import { vaultText } from '../i18n/vault';
+import { vaultText, vaultLocale } from '../i18n/vault';
 import {
   popupLauncherText,
   translatePopupLauncher,
@@ -270,27 +270,43 @@ getElement<HTMLButtonElement>('profile-setup-settings').addEventListener(
   showSettings,
 );
 openCardButton.addEventListener('click', () => void launchCard());
+let languageChanges: Promise<void> = Promise.resolve();
+function selectLanguage(selected: UiLanguage): Promise<void> {
+  languageChanges = languageChanges
+    .then(async () => {
+      if (popupInvalidated) return;
+      const operation = await currentPopupOperation();
+      await commitDataOperation(operation, () =>
+        privateStorage.set({ [UI_LANGUAGE_KEY]: selected }),
+      );
+      if (popupInvalidated) return;
+      language = selected;
+      translate();
+      if (saved.isVisible) await saved.refresh();
+    })
+    .catch((error) => {
+      if (!(error instanceof DataOperationCancelledError))
+        setPopupStatus(status, 'error', popupText(language, 'settingsFailed'));
+    });
+  return languageChanges;
+}
 for (const [element, key] of [
   [languageSelect, UI_LANGUAGE_KEY],
   [highlights, NOVEL_PASSAGE_HIGHLIGHTS_KEY],
 ] as const) {
   element.addEventListener('change', () => {
     if (popupInvalidated) return;
-    const value =
-      key === UI_LANGUAGE_KEY
-        ? normalizeUiLanguage(languageSelect.value)
-        : highlights.checked;
+    if (key === UI_LANGUAGE_KEY) {
+      void selectLanguage(normalizeUiLanguage(languageSelect.value));
+      return;
+    }
+    const value = highlights.checked;
     void currentPopupOperation()
       .then(async (operation) => {
         await commitDataOperation(operation, () =>
           privateStorage.set({ [key]: value }),
         );
         if (popupInvalidated) return;
-        if (key === UI_LANGUAGE_KEY) {
-          language = value as UiLanguage;
-          translate();
-          if (saved.isVisible) await saved.refresh();
-        }
       })
       .catch((error) => {
         if (!(error instanceof DataOperationCancelledError))
@@ -375,13 +391,25 @@ async function initialize(): Promise<void> {
     PERSONAL_PROFILE_KEY,
   ]);
   await assertDataOperationCurrent(operation);
-  language = normalizeUiLanguage(stored[UI_LANGUAGE_KEY]);
+  const initialChoice = document.documentElement.dataset.onboardingLanguage;
+  language = initialChoice
+    ? normalizeUiLanguage(initialChoice)
+    : stored[UI_LANGUAGE_KEY] === undefined
+      ? vaultLocale()
+      : normalizeUiLanguage(stored[UI_LANGUAGE_KEY]);
+  if (initialChoice || stored[UI_LANGUAGE_KEY] === undefined) {
+    await commitDataOperation(operation, () =>
+      privateStorage.set({ [UI_LANGUAGE_KEY]: language }),
+    );
+    delete document.documentElement.dataset.onboardingLanguage;
+  }
   highlights.checked = novelPassageHighlightsEnabled(
     stored[NOVEL_PASSAGE_HIGHLIGHTS_KEY],
   );
   // Construct before translating: profile forms retain their original labels
   // for the existing nine-language profile translator.
   profileOnboarding = new ProfileOnboarding({
+    onLanguageChange: selectLanguage,
     onComplete: async () => {
       needsOnboarding = !isProfileReady(await loadProfile());
       openCardButton.disabled = needsOnboarding;

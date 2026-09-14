@@ -9,6 +9,7 @@ const UNIT_ALIASES: Readonly<Record<string, string>> = {
   '٪': 'percent',
   percent: 'percent',
   percentage: 'percent',
+  prozent: 'percent',
   процентов: 'percent',
   процента: 'percent',
   процент: 'percent',
@@ -32,12 +33,14 @@ const UNIT_ALIASES: Readonly<Record<string, string>> = {
   g: 'g',
   gram: 'g',
   grams: 'g',
+  gramm: 'g',
   г: 'g',
   грамм: 'g',
   граммов: 'g',
   kg: 'kg',
   kilogram: 'kg',
   kilograms: 'kg',
+  kilogramm: 'kg',
   кг: 'kg',
   килограмм: 'kg',
   килограммов: 'kg',
@@ -68,6 +71,8 @@ const UNIT_ALIASES: Readonly<Record<string, string>> = {
   sec: 's',
   second: 's',
   seconds: 's',
+  sekunde: 's',
+  sekunden: 's',
   секунд: 's',
   секунды: 's',
   ms: 'ms',
@@ -77,6 +82,7 @@ const UNIT_ALIASES: Readonly<Record<string, string>> = {
   min: 'min',
   minute: 'min',
   minutes: 'min',
+  minuten: 'min',
   минут: 'min',
   минуты: 'min',
   мин: 'min',
@@ -84,14 +90,22 @@ const UNIT_ALIASES: Readonly<Record<string, string>> = {
   hr: 'h',
   hour: 'h',
   hours: 'h',
+  stunde: 'h',
+  stunden: 'h',
   часов: 'h',
   часа: 'h',
   day: 'day',
   days: 'day',
+  tag: 'day',
+  tage: 'day',
+  tagen: 'day',
   дней: 'day',
   дня: 'day',
   year: 'year',
   years: 'year',
+  jahr: 'year',
+  jahre: 'year',
+  jahren: 'year',
   лет: 'year',
   года: 'year',
   kb: 'kb',
@@ -160,10 +174,12 @@ function quantities(text: string): string[] {
     if (temperature) unit = `temperature:${temperature[1]}`;
     const rate = after
       .slice(temperature?.[0].length ?? suffixUnit?.length ?? 0)
-      .match(/^\s*(?:\/|per\s+|в\s+)([\p{L}]+)/u)?.[1];
+      .match(/^\s*(?:\/|per\s+|pro\s+|в\s+)([\p{L}]+)/u)?.[1];
     if (rate) unit += `/${UNIT_ALIASES[rate] ?? rate}`;
     if (
-      /^(?:percentage|percent) points?\b|^процентн[\p{L}]* пункт/iu.test(after)
+      /^(?:percentage|percent) points?\b|^prozentpunkt[\p{L}]*|^процентн[\p{L}]* пункт/iu.test(
+        after,
+      )
     )
       unit = 'percentage-point';
     const operator =

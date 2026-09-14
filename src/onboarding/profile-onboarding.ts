@@ -5,6 +5,7 @@ import {
 } from './profile-basics';
 import { renderProfileBrief } from './profile-brief';
 import { createProfileDemo } from './profile-demo';
+import { createLanguageChoice } from './language-choice';
 import {
   mergeProfiles,
   resolveMerge,
@@ -36,7 +37,7 @@ import { validatePortableProfile } from '../profile/validator';
 import { isProfileReady } from '../profile/readiness';
 import type { CognitiveEffort } from '../shared/types';
 import { captureProfileLabels, profileText as p } from '../i18n/profile';
-import { normalizeUiLanguage } from '../i18n/ui';
+import { normalizeUiLanguage, type UiLanguage } from '../i18n/ui';
 import {
   beginDataOperation,
   commitDataOperation,
@@ -60,6 +61,7 @@ import {
 
 interface ProfileOnboardingOptions {
   onComplete: () => void | Promise<void>;
+  onLanguageChange?: (language: UiLanguage) => void | Promise<void>;
   buildQuickProfile?: (
     answers: QuickProfileAnswers,
   ) => PersonalProfile | Promise<PersonalProfile>;
@@ -335,9 +337,15 @@ export class ProfileOnboarding {
   private handoffState: ProfileHandoffState | null = null;
   private operation: DataOperation | null = null;
   private readonly translateStatic = captureProfileLabels(this.root);
+  private readonly languageChoice: ReturnType<typeof createLanguageChoice>;
 
   constructor(options: ProfileOnboardingOptions) {
     this.options = options;
+    this.languageChoice = createLanguageChoice(
+      normalizeUiLanguage(document.documentElement.lang),
+      (language) => this.options.onLanguageChange?.(language),
+    );
+    this.root.prepend(this.languageChoice.root);
     this.bindEvents();
     this.translateStatic();
     this.renderExample();
@@ -371,6 +379,9 @@ export class ProfileOnboarding {
 
   translate(): void {
     this.translateStatic();
+    this.languageChoice.update(
+      normalizeUiLanguage(document.documentElement.lang),
+    );
     this.renderExample();
     this.renderProfileBar();
     // Changing the interface language must not reopen an inactive import view.

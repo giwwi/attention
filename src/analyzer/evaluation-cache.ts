@@ -12,6 +12,7 @@ import type {
 import type { MaterialFeatures } from './material-features';
 import { stableTextFingerprint } from './material-features';
 import { loadUtilityCalibration } from '../utility/storage';
+import { normalizeUiLanguage } from '../i18n/ui';
 
 export interface EvaluationSourceVersions {
   profile: string;
@@ -54,6 +55,7 @@ export function analysisContextFingerprint(context: AnalysisContext): string {
   return stableTextFingerprint(
     JSON.stringify({
       scenario: context.scenario,
+      responseLanguage: normalizeUiLanguage(context.responseLanguage),
       intent: context.intent,
       availableMinutes: context.availableMinutes,
       relaxIntent: context.relaxIntent ?? null,
@@ -69,8 +71,8 @@ export function createEvaluationCacheVersion(
   sources: EvaluationSourceVersions,
 ): EvaluationCacheVersion {
   return {
-    // Revision 9 aligns profile evidence with passages and shows useful assessment reasons.
-    schemaVersion: 9,
+    // Revision 10 adds German matching and language-specific AI explanations.
+    schemaVersion: 10,
     ...sources,
     articleText: features.articleTextFingerprint,
     analysisContext: analysisContextFingerprint(context),
@@ -83,7 +85,7 @@ function sameSources(
   context: AnalysisContext,
 ): boolean {
   return Boolean(
-    stored?.schemaVersion === 9 &&
+    stored?.schemaVersion === 10 &&
     stored.profile === sources.profile &&
     stored.history === sources.history &&
     stored.readwise === sources.readwise &&

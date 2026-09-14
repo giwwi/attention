@@ -229,7 +229,10 @@ export class EvaluationController {
     const revision = this.revision;
     const capture = this.options.getCapture();
     if (!capture || capture.url !== pageUrl) return;
-    const context = this.options.getContext();
+    const context = {
+      ...this.options.getContext(),
+      responseLanguage: this.options.getLanguage(),
+    };
     const [profile, features] = await Promise.all([
       loadProfile(),
       buildMaterialFeatures(capture),
@@ -695,7 +698,10 @@ export class EvaluationController {
     const capture = this.options.getCapture();
     if (!capture) return;
     const revision = ++this.revision;
-    const context = this.options.getContext();
+    const context = {
+      ...this.options.getContext(),
+      responseLanguage: this.options.getLanguage(),
+    };
     const language = this.options.getLanguage();
     let operation: DataOperation | undefined;
     this.analyzeButton.disabled = true;

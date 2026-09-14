@@ -114,6 +114,26 @@ function evaluation(analyzerId: string): MaterialEvaluation {
 }
 
 describe('AI analyzer input and output boundary', () => {
+  it.each([
+    ['en', 'English'],
+    ['de', 'German'],
+    ['ru', 'Russian'],
+  ] as const)(
+    'requests explanations in %s while preserving original quotes',
+    (language, name) => {
+      const source =
+        'Vergleichen Sie die Modelle anhand unabhängiger Beispiele.';
+      const prompt = buildAiAnalysisPrompt(
+        material({ content: source, language: 'de' }),
+        { ...context, responseLanguage: language },
+        null,
+      );
+      expect(prompt).toContain(`Response language: ${name} (${language})`);
+      expect(prompt).toContain('never translate quotations');
+      expect(prompt).toContain(source);
+      expect(prompt).not.toContain('Пиши reason на русском');
+    },
+  );
   it('neutralizes confident familiarity when a model claim contradicts its exact numeric anchor', () => {
     const source =
       'A field experiment found that structured review reduced errors by 90 percent.';

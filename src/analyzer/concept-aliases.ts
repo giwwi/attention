@@ -1,3 +1,5 @@
+import { germanLemma } from './german-text';
+
 /**
  * A deliberately small cross-language concept layer. These are not profile
  * translations: they only let equivalent high-level topics meet in local
@@ -16,6 +18,10 @@ export const CONCEPT_ALIASES = {
     'ии',
     'большая языковая модель',
     'künstliche intelligenz',
+    'künstlicher intelligenz',
+    'kuenstliche intelligenz',
+    'ki',
+    'sprachmodell',
     'inteligencia artificial',
     'intelligenza artificiale',
     'intelligence artificielle',
@@ -33,6 +39,9 @@ export const CONCEPT_ALIASES = {
     'глубокое обучение',
     'нейронная сеть',
     'maschinelles lernen',
+    'maschinellen lernens',
+    'neuronale netze',
+    'neuronalen netzen',
     'aprendizaje automático',
     'aprendizaje profundo',
     'apprendimento automatico',
@@ -52,6 +61,7 @@ export const CONCEPT_ALIASES = {
     'разработка по',
     'программирование',
     'softwareentwicklung',
+    'programmierung',
     'ingeniería de software',
     'sviluppo software',
     'génie logiciel',
@@ -86,6 +96,7 @@ export const CONCEPT_ALIASES = {
     'научная статья',
     'forschung',
     'wissenschaftliche studie',
+    'wissenschaftlichen studien',
     'investigación',
     'studio scientifico',
     'recherche',
@@ -210,6 +221,9 @@ export const CONCEPT_ALIASES = {
     'поиск работы',
     'beruf',
     'karriere',
+    'arbeitssuche',
+    'stellensuche',
+    'berufliche entwicklung',
     'carrera profesional',
     'carriera',
     'carrière',
@@ -306,6 +320,7 @@ export const CONCEPT_ALIASES = {
     'приватность',
     'cybersicherheit',
     'datenschutz',
+    'informationssicherheit',
     'ciberseguridad',
     'privacidad',
     'sicurezza informatica',
@@ -314,6 +329,54 @@ export const CONCEPT_ALIASES = {
     '網路安全',
     'الأمن السيبراني',
     'साइबर सुरक्षा',
+  ],
+  ai_evaluation: [
+    'model evaluation',
+    'ai evaluation',
+    'response evaluation',
+    'оценка моделей',
+    'оценка ответов',
+    'оценка ии',
+    'modellbewertung',
+    'modellevaluation',
+    'ki bewertung',
+    'bewertung von sprachmodellen',
+    'bewertung der modellantworten',
+  ],
+  data_quality: [
+    'data quality',
+    'dataset quality',
+    'качество данных',
+    'datenqualität',
+    'datenqualitaet',
+  ],
+  source_verification: [
+    'source verification',
+    'source checking',
+    'проверка источников',
+    'quellenprüfung',
+    'quellenpruefung',
+    'quellen überprüfen',
+    'quellen prüfen',
+  ],
+  model_errors: [
+    'model errors',
+    'ai errors',
+    'model hallucinations',
+    'ошибки моделей',
+    'галлюцинации моделей',
+    'modellfehler',
+    'ki fehler',
+    'halluzinationen',
+  ],
+  evaluation_benchmarks: [
+    'evaluation benchmarks',
+    'model benchmarks',
+    'оценочные тесты',
+    'тесты моделей',
+    'modelltests',
+    'bewertungsverfahren',
+    'evaluationsverfahren',
   ],
 } as const;
 
@@ -326,18 +389,30 @@ function normalizedText(value: string): string {
     .trim();
 }
 
-function includesAlias(
-  normalized: string,
-  lexicalTokens: Set<string>,
-  alias: string,
-): boolean {
-  const candidate = normalizedText(alias);
-  if (!candidate) return false;
-  if (!candidate.includes(' ') && !/[\u3400-\u9fff]/u.test(candidate)) {
-    return lexicalTokens.has(candidate);
+// Compile only the public vocabulary, never cache article/profile text.
+const lexicalConcepts = new Map<string, Set<string>>();
+const phraseConcepts: Array<{
+  phrase: string;
+  concept: string;
+  substring: boolean;
+}> = [];
+for (const [concept, aliases] of Object.entries(CONCEPT_ALIASES)) {
+  for (const alias of aliases) {
+    const candidate = normalizedText(alias);
+    const substring = /[\u3400-\u9fff]/u.test(candidate);
+    if (!candidate.includes(' ') && !substring) {
+      for (const key of [candidate, germanLemma(candidate)]) {
+        const values = lexicalConcepts.get(key) ?? new Set<string>();
+        values.add(`concept:${concept}`);
+        lexicalConcepts.set(key, values);
+      }
+    } else
+      phraseConcepts.push({
+        phrase: substring ? candidate : ` ${candidate} `,
+        concept: `concept:${concept}`,
+        substring,
+      });
   }
-  if (/[\u3400-\u9fff]/u.test(candidate)) return normalized.includes(candidate);
-  return ` ${normalized} `.includes(` ${candidate} `);
 }
 
 export function conceptTokens(
@@ -346,12 +421,12 @@ export function conceptTokens(
 ): Set<string> {
   const normalized = normalizedText(value);
   const concepts = new Set<string>();
-  for (const [concept, aliases] of Object.entries(CONCEPT_ALIASES)) {
-    if (
-      aliases.some((alias) => includesAlias(normalized, lexicalTokens, alias))
-    ) {
-      concepts.add(`concept:${concept}`);
-    }
-  }
+  for (const token of lexicalTokens)
+    for (const concept of lexicalConcepts.get(token) ?? [])
+      concepts.add(concept);
+  const padded = ` ${normalized} `;
+  for (const { phrase, concept, substring } of phraseConcepts)
+    if ((substring ? normalized : padded).includes(phrase))
+      concepts.add(concept);
   return concepts;
 }

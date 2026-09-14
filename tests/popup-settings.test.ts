@@ -54,9 +54,9 @@ describe('compact popup settings', () => {
       (option) => option.value,
     );
     expect(languages).toEqual([
-      'ru',
       'en',
       'de',
+      'ru',
       'es',
       'fr',
       'it',

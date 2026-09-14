@@ -56,9 +56,9 @@ export function articleMap(material: PageCapture): ArticleMap {
 }
 
 const DEPENDENT_START =
-  /^(?:this|these|those|it|such|therefore|thus|as a result|however|but|instead|for example|это|этот|эта|эти|такой|такая|такие|поэтому|таким образом|однако|но |например|dies|daher|jedoch|cependant|donc|sin embargo|por lo tanto|tuttavia|quindi|因此|然而|但是|هذا|هذه|لذلك|لكن|इसलिए|हालाँकि)(?:\b|\s|[，,])/iu;
+  /^(?:this|these|those|it|such|therefore|thus|as a result|however|but|instead|for example|это|этот|эта|эти|такой|такая|такие|поэтому|таким образом|однако|но |например|dies(?:e|er|es|en|em)?|daher|deshalb|dadurch|damit|dabei|jedoch|zum beispiel|das bedeutet|cependant|donc|sin embargo|por lo tanto|tuttavia|quindi|因此|然而|但是|هذا|هذه|لذلك|لكن|इसलिए|हालाँकि)(?:\b|\s|[，,])/iu;
 const CAVEAT_START =
-  /^(?:however|but|yet|unless|except|only|note that|in contrast|nevertheless|this (?:only|does not|result|finding|limitation)|these (?:results|findings|limitations)|однако|но |при этом|впрочем|кроме|только|важно|следует учесть|это (?:не|верно|справедливо)|эти (?:результаты|выводы)|allerdings|jedoch|nur |cependant|pourtant|toutefois|sin embargo|solo |tuttavia|però|しかし|ただし|然而|但是|不过|但|لكن|إلا|हालाँकि|लेकिन)/iu;
+  /^(?:however|but|yet|unless|except|only|note that|in contrast|nevertheless|this (?:only|does not|result|finding|limitation)|these (?:results|findings|limitations)|однако|но |при этом|впрочем|кроме|только|важно|следует учесть|это (?:не|верно|справедливо)|эти (?:результаты|выводы)|allerdings|jedoch|nur |aber |dennoch|sofern|es sei denn|im gegensatz|diese? (?:ergebnisse|einschränkung)|dies gilt|zu beachten|cependant|pourtant|toutefois|sin embargo|solo |tuttavia|però|しかし|ただし|然而|但是|不过|但|لكن|إلا|हालाँकि|लेकिन)/iu;
 
 /** Whole contiguous blocks, including introductions and nearby qualifications. */
 export function passageWindow(

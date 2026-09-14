@@ -1,5 +1,6 @@
 import { CONCEPT_ALIASES } from './concept-aliases';
 import { textTokens } from './text-match';
+import { GERMAN_GOAL_FILLERS, GERMAN_PRACTICAL_MARKERS } from './german-text';
 import { articleMap } from '../reading/blocks';
 import {
   matchesLanguageMarker,
@@ -40,6 +41,7 @@ export function goalTerms(value: string): Set<string> {
     if (
       !term.startsWith('concept:') &&
       !generic.has(term) &&
+      !GERMAN_GOAL_FILLERS.has(term) &&
       !/^\d+$/u.test(term)
     )
       result.add(term);
@@ -105,6 +107,7 @@ export function createGoalEvidenceAssessor(
       terms: goalTerms(block.text),
       actionable:
         ['list', 'table', 'code'].includes(block.kind) ||
+        GERMAN_PRACTICAL_MARKERS.test(block.text) ||
         matchesLanguageMarker(block.text, 'recommendation', language) ||
         /\b(compare|measure|configure|set|run|test|example|because|however|steps?)\b|сравн|измер|настрой|например|потому|однако|шаг/iu.test(
           block.text,

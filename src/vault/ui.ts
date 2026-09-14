@@ -1,4 +1,5 @@
 import { createProfileDemo } from '../onboarding/profile-demo';
+import { createLanguageChoice } from '../onboarding/language-choice';
 import { profileText } from '../i18n/profile';
 import { vaultLocale, vaultText } from '../i18n/vault';
 import type { UiLanguage } from '../i18n/ui';
@@ -48,7 +49,7 @@ function gateShell(language: UiLanguage): HTMLElement {
 export function ensureVaultUnlocked(): Promise<void> {
   if (activeGate) return activeGate;
   installStyles();
-  const language = vaultLocale();
+  let language = vaultLocale();
   const t = (key: Parameters<typeof vaultText>[1]) => vaultText(language, key);
   const p = (text: string) => profileText(text, {}, language);
   const original = document.createDocumentFragment();
@@ -70,6 +71,20 @@ export function ensureVaultUnlocked(): Promise<void> {
   document.body.append(gate);
   let state: 'unconfigured' | 'locked' = 'locked';
   let busy = false;
+  let showingDemo = false;
+  const languageChoice = createLanguageChoice(language, (selected) => {
+    if (busy || !showingDemo) return;
+    language = selected;
+    // Only an ephemeral language preference exists before the vault is created.
+    document.documentElement.dataset.onboardingLanguage = language;
+    gate.lang = language;
+    gate.dir = language === 'ar' ? 'rtl' : 'ltr';
+    languageChoice.update(language);
+    sessionHint.textContent = t('sessionHint');
+    renderDemo();
+  });
+  languageChoice.root.hidden = true;
+  gate.insertBefore(languageChoice.root, heading);
   let resolveGate: () => void;
   activeGate = new Promise<void>((resolve) => {
     resolveGate = resolve;
@@ -114,6 +129,8 @@ export function ensureVaultUnlocked(): Promise<void> {
   }
 
   function renderForm(error = ''): void {
+    showingDemo = false;
+    languageChoice.root.hidden = true;
     content.replaceChildren();
     const creating = state === 'unconfigured';
     heading.textContent = creating
@@ -275,40 +292,39 @@ export function ensureVaultUnlocked(): Promise<void> {
     cancel.focus();
   }
 
+  function renderDemo(): void {
+    showingDemo = true;
+    languageChoice.root.hidden = false;
+    content.replaceChildren();
+    heading.textContent = p('Что стоит вашего времени?');
+    description.textContent = p(
+      'Attention помогает выбрать, что читать и на каких фрагментах остановиться.',
+    );
+    description.hidden = false;
+    const start = element('button', p('Настроить под меня'), 'vault-primary');
+    start.type = 'button';
+    start.id = 'profile-start';
+    start.addEventListener('click', () => {
+      document.documentElement.dataset.profileDemoSeen = 'true';
+      renderForm();
+    });
+    content.append(
+      createProfileDemo(language),
+      element(
+        'p',
+        p('Чтобы советовать именно вам, Attention нужно немного вас узнать.'),
+      ),
+      start,
+    );
+  }
+
   void getVaultStatus()
     .then((current) => {
       if (current === 'unlocked') finish();
       else {
         state = current;
-        if (current === 'unconfigured') {
-          heading.textContent = p('Что стоит вашего времени?');
-          description.textContent = p(
-            'Attention помогает выбрать, что читать и на каких фрагментах остановиться.',
-          );
-          description.hidden = false;
-          const start = element(
-            'button',
-            p('Настроить под меня'),
-            'vault-primary',
-          );
-          start.type = 'button';
-          start.id = 'profile-start';
-          start.addEventListener('click', () => {
-            // Ephemeral flag only; no profile or completed-setup marker is stored.
-            document.documentElement.dataset.profileDemoSeen = 'true';
-            renderForm();
-          });
-          content.append(
-            createProfileDemo(language),
-            element(
-              'p',
-              p(
-                'Чтобы советовать именно вам, Attention нужно немного вас узнать.',
-              ),
-            ),
-            start,
-          );
-        } else renderForm();
+        if (current === 'unconfigured') renderDemo();
+        else renderForm();
       }
     })
     .catch(() => renderForm(t('storageError')));

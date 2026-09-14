@@ -108,7 +108,43 @@ test('cold cards guide setup; profile save activates existing tabs; deletion res
       path: 'output/playwright/profile-demo-before-vault.png',
       fullPage: true,
     });
+    const languageChoices = popup.locator('#vault-gate [data-language-choice]');
+    await expect(languageChoices).toHaveText(['English', 'Deutsch', 'Русский']);
+    await languageChoices.filter({ hasText: 'Deutsch' }).click();
+    await expect(popup.locator('#vault-gate')).toHaveAttribute('lang', 'de');
+    await expect(popup.locator('#profile-start')).toHaveText(
+      'Auf mich abstimmen',
+    );
+    await popup.screenshot({
+      path: 'output/playwright/onboarding-language-de.png',
+      fullPage: true,
+    });
+    await languageChoices.filter({ hasText: 'Русский' }).click();
+    await expect(popup.locator('#profile-start')).toHaveText(
+      'Настроить под меня',
+    );
+    await popup.screenshot({
+      path: 'output/playwright/onboarding-language-ru.png',
+      fullPage: true,
+    });
+    await languageChoices.filter({ hasText: 'Deutsch' }).click();
     await createVaultThroughUi(popup);
+    await expect(popup.locator('html')).toHaveAttribute('lang', 'de');
+    expect(
+      await worker.evaluate(
+        async () =>
+          (await attentionVault.privateStorage.get('interfaceLanguage'))
+            .interfaceLanguage,
+      ),
+    ).toBe('de');
+    await popup.reload();
+    await expect(popup.locator('html')).toHaveAttribute('lang', 'de');
+    await popup
+      .locator('#profile-onboarding [data-language-choice="en"]')
+      .click();
+    await expect(popup.locator('html')).toHaveAttribute('lang', 'en');
+    if (await popup.locator('#profile-welcome-step').isVisible())
+      await popup.locator('#profile-start').click();
     await expect(popup.locator('#profile-source-step')).toBeVisible();
     await expect(
       popup.locator('[data-profile-source="chatgpt"]'),

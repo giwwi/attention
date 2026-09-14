@@ -58,6 +58,33 @@ function stored(
 }
 
 describe('evaluation cache versioning', () => {
+  it('never reuses an explanation generated for another interface language', async () => {
+    const features = await buildMaterialFeatures(capture());
+    const german = { ...context, responseLanguage: 'de' as const };
+    const value = stored(
+      createEvaluationCacheVersion(features, german, sourceVersions),
+    );
+    expect(
+      isEvaluationCacheCurrent(value, sourceVersions, german, features),
+    ).toBe(true);
+    for (const responseLanguage of ['ru', 'en'] as const)
+      expect(
+        isEvaluationCacheCurrent(
+          value,
+          sourceVersions,
+          { ...context, responseLanguage },
+          features,
+        ),
+      ).toBe(false);
+    expect(
+      isEvaluationCacheCurrent(
+        stored({ ...value.cacheVersion!, schemaVersion: 9 }),
+        sourceVersions,
+        german,
+        features,
+      ),
+    ).toBe(false);
+  });
   it('reuses an evaluation only for the same profile, sources, context and article text', async () => {
     const features = await buildMaterialFeatures(capture());
     const value = stored(
