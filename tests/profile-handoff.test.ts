@@ -21,6 +21,8 @@ import { PROFILE_PROVIDERS } from '../src/profile/providers';
 import { installDataLocks } from './helpers/data-locks';
 import { DATA_GENERATION_KEY } from '../src/privacy/data-operations';
 import { createEmptyProfile } from '../src/profile/schema';
+import { EXTERNAL_PROFILE_SOURCES } from '../src/profile/schema';
+import { PROFILE_WEB_URLS } from '../src/profile/provider-sites';
 
 class MemoryStorage {
   readonly values: Record<string, unknown> = {};
@@ -73,7 +75,7 @@ function handoffEnvironment(options?: {
 function onboardingFixture(): void {
   document.body.innerHTML = `
     <section id="profile-onboarding" hidden>
-      <div id="profile-welcome-step" hidden><div id="profile-welcome-demo"></div><button id="profile-start"></button></div>
+      <div id="profile-welcome-step" hidden><button id="profile-start"></button></div>
       <div id="profile-question-step" hidden></div>
       <div id="profile-complete-step" hidden><button id="profile-return"></button><p id="profile-return-status"></p><button id="profile-finish"></button><button id="profile-add-provider"></button></div>
       <div id="profile-source-step"></div>
@@ -126,7 +128,7 @@ function onboardingFixture(): void {
 
 beforeEach(() => {
   document.documentElement.lang = 'ru';
-  document.documentElement.dataset.profileDemoSeen = 'true';
+  document.documentElement.dataset.profileWelcomeSeen = 'true';
   installDataLocks();
 });
 
@@ -136,6 +138,30 @@ afterEach(() => {
 });
 
 describe('profile provider handoff', () => {
+  it.each(['gemini', 'copilot', 'perplexity'] as const)(
+    'copies the %s-specific prompt before opening its website',
+    async (provider) => {
+      const { environment, copied, opened } = handoffEnvironment();
+      const result = await launchProfileHandoff(
+        provider,
+        PROFILE_PROVIDERS[provider].prompt,
+        environment,
+        async (prepared) => {
+          expect(prepared.promptCopied).toBe(true);
+          expect(opened).toEqual([]);
+        },
+      );
+      expect(copied).toEqual([PROFILE_PROVIDERS[provider].prompt]);
+      expect(copied[0]).toContain(`with "${provider}"`);
+      expect(opened).toEqual([PROFILE_WEB_URLS[provider]]);
+      expect(result).toEqual({
+        provider,
+        method: 'clipboard-and-web',
+        promptCopied: true,
+        providerOpened: true,
+      });
+    },
+  );
   it('can prepare the ChatGPT clipboard handoff before opening the site', async () => {
     const { environment, copied, opened } = handoffEnvironment();
     const prompt = PROFILE_PROVIDERS.chatgpt.prompt;
@@ -395,7 +421,7 @@ describe('profile handoff persistence', () => {
     expect(storage.values[PROFILE_IMPORT_HANDOFF_KEY]).toBeTruthy();
   });
 
-  it.each(['chatgpt', 'claude', 'other'] as const)(
+  it.each(EXTERNAL_PROFILE_SOURCES)(
     'restores the %s waiting screen when the popup is reopened',
     async (provider) => {
       const storage = new MemoryStorage();

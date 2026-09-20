@@ -6,6 +6,7 @@ import {
   createTestExtension,
   createVaultThroughUi,
   extensionWorker,
+  readRawVaultStorage,
 } from './helpers/vault';
 import {
   clickCardElement,
@@ -86,66 +87,49 @@ test('cold cards guide setup; profile save activates existing tabs; deletion res
     const popupUrl = `chrome-extension://${new URL(worker.url()).host}/popup.html`;
     const opened = context.waitForEvent('page');
     await clickCardElement(context, feed, '.profile-create-button');
-    let popup = await opened;
+    const popup = await opened;
     await expect(popup).toHaveURL(/popup.html\?sourceTab=\d+$/);
     await popup.setViewportSize({ width: 380, height: 850 });
-    const demo = popup.locator('[data-profile-demo]');
-    await expect(demo).toBeVisible();
-    const beforeDemo = await worker.evaluate(() =>
-      chrome.storage.local.get(null),
+    await expect(popup.locator('#profile-welcome-step h2')).toHaveText(
+      'Read what matters to you',
     );
-    await expect(demo).toContainText('Illustrative example');
-    await demo
-      .getByRole('button', { name: 'I already know the basics' })
-      .click();
-    await expect(demo.getByRole('status')).toContainText(
-      'You can skip the basics',
-    );
-    expect(await worker.evaluate(() => chrome.storage.local.get(null))).toEqual(
-      beforeDemo,
-    );
+    await expect(popup.locator('.profile-welcome-needs li')).toHaveText([
+      'What interests you and what you’re working on.',
+      'What you already know.',
+    ]);
+    await expect(popup.locator('[data-profile-demo]')).toHaveCount(0);
     await popup.screenshot({
-      path: 'output/playwright/profile-demo-before-vault.png',
+      path: 'output/playwright/profile-welcome-before-vault.png',
       fullPage: true,
     });
-    const languageChoices = popup.locator('#vault-gate [data-language-choice]');
-    await expect(languageChoices).toHaveText(['English', 'Deutsch', 'Русский']);
-    await languageChoices.filter({ hasText: 'Deutsch' }).click();
-    await expect(popup.locator('#vault-gate')).toHaveAttribute('lang', 'de');
+    const languageChoice = popup.locator(
+      '#profile-onboarding .onboarding-language select',
+    );
+    await expect(languageChoice.locator('option')).toHaveCount(9);
+    await languageChoice.selectOption('de');
+    await expect(popup.locator('html')).toHaveAttribute('lang', 'de');
     await expect(popup.locator('#profile-start')).toHaveText(
-      'Auf mich abstimmen',
+      'Mein Profil erstellen',
     );
     await popup.screenshot({
       path: 'output/playwright/onboarding-language-de.png',
       fullPage: true,
     });
-    await languageChoices.filter({ hasText: 'Русский' }).click();
+    await languageChoice.selectOption('ru');
     await expect(popup.locator('#profile-start')).toHaveText(
-      'Настроить под меня',
+      'Создать мой профиль',
     );
     await popup.screenshot({
       path: 'output/playwright/onboarding-language-ru.png',
       fullPage: true,
     });
-    await languageChoices.filter({ hasText: 'Deutsch' }).click();
-    await createVaultThroughUi(popup);
-    await expect(popup.locator('html')).toHaveAttribute('lang', 'de');
-    expect(
-      await worker.evaluate(
-        async () =>
-          (await attentionVault.privateStorage.get('interfaceLanguage'))
-            .interfaceLanguage,
-      ),
-    ).toBe('de');
-    await popup.reload();
-    await expect(popup.locator('html')).toHaveAttribute('lang', 'de');
-    await popup
-      .locator('#profile-onboarding [data-language-choice="en"]')
-      .click();
-    await expect(popup.locator('html')).toHaveAttribute('lang', 'en');
-    if (await popup.locator('#profile-welcome-step').isVisible())
-      await popup.locator('#profile-start').click();
+    await languageChoice.selectOption('de');
+    await expect(popup.locator('#vault-password')).toHaveCount(0);
+    expect(await worker.evaluate(() => attentionVault.getVaultStatus())).toBe('unconfigured');
+    await languageChoice.selectOption('en');
+    await popup.locator('#profile-start').click();
     await expect(popup.locator('#profile-source-step')).toBeVisible();
+    await expect(popup.locator('#profile-example-slot')).toHaveCount(0);
     await expect(
       popup.locator('[data-profile-source="chatgpt"]'),
     ).toBeVisible();
@@ -158,52 +142,21 @@ test('cold cards guide setup; profile save activates existing tabs; deletion res
       path: 'output/playwright/profile-required-en.png',
       fullPage: true,
     });
-    await popup.locator('#profile-setup-settings').click();
-    await popup.locator('#interface-language').selectOption('ru');
-    await popup.locator('#back-to-launcher').click();
-    await expect(popup.locator('#profile-source-step')).toBeVisible();
-    await popup.screenshot({
-      path: 'output/playwright/profile-required-ru.png',
-      fullPage: true,
-    });
-
-    // Old installations may have skipped onboarding. That flag must not unlock cards.
-    await worker.evaluate(async () =>
-      attentionVault.privateStorage.set({ profileOnboardingComplete: true }),
-    );
-    await article.locator('h1').hover();
-    await article.mouse.wheel(0, 300);
-    await feed.locator('#feed-link').hover();
-    await feed.waitForTimeout(900);
-    for (const tab of [article, feed]) {
-      await expect(tab.locator('[data-attention-preview]')).toHaveAttribute(
-        'data-attention-profile-required',
-        'true',
-      );
-      await expect(tab.locator('[data-attention-outcome]')).toHaveCount(0);
-    }
-    await expect
-      .poll(() => cardTextContent(context, feed, '.profile-prompt'))
-      .toContain('Создать мой профиль');
-    expect(
-      await worker.evaluate(
-        async () =>
-          (await attentionVault.privateStorage.get('latestEvaluation'))
-            .latestEvaluation,
-      ),
-    ).toBeUndefined();
-
+    await languageChoice.selectOption('ru');
+    expect(JSON.stringify(await readRawVaultStorage(worker))).not.toContain('personalProfile');
+    for (const tab of [article, feed])
+      await expect(tab.locator('[data-attention-preview]')).toHaveAttribute('data-attention-profile-required', 'true');
     // Finish the cold scroll before returning later for the first hover.
     await article.locator('h1').scrollIntoViewIfNeeded();
 
     // Choosing a provider and restoring a handoff are not completed setup.
     await popup.locator('[data-profile-source="chatgpt"]').click();
     await expect(popup.locator('#profile-prompt-step')).toBeVisible();
-    await popup.close();
-    popup = await context.newPage();
-    await popup.goto(popupUrl);
-    await popup.setViewportSize({ width: 380, height: 850 });
+    const otherTab = await context.newPage();
+    await otherTab.goto('http://127.0.0.1:4317/feed');
+    await popup.bringToFront();
     await expect(popup.locator('#profile-prompt-step')).toBeVisible();
+    await otherTab.close();
     await popup.locator('#profile-import-json').fill('{broken');
     await popup.locator('#validate-profile').click();
     await expect(popup.locator('#profile-validation-errors')).toBeVisible();
@@ -214,18 +167,19 @@ test('cold cards guide setup; profile save activates existing tabs; deletion res
     await popup.locator('#profile-import-json').fill(PROFILE_IMPORT);
     await popup.locator('#validate-profile').click();
     await expect(popup.locator('#profile-review-step')).toBeVisible();
-    expect(
-      await worker.evaluate(
-        async () =>
-          (await attentionVault.privateStorage.get('personalProfile'))
-            .personalProfile,
-      ),
-    ).toBeUndefined();
+    expect(await worker.evaluate(() => attentionVault.getVaultStatus())).toBe('unconfigured');
+    expect(JSON.stringify(await readRawVaultStorage(worker))).not.toContain('Software quality');
     await expect(article.locator('[data-attention-preview]')).toHaveAttribute(
       'data-attention-profile-required',
       'true',
     );
     await popup.locator('#save-profile').click();
+    await expect(popup.locator('#vault-password')).toBeVisible();
+    await popup.locator('#vault-back-to-profile').click();
+    await expect(popup.locator('#profile-review-step')).toBeVisible();
+    await popup.locator('#save-profile').click();
+    await createVaultThroughUi(popup);
+
     await expect(popup.locator('#profile-complete-step')).toBeVisible();
     await expect(popup.locator('#profile-return')).toBeVisible();
     await popup.locator('#profile-return').click();

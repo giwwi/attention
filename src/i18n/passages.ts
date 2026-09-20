@@ -1,6 +1,7 @@
 import type { UiLanguage } from './ui';
 const en = {
   title: 'Passages for you',
+  connectReadwiseHint: 'Connect Readwise in settings to save passages.',
   goal: 'Matches your goal',
   learning: 'Related to what you’re learning',
   interest: 'Related to your interests',
@@ -18,6 +19,7 @@ const copies: Record<UiLanguage, Copy> = {
   en,
   ru: {
     title: 'Фрагменты для вас',
+    connectReadwiseHint: 'Для сохранения подключите Readwise в настройках.',
     goal: 'По вашей цели',
     learning: 'По теме, которую вы изучаете',
     interest: 'По вашим интересам',
@@ -34,6 +36,8 @@ const copies: Record<UiLanguage, Copy> = {
   },
   de: {
     title: 'Textstellen für Sie',
+    connectReadwiseHint:
+      'Zum Speichern Readwise in den Einstellungen verbinden.',
     goal: 'Passend zu Ihrem Ziel',
     learning: 'Zu Ihrem Lernthema',
     interest: 'Zu Ihren Interessen',
@@ -49,6 +53,8 @@ const copies: Record<UiLanguage, Copy> = {
   },
   fr: {
     title: 'Passages pour vous',
+    connectReadwiseHint:
+      'Connectez Readwise dans les paramètres pour enregistrer les passages.',
     goal: 'En lien avec votre objectif',
     learning: 'En lien avec votre apprentissage',
     interest: 'En lien avec vos intérêts',
@@ -64,6 +70,8 @@ const copies: Record<UiLanguage, Copy> = {
   },
   es: {
     title: 'Fragmentos para ti',
+    connectReadwiseHint:
+      'Conecta Readwise en los ajustes para guardar fragmentos.',
     goal: 'Relacionado con tu objetivo',
     learning: 'Relacionado con lo que aprendes',
     interest: 'Relacionado con tus intereses',
@@ -79,6 +87,8 @@ const copies: Record<UiLanguage, Copy> = {
   },
   it: {
     title: 'Passaggi per te',
+    connectReadwiseHint:
+      'Collega Readwise nelle impostazioni per salvare i passaggi.',
     goal: 'In linea con il tuo obiettivo',
     learning: 'Su ciò che stai imparando',
     interest: 'In linea con i tuoi interessi',
@@ -94,6 +104,7 @@ const copies: Record<UiLanguage, Copy> = {
   },
   zh: {
     title: '适合你的段落',
+    connectReadwiseHint: '请在设置中连接 Readwise 以保存段落。',
     goal: '与你的目标相关',
     learning: '与你正在学习的内容相关',
     interest: '与你的兴趣相关',
@@ -108,6 +119,7 @@ const copies: Record<UiLanguage, Copy> = {
   },
   ar: {
     title: 'مقاطع مناسبة لك',
+    connectReadwiseHint: 'اربط Readwise في الإعدادات لحفظ المقاطع.',
     goal: 'مرتبط بهدفك',
     learning: 'مرتبط بما تتعلمه',
     interest: 'مرتبط باهتماماتك',
@@ -124,6 +136,7 @@ const copies: Record<UiLanguage, Copy> = {
   },
   hi: {
     title: 'आपके लिए अंश',
+    connectReadwiseHint: 'अंश सहेजने के लिए सेटिंग्स में Readwise कनेक्ट करें।',
     goal: 'आपके लक्ष्य से संबंधित',
     learning: 'आप जो सीख रहे हैं उससे संबंधित',
     interest: 'आपकी रुचियों से संबंधित',

@@ -9,6 +9,7 @@ import {
   translatePilotLauncher,
 } from '../pilot/launcher';
 import { ProfileOnboarding } from '../onboarding/profile-onboarding';
+import { prepareFirstProfile } from '../onboarding/first-profile';
 import { AiQuickProfileBuilder } from '../profile/quick-builder';
 import { PERSONAL_PROFILE_KEY, loadProfile } from '../profile/storage';
 import { isProfileReady } from '../profile/readiness';
@@ -50,6 +51,7 @@ import {
   type DataOperation,
 } from '../privacy/data-operations';
 
+await prepareFirstProfile();
 await initializeVaultPage();
 
 const storageReady = privateStorage.setAccessLevel({
@@ -452,6 +454,14 @@ async function initialize(): Promise<void> {
     navigation.hidden = true;
     backButton.hidden = false;
   } else showLauncher();
+  const url = new URL(location.href);
+  if (!needsOnboarding && url.searchParams.get('profileCreated') === '1') {
+    url.searchParams.delete('profileCreated');
+    history.replaceState(null, '', url.href);
+    launcher.hidden = true;
+    navigation.hidden = true;
+    profileOnboarding.showComplete();
+  }
 }
 void initialize()
   .then(installVaultLockControl)

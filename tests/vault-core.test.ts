@@ -167,6 +167,48 @@ function persistentSnapshot(): string {
 }
 
 describe('encrypted private storage', () => {
+  it('encrypts the initial reviewed profile before activating the first session', async () => {
+    expect(await vault.canPrepareProfileBeforeVault()).toBe(true);
+    const initial = { personalProfile: { goal: 'private first draft' }, interfaceLanguage: 'de' };
+    const creating = vault.createVault(PASSWORD, initial);
+    initial.personalProfile.goal = 'changed after save';
+    await creating;
+    expect(await vault.privateStorage.get('personalProfile')).toEqual({ personalProfile: { goal: 'private first draft' } });
+    expect(persistentSnapshot()).not.toContain('private first draft');
+    expect(persistentSnapshot()).not.toContain(PASSWORD);
+    expect(await vault.canPrepareProfileBeforeVault()).toBe(false);
+    await vault.lockVault();
+    await vault.unlockVault(PASSWORD);
+    expect((await vault.privateStorage.get('interfaceLanguage')).interfaceLanguage).toBe('de');
+  });
+
+  it('does not overwrite a legacy profile with a new setup draft', async () => {
+    await local.set({ personalProfile: { goal: 'existing profile' } });
+    expect(await vault.canPrepareProfileBeforeVault()).toBe(false);
+    await expect(vault.createVault(PASSWORD, { personalProfile: { goal: 'replacement' } })).rejects.toThrow('migrated');
+    expect(await vault.getVaultStatus()).toBe('unconfigured');
+    expect(local.data.personalProfile).toEqual({ goal: 'existing profile' });
+  });
+
+  it('rolls back a failed initial encrypted save and can retry the draft', async () => {
+    disk.corruptWrite = true;
+    await expect(vault.createVault(PASSWORD, { personalProfile: 'private draft' })).rejects.toThrow();
+    expect(await vault.getVaultStatus()).toBe('unconfigured');
+    expect(disk.records.size).toBe(0);
+    expect(Object.keys(session.data)).toHaveLength(0);
+    disk.corruptWrite = false;
+    await vault.createVault(PASSWORD, { personalProfile: 'private draft' });
+    expect((await vault.privateStorage.get('personalProfile')).personalProfile).toBe('private draft');
+  });
+
+  it('rejects a second setup racing to create a vault without replacing the first profile', async () => {
+    const attempts = await Promise.allSettled([
+      vault.createVault(PASSWORD, { personalProfile: 'first' }),
+      vault.createVault(PASSWORD, { personalProfile: 'second' }),
+    ]);
+    expect(attempts.map((attempt) => attempt.status)).toEqual(['fulfilled', 'rejected']);
+    expect((await vault.privateStorage.get('personalProfile')).personalProfile).toBe('first');
+  });
   it('fails closed when unconfigured or locked, including defaults and clear', async () => {
     expect(await vault.getVaultStatus()).toBe('unconfigured');
     await expect(

@@ -1,10 +1,14 @@
 import { loadProfileHandoffState } from '../onboarding/handoff/state';
+import { loadFirstRunHandoffNotice } from '../onboarding/handoff/first-run-notice';
+import { UI_LANGUAGE_KEY, normalizeUiLanguage } from '../i18n/ui';
 import { loadProfile } from '../profile/storage';
 import { isProfileReady } from '../profile/readiness';
+import { profileProviderAtUrl } from '../profile/provider-sites';
 import {
   getVaultEpoch,
   getVaultStatus,
   onVaultStateChanged,
+  privateStorage,
 } from '../vault/storage';
 import {
   VAULT_CHANGED_TYPE,
@@ -52,7 +56,7 @@ export function installVaultMessages(): void {
     }
     if (type === PROFILE_SETUP_OPEN_TYPE) {
       // No caller-supplied destination: a trusted card gesture can only open
-      // our own setup page, which handles vault creation before the profile.
+      // our own setup page, which protects the reviewed profile before saving.
       if (
         sender.frameId !== 0 ||
         typeof sender.tab?.id !== 'number' ||
@@ -73,36 +77,53 @@ export function installVaultMessages(): void {
         );
       return true;
     }
-    let allowed = false;
-    try {
-      const url = new URL(sender.url ?? '');
-      allowed =
-        sender.frameId === 0 &&
-        url.protocol === 'https:' &&
-        (url.hostname === 'chatgpt.com' ||
-          url.hostname.endsWith('.chatgpt.com'));
-    } catch {
-      /* Invalid senders receive no state. */
-    }
-    if (!allowed) {
+    const provider = profileProviderAtUrl(sender.url ?? '');
+    if (!provider || sender.frameId !== 0) {
       respond({ ok: false });
       return;
     }
     void (async () => {
+      const status = await getVaultStatus();
+      if (status === 'unconfigured') {
+        const state = await loadFirstRunHandoffNotice();
+        if ((await getVaultStatus()) !== 'unconfigured')
+          throw new Error('Vault changed.');
+        respond({
+          ok: true,
+          state:
+            state?.profileImportProvider === provider
+              ? {
+                  profileImportProvider: state.profileImportProvider,
+                  profileImportStage: state.profileImportStage,
+                  method: state.method,
+                  promptCopied: state.promptCopied,
+                  language: state.language,
+                }
+              : null,
+        });
+        return;
+      }
+      if (status !== 'unlocked') {
+        respond({ ok: false });
+        return;
+      }
       const epoch = await getVaultEpoch();
       const state = await loadProfileHandoffState();
+      const settings = await privateStorage.get(UI_LANGUAGE_KEY);
       if (epoch !== (await getVaultEpoch())) throw new Error('Vault changed.');
       // Only the flags for a fixed, public prompt leave the trusted context.
       respond({
         ok: true,
-        state: state
-          ? {
-              profileImportProvider: state.profileImportProvider,
-              profileImportStage: state.profileImportStage,
-              method: state.method,
-              promptCopied: state.promptCopied,
-            }
-          : null,
+        state:
+          state?.profileImportProvider === provider
+            ? {
+                profileImportProvider: state.profileImportProvider,
+                profileImportStage: state.profileImportStage,
+                method: state.method,
+                promptCopied: state.promptCopied,
+                language: normalizeUiLanguage(settings[UI_LANGUAGE_KEY]),
+              }
+            : null,
       });
     })().catch(() => respond({ ok: false }));
     return true;

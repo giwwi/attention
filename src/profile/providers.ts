@@ -125,6 +125,21 @@ export const PROFILE_PROVIDERS: Record<ExternalProfileSource, ProfileProvider> =
       name: 'Claude',
       prompt: buildPrompt('Claude', 'claude'),
     },
+    gemini: {
+      id: 'gemini',
+      name: 'Gemini',
+      prompt: buildPrompt('Gemini', 'gemini'),
+    },
+    copilot: {
+      id: 'copilot',
+      name: 'Copilot',
+      prompt: buildPrompt('Microsoft Copilot', 'copilot'),
+    },
+    perplexity: {
+      id: 'perplexity',
+      name: 'Perplexity',
+      prompt: buildPrompt('Perplexity', 'perplexity'),
+    },
     other: {
       id: 'other',
       name: 'другого AI',

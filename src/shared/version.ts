@@ -1,1 +1,1 @@
-export const EXTENSION_RUNTIME_VERSION = '0.29.1';
+export const EXTENSION_RUNTIME_VERSION = '0.30.0';

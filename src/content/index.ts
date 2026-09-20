@@ -18,7 +18,7 @@ import {
 import { EXTENSION_RUNTIME_VERSION } from '../shared/version';
 import { isAttentionInputsInvalidatedMessage } from '../background/input-invalidation';
 import { ATTENTION_CARD_OPEN_TYPE } from '../shared/card-messages';
-import { installChatGptProfileHandoffNotice } from './profile-handoff-notice';
+import { installProfileHandoffNotice } from './profile-handoff-notice';
 
 interface GateGlobal {
   __attentionVaultGateStop?: () => void;
@@ -53,6 +53,14 @@ function suspend(): void {
   handoffAbort = undefined;
 }
 
+function showHandoffNotice(): void {
+  if (handoffAbort) return;
+  handoffAbort = new AbortController();
+  void installProfileHandoffNotice({
+    signal: handoffAbort.signal,
+  }).catch(() => undefined);
+}
+
 async function reconcile(): Promise<void> {
   const revision = ++requestRevision;
   try {
@@ -64,7 +72,10 @@ async function reconcile(): Promise<void> {
     vaultUnlocked = Boolean(state?.ok && state.unlocked);
     if (!state?.ok || !state.unlocked || !state.epoch) {
       suspend();
-      if (state?.ok && state.unconfigured === true) showProfilePrompt();
+      if (state?.ok && state.unconfigured === true) {
+        showProfilePrompt();
+        showHandoffNotice();
+      }
       return;
     }
     void chrome.runtime
@@ -83,12 +94,7 @@ async function reconcile(): Promise<void> {
       .catch(() => undefined);
     // Import instructions still work on ChatGPT before a profile exists.
     // The separate setup-only hover never captures or evaluates an article.
-    if (!handoffAbort) {
-      handoffAbort = new AbortController();
-      void installChatGptProfileHandoffNotice({
-        signal: handoffAbort.signal,
-      }).catch(() => undefined);
-    }
+    showHandoffNotice();
     if (state.profileReady !== true) {
       stopRuntime?.();
       stopRuntime = undefined;

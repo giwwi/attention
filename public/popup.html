@@ -58,18 +58,27 @@
 
       <section id="profile-onboarding" class="profile-onboarding" hidden>
         <div id="profile-welcome-step" class="profile-step" hidden>
-          <h2>Что стоит вашего времени?</h2>
+          <h2>Читайте то, что полезно именно вам</h2>
           <p class="profile-intro">
-            Attention помогает выбрать, что читать и на каких фрагментах
-            остановиться.
+            Attention помогает решить, стоит ли открывать статью, и найти в ней
+            фрагменты, которые могут дать вам что-то новое.
           </p>
-          <div id="profile-welcome-demo"></div>
+          <p>Для этого ему нужно немного узнать о вас:</p>
+          <ul class="profile-welcome-needs">
+            <li>Что вам интересно и над чем вы работаете.</li>
+            <li>В чём вы уже разбираетесь.</li>
+          </ul>
           <p>
-            Чтобы советовать именно вам, Attention нужно немного вас узнать.
+            Без этого одна и та же рекомендация достанется и новичку, и
+            специалисту.
           </p>
           <button id="profile-start" class="profile-primary" type="button">
-            Настроить под меня
+            Создать мой профиль
           </button>
+          <p class="profile-welcome-guide">
+            Начните с ChatGPT или Claude: они помогут собрать ваши интересы,
+            знания и цели в профиль для Attention.
+          </p>
         </div>
         <div id="profile-question-step" class="profile-step" hidden></div>
         <div id="profile-complete-step" class="profile-step" hidden>
@@ -120,8 +129,19 @@
               </span>
               <span aria-hidden="true">→</span>
             </button>
+            <button type="button" data-profile-source="gemini">
+              <span><strong>Пусть Gemini представит меня</strong></span>
+              <span aria-hidden="true">→</span>
+            </button>
+            <button type="button" data-profile-source="copilot">
+              <span><strong>Пусть Copilot представит меня</strong></span>
+              <span aria-hidden="true">→</span>
+            </button>
+            <button type="button" data-profile-source="perplexity">
+              <span><strong>Пусть Perplexity представит меня</strong></span>
+              <span aria-hidden="true">→</span>
+            </button>
           </div>
-          <div id="profile-example-slot"></div>
           <details id="profile-other-methods" class="profile-other-methods">
             <summary>Я пока не пользуюсь ими</summary>
             <p class="profile-intro">
@@ -214,8 +234,8 @@
             Настройки
           </button>
           <p class="profile-privacy-note">
-            Attention не получает доступ к истории ChatGPT или Claude. Вы
-            передаёте только готовый профиль, который хранится локально.
+            Attention не читает переписки и не подключается к аккаунту AI. Ответ
+            вставляете вы сами.
           </p>
         </div>
 

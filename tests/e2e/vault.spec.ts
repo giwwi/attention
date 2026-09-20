@@ -12,6 +12,7 @@ import path from 'node:path';
 import {
   createTestExtension,
   createVaultThroughUi,
+  preparePasswordStep,
   expectVaultEmpty,
   extensionWorker,
   openVaultInspector,
@@ -58,8 +59,8 @@ test.afterEach(async () => {
 test('the real password gate encrypts data, rejects a wrong password without changes, and restores access', async () => {
   const popup = await popupPage();
   const inspector = await openVaultInspector(context);
-  await expect(popup.locator('#vault-gate [data-profile-demo]')).toBeVisible();
-  await popup.locator('#vault-gate #profile-start').click();
+  await expect(popup.locator('#profile-welcome-step .profile-welcome-needs')).toBeVisible();
+  await preparePasswordStep(popup);
   await expect(popup.locator('#vault-confirm-password')).toBeVisible();
   await expect(popup.locator('#profile-onboarding')).toHaveCount(0);
   await expect(popup.locator('#interface-language')).toHaveCount(0);

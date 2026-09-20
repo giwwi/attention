@@ -1,4 +1,3 @@
-import { createProfileDemo } from '../onboarding/profile-demo';
 import { createLanguageChoice } from '../onboarding/language-choice';
 import { profileText } from '../i18n/profile';
 import { vaultLocale, vaultText } from '../i18n/vault';
@@ -12,6 +11,14 @@ import {
 } from './storage';
 
 let activeGate: Promise<void> | undefined;
+
+export class VaultSetupBackError extends Error {}
+
+interface VaultGateOptions {
+  /** Only the first setup supplies records; they are encrypted before activation. */
+  initialRecords?: Record<string, unknown>;
+  language?: UiLanguage;
+}
 
 function installStyles(): void {
   if (document.getElementById('vault-ui-styles')) return;
@@ -46,10 +53,10 @@ function gateShell(language: UiLanguage): HTMLElement {
 }
 
 /** Call before initializing private views. Only the initial, static app DOM is retained. */
-export function ensureVaultUnlocked(): Promise<void> {
+export function ensureVaultUnlocked(options: VaultGateOptions = {}): Promise<void> {
   if (activeGate) return activeGate;
   installStyles();
-  let language = vaultLocale();
+  let language = options.language ?? vaultLocale();
   const t = (key: Parameters<typeof vaultText>[1]) => vaultText(language, key);
   const p = (text: string) => profileText(text, {}, language);
   const original = document.createDocumentFragment();
@@ -71,9 +78,9 @@ export function ensureVaultUnlocked(): Promise<void> {
   document.body.append(gate);
   let state: 'unconfigured' | 'locked' = 'locked';
   let busy = false;
-  let showingDemo = false;
+  let showingWelcome = false;
   const languageChoice = createLanguageChoice(language, (selected) => {
-    if (busy || !showingDemo) return;
+    if (busy || !showingWelcome) return;
     language = selected;
     // Only an ephemeral language preference exists before the vault is created.
     document.documentElement.dataset.onboardingLanguage = language;
@@ -81,13 +88,15 @@ export function ensureVaultUnlocked(): Promise<void> {
     gate.dir = language === 'ar' ? 'rtl' : 'ltr';
     languageChoice.update(language);
     sessionHint.textContent = t('sessionHint');
-    renderDemo();
+    renderWelcome();
   });
   languageChoice.root.hidden = true;
   gate.insertBefore(languageChoice.root, heading);
   let resolveGate: () => void;
-  activeGate = new Promise<void>((resolve) => {
+  let rejectGate: (error: Error) => void;
+  activeGate = new Promise<void>((resolve, reject) => {
     resolveGate = resolve;
+    rejectGate = reject;
   });
   const pending = activeGate;
 
@@ -102,12 +111,13 @@ export function ensureVaultUnlocked(): Promise<void> {
     if (show) show.checked = false;
   }
 
-  function finish(): void {
+  function finish(error?: Error): void {
     clearPasswords();
     gate.remove();
     document.body.append(original);
     activeGate = undefined;
-    resolveGate();
+    if (error) rejectGate(error);
+    else resolveGate();
   }
 
   function setBusy(value: boolean, message = ''): void {
@@ -129,7 +139,7 @@ export function ensureVaultUnlocked(): Promise<void> {
   }
 
   function renderForm(error = ''): void {
-    showingDemo = false;
+    showingWelcome = false;
     languageChoice.root.hidden = true;
     content.replaceChildren();
     const creating = state === 'unconfigured';
@@ -145,6 +155,9 @@ export function ensureVaultUnlocked(): Promise<void> {
     sessionHint.hidden = false;
     if (creating) content.append(element('p', t('createHint'), 'vault-hint'));
     const form = element('form');
+    form.id = creating ? 'attention-create-vault' : 'attention-unlock-vault';
+    form.autocomplete = 'on';
+    form.method = 'post';
     form.noValidate = true;
     const passwordLabel = element('label', t('password'));
     passwordLabel.htmlFor = 'vault-password';
@@ -159,6 +172,12 @@ export function ensureVaultUnlocked(): Promise<void> {
     password.setAttribute('autocapitalize', 'off');
     password.setAttribute('aria-describedby', 'vault-status');
     form.append(passwordLabel, password);
+    if (/Mac/iu.test(navigator.platform)) {
+      const help = element('details', undefined, 'vault-password-help');
+      help.append(element('summary', t('applePasswords')));
+      help.append(element('p', t('applePasswordsHelp'), 'vault-hint'));
+      form.append(help);
+    }
     const confirm = element('input');
     if (creating) {
       password.minLength = 12;
@@ -219,7 +238,9 @@ export function ensureVaultUnlocked(): Promise<void> {
       confirm.removeAttribute('aria-invalid');
       // Start the operation before clearing DOM fields; never persist the password in UI state.
       const action = creating
-        ? createVault(password.value)
+        ? options.initialRecords
+          ? createVault(password.value, options.initialRecords)
+          : createVault(password.value)
         : unlockVault(password.value);
       clearPasswords();
       setBusy(true, t('working'));
@@ -241,7 +262,16 @@ export function ensureVaultUnlocked(): Promise<void> {
     reset.addEventListener('click', () => {
       if (!busy) renderReset();
     });
-    content.append(form, reset);
+    content.append(form);
+    if (options.initialRecords) {
+      const back = element('button', t('backToProfile'), 'vault-link');
+      back.id = 'vault-back-to-profile';
+      back.type = 'button';
+      back.addEventListener('click', () => {
+        if (!busy) finish(new VaultSetupBackError());
+      });
+      content.append(back);
+    } else content.append(reset);
     setBusy(false, error);
     password.focus();
   }
@@ -292,38 +322,60 @@ export function ensureVaultUnlocked(): Promise<void> {
     cancel.focus();
   }
 
-  function renderDemo(): void {
-    showingDemo = true;
+  function renderWelcome(): void {
+    showingWelcome = true;
     languageChoice.root.hidden = false;
     content.replaceChildren();
-    heading.textContent = p('Что стоит вашего времени?');
+    heading.textContent = p('Читайте то, что полезно именно вам');
     description.textContent = p(
-      'Attention помогает выбрать, что читать и на каких фрагментах остановиться.',
+      'Attention помогает решить, стоит ли открывать статью, и найти в ней фрагменты, которые могут дать вам что-то новое.',
     );
     description.hidden = false;
-    const start = element('button', p('Настроить под меня'), 'vault-primary');
+    const needs = element('ul', undefined, 'profile-welcome-needs');
+    needs.append(
+      element('li', p('Что вам интересно и над чем вы работаете.')),
+      element('li', p('В чём вы уже разбираетесь.')),
+    );
+    const start = element('button', p('Создать мой профиль'), 'vault-primary');
     start.type = 'button';
     start.id = 'profile-start';
     start.addEventListener('click', () => {
-      document.documentElement.dataset.profileDemoSeen = 'true';
+      document.documentElement.dataset.profileWelcomeSeen = 'true';
       renderForm();
     });
     content.append(
-      createProfileDemo(language),
       element(
         'p',
-        p('Чтобы советовать именно вам, Attention нужно немного вас узнать.'),
+        p('Для этого ему нужно немного узнать о вас:'),
+      ),
+      needs,
+      element(
+        'p',
+        p(
+          'Без этого одна и та же рекомендация достанется и новичку, и специалисту.',
+        ),
       ),
       start,
+      element(
+        'p',
+        p(
+          'Начните с ChatGPT или Claude: они помогут собрать ваши интересы, знания и цели в профиль для Attention.',
+        ),
+        'profile-welcome-guide',
+      ),
     );
   }
 
   void getVaultStatus()
     .then((current) => {
+      if (options.initialRecords && current !== 'unconfigured') {
+        finish(new Error('Another setup created a vault. Reopen Attention to unlock it.'));
+        return;
+      }
       if (current === 'unlocked') finish();
       else {
         state = current;
-        if (current === 'unconfigured') renderDemo();
+        if (current === 'unconfigured' && !options.initialRecords) renderWelcome();
         else renderForm();
       }
     })

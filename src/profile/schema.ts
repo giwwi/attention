@@ -3,7 +3,23 @@ import type { CognitiveEffort } from '../shared/types';
 export const PROFILE_SCHEMA_VERSION = '2.0' as const;
 export const LEGACY_PROFILE_SCHEMA_VERSION = '1.0' as const;
 
-export type ExternalProfileSource = 'chatgpt' | 'claude' | 'other';
+export const EXTERNAL_PROFILE_SOURCES = [
+  'chatgpt',
+  'claude',
+  'gemini',
+  'copilot',
+  'perplexity',
+  'other',
+] as const;
+export type ExternalProfileSource = (typeof EXTERNAL_PROFILE_SOURCES)[number];
+export function isExternalProfileSource(
+  value: unknown,
+): value is ExternalProfileSource {
+  return (
+    typeof value === 'string' &&
+    (EXTERNAL_PROFILE_SOURCES as readonly string[]).includes(value)
+  );
+}
 export type ProfileSource = ExternalProfileSource | 'manual' | 'quick_ai';
 export type GoalPriority = 'low' | 'medium' | 'high';
 export type GoalStatus = 'active' | 'paused' | 'completed';

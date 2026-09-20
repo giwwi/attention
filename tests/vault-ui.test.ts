@@ -63,35 +63,74 @@ beforeEach(() => {
 });
 
 describe('vault entry gate', () => {
-  it('offers English, German and Russian before any password or profile is requested', async () => {
+  it('returns from the final password step without losing the draft or creating a vault', async () => {
+    vault.getVaultStatus.mockResolvedValue('unconfigured');
+    const { ensureVaultUnlocked, VaultSetupBackError } = await loadUi();
+    const pending = ensureVaultUnlocked({ initialRecords: { personalProfile: 'draft' }, language: 'ru' });
+    const cancelled = expect(pending).rejects.toBeInstanceOf(VaultSetupBackError);
+    await flush();
+    expect(document.getElementById('profile-start')).toBeNull();
+    input('vault-password').value = 'unsaved password';
+    button('vault-back-to-profile').click();
+    await cancelled;
+    expect(input('private-draft').value).toBe('Unsaved private draft');
+    expect(document.getElementById('vault-password')).toBeNull();
+    expect(vault.createVault).not.toHaveBeenCalled();
+  });
+
+  it('passes the reviewed records into vault creation and never silently joins another setup', async () => {
+    vault.getVaultStatus.mockResolvedValue('unconfigured');
+    const { ensureVaultUnlocked } = await loadUi();
+    const records = { personalProfile: 'reviewed draft' };
+    const pending = ensureVaultUnlocked({ initialRecords: records });
+    await flush();
+    input('vault-password').value = input('vault-confirm-password').value = 'my test password';
+    vault.createVault.mockImplementation(async () => { vault.getVaultStatus.mockResolvedValue('unlocked'); });
+    submit();
+    await pending;
+    expect(vault.createVault).toHaveBeenCalledWith('my test password', records);
+    await expect(ensureVaultUnlocked({ initialRecords: records })).rejects.toThrow('Another setup');
+  });
+  it('offers all languages in one select before any password or profile is requested', async () => {
     vault.getVaultStatus.mockResolvedValue('unconfigured');
     const { ensureVaultUnlocked } = await loadUi();
     void ensureVaultUnlocked();
     await flush();
-    const choices = [
-      ...document.querySelectorAll<HTMLButtonElement>('[data-language-choice]'),
-    ];
-    expect(choices.map((choice) => choice.textContent)).toEqual([
+    const choice = document.querySelector<HTMLSelectElement>(
+      '.onboarding-language select',
+    )!;
+    expect(document.querySelector('.onboarding-language button')).toBeNull();
+    expect([...choice.options].map((option) => option.textContent)).toEqual([
+      'Русский',
       'English',
       'Deutsch',
-      'Русский',
+      'Español',
+      'Français',
+      'Italiano',
+      '中文',
+      'العربية',
+      'हिन्दी',
     ]);
-    choices[1]!.click();
+    expect(choice.value).toBe('en');
+    choice.value = 'de';
+    choice.dispatchEvent(new Event('change'));
     expect(document.getElementById('vault-gate')?.lang).toBe('de');
     expect(document.getElementById('profile-start')?.textContent).toBe(
-      'Auf mich abstimmen',
+      'Mein Profil erstellen',
     );
     expect(document.documentElement.dataset.onboardingLanguage).toBe('de');
     expect(vault.createVault).not.toHaveBeenCalled();
     expect(document.querySelector('[data-vault-password]')).toBeNull();
-    choices[2]!.click();
+    choice.value = 'ru';
+    choice.dispatchEvent(new Event('change'));
     expect(document.getElementById('profile-start')?.textContent).toBe(
-      'Настроить под меня',
+      'Создать мой профиль',
     );
-    expect(choices[2]!.getAttribute('aria-pressed')).toBe('true');
-    choices[0]!.click();
+    expect(choice.value).toBe('ru');
+    choice.value = 'en';
+    choice.dispatchEvent(new Event('change'));
     expect(document.getElementById('profile-start')?.textContent).toBe(
-      'Make it personal',
+      'Create my profile',
     );
   });
   it('loads a packaged stylesheet that the extension security policy permits', async () => {
@@ -228,7 +267,10 @@ describe('vault entry gate', () => {
     const pending = ensureVaultUnlocked();
     await flush();
     expect(document.querySelector('form')).toBeNull();
-    expect(document.querySelector('[data-profile-demo]')).not.toBeNull();
+    expect(document.querySelector('[data-profile-demo]')).toBeNull();
+    expect(document.querySelectorAll('.profile-welcome-needs li')).toHaveLength(
+      2,
+    );
     button('profile-start').click();
     input('vault-password').value = 'correct-horse-battery';
     input('vault-confirm-password').value = 'correct-horse-battery';

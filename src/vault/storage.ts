@@ -516,7 +516,10 @@ const area = {
 /** Promise API used by existing repositories; plaintext never reaches storage.local. */
 export const privateStorage = area as unknown as chrome.storage.StorageArea;
 
-async function migrate(context: Context): Promise<void> {
+async function migrate(
+  context: Context,
+  initialRecords: Record<string, unknown> = {},
+): Promise<void> {
   const local = await chrome.storage.local.get(null);
   const entries = Object.entries(local).filter(([name]) => !RESERVED.has(name));
   if (!context.metadata.migrationProof) {
@@ -524,6 +527,11 @@ async function migrate(context: Context): Promise<void> {
     for (const [name, value] of Object.entries(legacy)) {
       if (Object.hasOwn(local, name))
         throw new Error('Legacy storage contains conflicting records.');
+      entries.push([name, value]);
+    }
+    for (const [name, value] of Object.entries(initialRecords)) {
+      if (entries.some(([existing]) => existing === name))
+        throw new Error('Initial profile conflicts with existing data.');
       entries.push([name, value]);
     }
     const normalized = entries.map(
@@ -604,13 +612,38 @@ async function installSession(context: Context): Promise<void> {
   notifyState();
 }
 
-export function createVault(password: string): Promise<void> {
+/** Fresh setup may prepare a profile in RAM; existing installations must migrate first. */
+export function canPrepareProfileBeforeVault(): Promise<boolean> {
+  return withVaultLock(async () => {
+    await trustedStorage();
+    if (await metadata()) return false;
+    const local = await chrome.storage.local.get(null);
+    if (Object.keys(local).some((name) => !RESERVED.has(name))) return false;
+    return Object.keys(await readLegacyDatabases()).length === 0;
+  });
+}
+
+export async function createVault(
+  password: string,
+  initialRecords?: Record<string, unknown>,
+): Promise<void> {
+  // Snapshot before any await: the reviewed draft cannot change during encryption.
+  const initial = initialRecords === undefined
+    ? undefined
+    : JSON.parse(serialize(initialRecords)) as Record<string, unknown>;
+  if (initial) Object.keys(initial).forEach(logicalKey);
   return lifecycle(async () => {
     if (typeof password !== 'string' || password.length < 12)
       throw new Error('Use a vault password with at least 12 characters.');
     await trustedStorage();
     if (await metadata())
       throw new Error('A vault already exists. Unlock it or reset it first.');
+    if (initial) {
+      const local = await chrome.storage.local.get(null);
+      if (Object.keys(local).some((name) => !RESERVED.has(name)) ||
+          Object.keys(await readLegacyDatabases()).length)
+        throw new Error('Existing data must be migrated before importing a profile.');
+    }
     const id = crypto.randomUUID();
     const salt = encode(random(16));
     const raw = random(32);
@@ -633,8 +666,18 @@ export function createVault(password: string): Promise<void> {
       session: { version: 1, vaultId: id, epoch: '', key: '' },
     };
     try {
-      await migrate(context);
+      await migrate(context, initial);
       await installSession(context);
+    } catch (error) {
+      if (initial) {
+        // This branch started from empty stores. Roll back a failed first save
+        // under the lifecycle lock; keep the in-memory draft available to retry.
+        await chrome.storage.session.remove(VAULT_SESSION_KEY);
+        await clearRecords();
+        await chrome.storage.local.remove([VAULT_METADATA_KEY, VAULT_REVISION_KEY]);
+        notifyState();
+      }
+      throw error;
     } finally {
       raw.fill(0);
     }

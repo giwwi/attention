@@ -1,0 +1,17 @@
+Attention — software license notice
+
+Attention's original software source code is licensed under the Mozilla
+Public License, v. 2.0 (MPL-2.0). This notice applies to software code only;
+books, logos, and promotional materials are outside its scope.
+
+This Source Code Form is subject to the terms of the Mozilla Public
+License, v. 2.0. If a copy of the MPL was not distributed with this
+file, You can obtain one at https://mozilla.org/MPL/2.0/.
+
+The full license text is included in LICENSE.
+Source code: https://github.com/giwwi/attention
+Build instructions are in the source repository's README.md.
+
+Third-party components retain their own license terms. Notices for
+components bundled with the extension are in THIRD_PARTY_NOTICES.txt
+(public/THIRD_PARTY_NOTICES.txt in the source repository).

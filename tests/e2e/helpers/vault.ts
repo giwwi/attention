@@ -60,6 +60,7 @@ export async function createVaultThroughUi(
   page: Page,
   password = TEST_VAULT_PASSWORD,
 ): Promise<void> {
+  await preparePasswordStep(page);
   await expect(page.locator('#vault-gate')).toBeVisible();
   const start = page.locator('#vault-gate #profile-start');
   await expect(page.locator('#vault-gate')).not.toContainText('Checking');
@@ -68,6 +69,27 @@ export async function createVaultThroughUi(
   await page.locator('#vault-confirm-password').fill(password);
   await page.locator('#vault-submit').click();
   await expect(page.locator('#vault-gate')).toHaveCount(0);
+}
+
+/** A fresh install now collects/reviews a profile before creating its vault. */
+export async function preparePasswordStep(page: Page): Promise<void> {
+  await expect(page.locator('#profile-onboarding:visible, #vault-gate')).toHaveCount(1);
+  if (await page.locator('#profile-onboarding').isVisible()) {
+    // Save starts the password gate asynchronously. Do not restart the import
+    // while the reviewed profile is transitioning to that final step.
+    if (await page.locator('#profile-review-step').isVisible()) {
+      await expect(page.locator('#vault-gate')).toBeVisible();
+      return;
+    }
+    if (await page.locator('#profile-welcome-step').isVisible())
+      await page.locator('#profile-start').click();
+    if (await page.locator('#profile-source-step').isVisible())
+      await page.locator('[data-profile-source="chatgpt"]').click();
+    const { PROFILE_IMPORT } = await import('./profile');
+    await page.locator('#profile-import-json').fill(PROFILE_IMPORT);
+    await page.locator('#validate-profile').click();
+    await page.locator('#save-profile').click();
+  }
 }
 
 export async function openVaultInspector(

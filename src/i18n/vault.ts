@@ -13,6 +13,34 @@ const languages: UiLanguage[] = [
 ];
 
 const copy = {
+  applePasswords: [
+    'Use Apple Passwords', 'Заполнить через Apple «Пароли»',
+    'Apple Passwörter verwenden', 'Usar Contraseñas de Apple',
+    'Utiliser Mots de passe d’Apple', 'Usa Password di Apple',
+    '使用 Apple 密码', 'استخدام تطبيق كلمات السر من Apple', 'Apple Passwords का उपयोग करें',
+  ],
+  applePasswordsHelp: [
+    'Save this password in the Passwords app as Attention. To fill it, right-click the password field, choose AutoFill → Passwords, and select your saved entry. Attention cannot save it to Apple Passwords for you.',
+    'Сохраните пароль в приложении «Пароли» под именем Attention. Для подстановки нажмите правой кнопкой на поле пароля → «Автозаполнение» → «Пароли» и выберите свою запись. Attention не может сама сохранить пароль в Apple «Пароли».',
+    'Speichere dieses Passwort in der App „Passwörter“ als Attention. Klicke zum Ausfüllen mit der rechten Maustaste auf das Passwortfeld → Automatisch ausfüllen → Passwörter und wähle deinen Eintrag. Attention kann es nicht selbst in Apple Passwörter speichern.',
+    'Guarda esta contraseña en la app Contraseñas con el nombre Attention. Para rellenarla, haz clic derecho en el campo → Autorrellenar → Contraseñas y elige tu entrada. Attention no puede guardarla en Contraseñas de Apple por ti.',
+    'Enregistrez ce mot de passe dans l’app Mots de passe sous le nom Attention. Pour le remplir, faites un clic droit sur le champ → Remplissage automatique → Mots de passe et choisissez votre entrée. Attention ne peut pas l’enregistrer dans Mots de passe à votre place.',
+    'Salva questa password nell’app Password con il nome Attention. Per inserirla, fai clic destro sul campo → Riempimento automatico → Password e scegli la voce salvata. Attention non può salvarla in Password di Apple al posto tuo.',
+    '请在“密码”应用中以 Attention 为名称保存此密码。填写时，右键点击密码框 → 自动填充 → 密码，选择已保存的条目。Attention 无法代你将密码保存到 Apple 密码中。',
+    'احفظ كلمة السر في تطبيق كلمات السر باسم Attention. لتعبئتها، انقر بزر الماوس الأيمن على الحقل ← التعبئة التلقائية ← كلمات السر، ثم اختر السجل المحفوظ. لا يستطيع Attention حفظها في التطبيق نيابةً عنك.',
+    'इस पासवर्ड को Passwords ऐप में Attention नाम से सहेजें। भरने के लिए पासवर्ड फ़ील्ड पर दायाँ क्लिक करें → AutoFill → Passwords और अपनी सहेजी गई प्रविष्टि चुनें। Attention इसे आपके लिए Apple Passwords में नहीं सहेज सकता।',
+  ],
+  backToProfile: [
+    'Back to my profile',
+    'Вернуться к профилю',
+    'Zurück zu meinem Profil',
+    'Volver a mi perfil',
+    'Revenir à mon profil',
+    'Torna al mio profilo',
+    '返回我的个人资料',
+    'العودة إلى ملفي الشخصي',
+    'मेरी प्रोफ़ाइल पर वापस जाएँ',
+  ],
   checking: [
     'Opening your vault…',
     'Открываем хранилище…',

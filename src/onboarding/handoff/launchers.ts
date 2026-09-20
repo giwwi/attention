@@ -1,7 +1,8 @@
 import type { ProfileHandoffMethod, ProfileHandoffProviderId } from './state';
+import { PROFILE_WEB_URLS } from '../../profile/provider-sites';
 
-export const CHATGPT_PROFILE_URL = 'https://chatgpt.com/';
-export const CLAUDE_PROFILE_WEB_URL = 'https://claude.ai/new';
+export const CHATGPT_PROFILE_URL = PROFILE_WEB_URLS.chatgpt;
+export const CLAUDE_PROFILE_WEB_URL = PROFILE_WEB_URLS.claude;
 
 export interface ProfileHandoffResult {
   provider: ProfileHandoffProviderId;
@@ -53,7 +54,7 @@ async function tryOpen(
   }
 }
 
-export async function prepareChatGptProfileHandoff(
+export async function prepareWebProfileHandoff(
   prompt: string,
   environment: ProfileHandoffEnvironment = browserEnvironment,
 ): Promise<ProfileHandoffPrepared> {
@@ -62,6 +63,8 @@ export async function prepareChatGptProfileHandoff(
     promptCopied: await tryCopy(prompt, environment),
   };
 }
+
+export const prepareChatGptProfileHandoff = prepareWebProfileHandoff;
 
 export function buildClaudeProfileDeepLink(prompt: string): string {
   return `claude://claude.ai/new?q=${encodeURIComponent(prompt)}`;
@@ -82,10 +85,13 @@ export async function launchProfileHandoff(
     };
   }
 
-  if (provider === 'chatgpt') {
-    const prepared = await prepareChatGptProfileHandoff(prompt, environment);
+  if (provider !== 'claude') {
+    const prepared = await prepareWebProfileHandoff(prompt, environment);
     await onPrepared?.(prepared);
-    const providerOpened = await tryOpen(CHATGPT_PROFILE_URL, environment);
+    const providerOpened = await tryOpen(
+      PROFILE_WEB_URLS[provider],
+      environment,
+    );
     return {
       provider,
       method: 'clipboard-and-web',

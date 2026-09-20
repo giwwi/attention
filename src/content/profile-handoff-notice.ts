@@ -1,6 +1,9 @@
 import { loadProfileHandoffState } from '../onboarding/handoff/state';
 import { VAULT_HANDOFF_NOTICE_TYPE } from '../vault/messages';
 import { PROFILE_PROVIDERS } from '../profile/providers';
+import { normalizeUiLanguage, type UiLanguage } from '../i18n/ui';
+import { handoffNoticeCopy } from '../i18n/handoff-notice';
+import { profileProviderAtUrl } from '../profile/provider-sites';
 
 const NOTICE_SELECTOR = '[data-attention-profile-handoff-notice="true"]';
 
@@ -15,27 +18,20 @@ export interface ProfileHandoffNoticeOptions {
   storage?: StorageArea;
   copyText?: (text: string) => Promise<void>;
   platform?: string;
+  language?: UiLanguage;
   signal?: AbortSignal;
-}
-
-function isChatGptUrl(value: string): boolean {
-  try {
-    const hostname = new URL(value).hostname.toLocaleLowerCase();
-    return hostname === 'chatgpt.com' || hostname.endsWith('.chatgpt.com');
-  } catch {
-    return false;
-  }
 }
 
 function pasteShortcut(platform: string): string {
   return /mac|iphone|ipad/iu.test(platform) ? '⌘V' : 'Ctrl+V';
 }
 
-export async function installChatGptProfileHandoffNotice(
+export async function installProfileHandoffNotice(
   options: ProfileHandoffNoticeOptions = {},
 ): Promise<HTMLElement | null> {
   const currentUrl = options.currentUrl ?? window.location.href;
-  if (!isChatGptUrl(currentUrl)) return null;
+  const provider = profileProviderAtUrl(currentUrl);
+  if (!provider) return null;
 
   const state = options.storage
     ? await loadProfileHandoffState(options.storage)
@@ -43,7 +39,7 @@ export async function installChatGptProfileHandoffNotice(
         ?.state;
   if (options.signal?.aborted) return null;
   if (
-    state?.profileImportProvider !== 'chatgpt' ||
+    state?.profileImportProvider !== provider ||
     state.profileImportStage !== 'waiting-for-response' ||
     state.method !== 'clipboard-and-web'
   ) {
@@ -63,6 +59,17 @@ export async function installChatGptProfileHandoffNotice(
     zIndex: '2147483647',
   });
   const shadow = host.attachShadow({ mode: 'open' });
+  const language = normalizeUiLanguage(options.language ?? state.language);
+  const base = handoffNoticeCopy[language];
+  const providerName = PROFILE_PROVIDERS[provider].name;
+  const text = {
+    ...base,
+    paste: base.paste.replaceAll('{provider}', providerName),
+    copyFailed: base.copyFailed.replaceAll('{provider}', providerName),
+    returnReply: base.returnReply.replaceAll('{provider}', providerName),
+  };
+  host.lang = language;
+  host.dir = language === 'ar' ? 'rtl' : 'ltr';
   const shortcut = pasteShortcut(
     options.platform ?? navigator.platform ?? navigator.userAgent,
   );
@@ -87,40 +94,37 @@ export async function installChatGptProfileHandoffNotice(
   const head = document.createElement('div');
   head.className = 'head';
   const title = document.createElement('strong');
-  title.textContent = state.promptCopied
-    ? 'Промпт Attention уже скопирован'
-    : 'Скопируйте промпт Attention';
+  title.textContent = state.promptCopied ? text.copied : text.copyPrompt;
   const close = document.createElement('button');
   close.className = 'close';
   close.type = 'button';
-  close.setAttribute('aria-label', 'Закрыть');
+  close.setAttribute('aria-label', text.close);
   close.textContent = '×';
   head.append(title, close);
   const explanation = document.createElement('p');
-  if (state.promptCopied) {
-    explanation.append('Нажмите ');
+  const showPasteInstructions = (): void => {
+    const [before = '', after = ''] = text.paste.split('{shortcut}');
     const key = document.createElement('kbd');
     key.textContent = shortcut;
-    explanation.append(
-      key,
-      ' в поле сообщения ChatGPT, затем отправьте запрос.',
-    );
+    explanation.replaceChildren(before, key, after);
+  };
+  if (state.promptCopied) {
+    showPasteInstructions();
   } else {
-    explanation.textContent =
-      'Автоматическое копирование не сработало. Скопируйте запрос кнопкой ниже, вставьте его в ChatGPT и отправьте.';
+    explanation.textContent = text.copyFailed;
   }
+  const returnReply = document.createElement('p');
+  returnReply.textContent = text.returnReply;
   const actions = document.createElement('div');
   actions.className = 'actions';
   const copy = document.createElement('button');
   copy.className = 'copy';
   copy.type = 'button';
-  copy.textContent = state.promptCopied
-    ? 'Скопировать ещё раз'
-    : 'Скопировать запрос';
+  copy.textContent = state.promptCopied ? text.copyAgain : text.copyPrompt;
   const status = document.createElement('span');
   status.className = 'status';
   actions.append(copy, status);
-  notice.append(head, explanation, actions);
+  notice.append(head, explanation, returnReply, actions);
   shadow.append(style, notice);
 
   const listeners = new AbortController();
@@ -140,14 +144,39 @@ export async function installChatGptProfileHandoffNotice(
     () => {
       const copyText =
         options.copyText ??
-        ((text: string) => navigator.clipboard.writeText(text));
-      void copyText(PROFILE_PROVIDERS.chatgpt.prompt)
+        (async (text: string) => {
+          try {
+            await navigator.clipboard.writeText(text);
+          } catch {
+            // Some pages restrict the Clipboard API. A user-initiated copy
+            // from our own selected field needs no broader extension permission.
+            const previousFocus =
+              shadow.activeElement ?? document.activeElement;
+            const field = document.createElement('textarea');
+            field.value = text;
+            field.style.cssText = 'position:fixed;left:-10000px;top:0;';
+            shadow.append(field);
+            try {
+              field.focus({ preventScroll: true });
+              field.select();
+              if (!document.execCommand('copy'))
+                throw new Error('Copy failed.');
+            } finally {
+              field.remove();
+              if (previousFocus instanceof HTMLElement)
+                previousFocus.focus({ preventScroll: true });
+            }
+          }
+        });
+      void copyText(PROFILE_PROVIDERS[provider].prompt)
         .then(() => {
-          status.textContent = 'Скопировано. Теперь вставьте и отправьте.';
-          copy.textContent = 'Скопировано ✓';
+          title.textContent = text.copied;
+          showPasteInstructions();
+          status.textContent = text.copiedStatus;
+          copy.textContent = text.copyAgain;
         })
         .catch(() => {
-          status.textContent = 'Не удалось скопировать.';
+          status.textContent = text.copyError;
         });
     },
     { signal: listeners.signal },

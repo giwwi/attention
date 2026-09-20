@@ -6,10 +6,15 @@ const notionOAuthBrokerUrl = process.env.NOTION_OAUTH_BROKER_URL?.trim() ?? '';
 const define = {
   __ATTENTION_NOTION_OAUTH_BROKER_URL__: JSON.stringify(notionOAuthBrokerUrl),
 };
+const banner = {
+  js: '/*! Attention original code: MPL-2.0. See LICENSE, NOTICE and THIRD_PARTY_NOTICES.txt. Source: https://github.com/giwwi/attention */',
+};
 
 await rm('dist', { recursive: true, force: true });
 await mkdir('dist', { recursive: true });
 await cp('public', 'dist', { recursive: true });
+await cp('LICENSE', 'dist/LICENSE');
+await cp('NOTICE', 'dist/NOTICE');
 
 if (notionOAuthBrokerUrl) {
   const brokerOrigin = new URL(notionOAuthBrokerUrl).origin;
@@ -28,6 +33,7 @@ const buildResults = await Promise.all([
   build({
     entryPoints: ['src/pilot/page.ts'],
     outfile: 'dist/pilot.js',
+    banner,
     bundle: true,
     format: 'esm',
     target: 'chrome116',
@@ -39,6 +45,7 @@ const buildResults = await Promise.all([
   build({
     entryPoints: ['src/popup/popup.ts'],
     outfile: 'dist/popup.js',
+    banner,
     bundle: true,
     format: 'esm',
     target: 'chrome116',
@@ -50,6 +57,7 @@ const buildResults = await Promise.all([
   build({
     entryPoints: ['src/content/index.ts'],
     outfile: 'dist/content.js',
+    banner,
     bundle: true,
     format: 'iife',
     target: 'chrome116',
@@ -61,6 +69,7 @@ const buildResults = await Promise.all([
   build({
     entryPoints: ['src/background/index.ts'],
     outfile: 'dist/background.js',
+    banner,
     bundle: true,
     format: 'iife',
     target: 'chrome116',
@@ -72,6 +81,7 @@ const buildResults = await Promise.all([
   build({
     entryPoints: ['src/obsidian/page.ts'],
     outfile: 'dist/obsidian.js',
+    banner,
     bundle: true,
     format: 'esm',
     target: 'chrome116',
@@ -83,6 +93,7 @@ const buildResults = await Promise.all([
   build({
     entryPoints: ['src/notion/page.ts'],
     outfile: 'dist/notion.js',
+    banner,
     bundle: true,
     format: 'esm',
     target: 'chrome116',

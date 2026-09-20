@@ -94,9 +94,20 @@ it.each([true, false])(
         document.querySelector('[data-attention-reading-target]'),
       ).toBeNull();
       expect(panel!.querySelector('.counter')?.textContent).toBe('1 из 2');
+      const readwise = panel!.querySelector<HTMLButtonElement>('.readwise')!;
+      const readwiseHint = panel!.querySelector<HTMLElement>('.readwise-hint')!;
+      expect(readwise.hidden).toBe(false);
+      expect(readwise.disabled).toBe(true);
+      expect(readwise.dataset.unavailable).toBe('true');
+      expect(readwiseHint.hidden).toBe(false);
+      expect(readwiseHint.textContent).toBe(
+        'Для сохранения подключите Readwise в настройках.',
+      );
+      expect(readwise.getAttribute('aria-describedby')).toBe(readwiseHint.id);
       panel!.querySelector<HTMLButtonElement>('.next')!.click();
       expect(highlighted()).toEqual([paragraphs[2]]);
       expect(panel!.querySelector('.counter')?.textContent).toBe('2 из 2');
+      expect(readwise.disabled).toBe(true);
       panel!.querySelector<HTMLButtonElement>('.previous')!.click();
       expect(highlighted()).toEqual(paragraphs.slice(0, 2));
       expect(
@@ -142,6 +153,12 @@ it('isolates passage actions and rejects synthetic mutations even with privilege
     document.querySelector('[data-attention-novel-passages]')?.shadowRoot,
   ).toBeNull();
   expect(panel).toBeDefined();
+  const readwise = panel!.querySelector<HTMLButtonElement>('.readwise')!;
+  expect(readwise.hidden).toBe(false);
+  expect(readwise.disabled).toBe(false);
+  expect(readwise.dataset.unavailable).toBe('false');
+  expect(readwise.hasAttribute('aria-describedby')).toBe(false);
+  expect(panel!.querySelector<HTMLElement>('.readwise-hint')!.hidden).toBe(true);
   for (const selector of ['.known', '.novel', '.readwise'])
     panel!.querySelector<HTMLButtonElement>(selector)!.click();
   expect(sendMessage).not.toHaveBeenCalled();

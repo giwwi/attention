@@ -2,6 +2,7 @@ import { privateStorage } from '../vault/storage';
 import {
   LEGACY_PROFILE_SCHEMA_VERSION,
   PROFILE_SCHEMA_VERSION,
+  isExternalProfileSource,
   type PersonalProfile,
   type ProfileSource,
 } from './schema';
@@ -102,9 +103,9 @@ function isImportRecord(value: unknown): value is ProfileImportRecord {
   const item = value as Record<string, unknown>;
   return (
     typeof item.id === 'string' &&
-    ['chatgpt', 'claude', 'other', 'manual', 'quick_ai'].includes(
-      String(item.source),
-    ) &&
+    (isExternalProfileSource(item.source) ||
+      item.source === 'manual' ||
+      item.source === 'quick_ai') &&
     typeof item.importedAt === 'string' &&
     (typeof item.generatedAt === 'string' || item.generatedAt === null) &&
     typeof item.counts === 'object' &&

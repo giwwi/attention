@@ -1,3 +1,17 @@
+# Attention 0.30.0 — profile first, five assistant choices
+
+- Create and review your profile before choosing the vault password. First setup stays in a dedicated extension tab; the draft remains in that tab’s memory until the encrypted save. Returning from the password step preserves the draft; closing or reloading the setup tab discards it.
+- Choose “Let ChatGPT introduce me”, “Let Claude introduce me”, “Let Gemini introduce me”, “Let Copilot introduce me” or “Let Perplexity introduce me”. Provider-specific prompts, import attribution and the copy/open/return flow support all five services. Attention does not connect to their accounts or read chat history.
+- Restored the assistant-page notice explaining that the prompt was copied, where to paste it and how to return the full response to Attention. The first-run notice works before a vault exists and stores only temporary non-personal coordination flags.
+- Simplified the welcome screen and combined all interface languages into one selector.
+- Password fields support standard autofill attributes and macOS system Passwords guidance. No password is saved to a manager automatically; the 12-character minimum is unchanged.
+- The passage panel always shows “Save to Readwise”; it stays gray and disabled until connected.
+- Original software code is licensed under MPL-2.0. License and third-party notices ship with the extension. Books, logos and promotional materials are outside this grant.
+
+No new extension permissions. AI analysis still uses the user’s own Vercel AI Gateway key and starts only on request.
+
+Validation: 809 unit/integration tests and 10 browser scenarios passed. TypeScript, ESLint and the production build passed. Browser checks cover first-run activation, assistant handoffs, encrypted profile saving, migration, locking, restart and reset. Assistant replies in tests are fixtures, not live model generations.
+
 # Attention 0.29.1 — English, German and Russian priority
 
 - English, Deutsch and Русский are available directly on the first onboarding screen and during profile setup. The selection updates the interface and is saved inside the encrypted vault after creation; other interface languages remain available.

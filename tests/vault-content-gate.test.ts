@@ -13,7 +13,7 @@ const runtime = vi.hoisted(() => ({
   open: vi.fn(),
 }));
 vi.mock('../src/content/profile-handoff-notice', () => ({
-  installChatGptProfileHandoffNotice: runtime.handoff,
+  installProfileHandoffNotice: runtime.handoff,
 }));
 vi.mock('../src/content/hover-preview', () => ({
   installHoverPreview: runtime.prompt,
@@ -71,6 +71,7 @@ describe('locked content runtime', () => {
     await Promise.resolve();
     expect(send.mock.calls).toEqual([[{ type: VAULT_STATUS_TYPE }]]);
     expect(runtime.start).not.toHaveBeenCalled();
+    expect(runtime.handoff).not.toHaveBeenCalled();
   });
 
   it('offers setup before a vault exists but removes the invitation when an existing vault is locked', async () => {
@@ -78,6 +79,9 @@ describe('locked content runtime', () => {
     await import('../src/content/index');
     await Promise.resolve();
     expect(runtime.prompt).toHaveBeenCalledOnce();
+    expect(runtime.handoff).toHaveBeenCalledOnce();
+    const signal = runtime.handoff.mock.calls[0]![0].signal as AbortSignal;
+    expect(signal.aborted).toBe(false);
     expect(runtime.start).not.toHaveBeenCalled();
     expect(send.mock.calls).toEqual([[{ type: VAULT_STATUS_TYPE }]]);
     send.mockResolvedValue({ ok: true, unlocked: false, unconfigured: false });
@@ -85,6 +89,8 @@ describe('locked content runtime', () => {
     await Promise.resolve();
     expect(runtime.dispose).toHaveBeenCalledOnce();
     expect(runtime.prompt).toHaveBeenCalledOnce();
+    expect(runtime.handoff).toHaveBeenCalledOnce();
+    expect(signal.aborted).toBe(true);
   });
 
   it('suspends immediately on a trusted lifecycle event while the new status is still pending', async () => {

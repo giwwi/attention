@@ -14,7 +14,6 @@ import {
   previewVerdict,
   personalValueReason,
 } from '../src/content/hover-preview';
-import { createProfileDemo } from '../src/onboarding/profile-demo';
 import { calibrateMaterialEvaluation } from '../src/utility/calibration';
 import { RAW_UTILITY_SCORE_VERSION } from '../src/utility/prediction';
 import { assertExtensionCloudAiAllowed } from '../src/privacy/settings';
@@ -544,21 +543,4 @@ describe('one source set for AI verdict and passages', () => {
     ).rejects.toThrow('Local only');
     expect(generateText).not.toHaveBeenCalled();
   });
-});
-
-it('offers a clearly labelled example without creating a profile or vault', () => {
-  const demo = createProfileDemo('ru');
-  document.body.append(demo);
-  expect(demo.textContent).toContain('Учебный пример');
-  expect(demo.querySelector('[role=status]')!.textContent).toContain(
-    'Стоит прочитать',
-  );
-  demo.querySelectorAll('button')[1]!.click();
-  expect(demo.querySelector('[role=status]')!.textContent).toContain(
-    'Основы можно пропустить',
-  );
-  expect(demo.querySelectorAll('button')[1]!.getAttribute('aria-pressed')).toBe(
-    'true',
-  );
-  demo.remove();
 });

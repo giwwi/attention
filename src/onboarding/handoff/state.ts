@@ -1,5 +1,8 @@
 import { privateStorage } from '../../vault/storage';
-import type { ExternalProfileSource } from '../../profile/schema';
+import {
+  isExternalProfileSource,
+  type ExternalProfileSource,
+} from '../../profile/schema';
 
 export const PROFILE_IMPORT_HANDOFF_KEY = 'profileImportHandoff';
 export const PROFILE_IMPORT_HANDOFF_MAX_AGE_MS = 24 * 60 * 60 * 1000;
@@ -33,9 +36,7 @@ function isProfileHandoffState(value: unknown): value is ProfileHandoffState {
     (state.sourceTabId === undefined ||
       (Number.isSafeInteger(state.sourceTabId) &&
         Number(state.sourceTabId) >= 0)) &&
-    ['chatgpt', 'claude', 'other'].includes(
-      String(state.profileImportProvider),
-    ) &&
+    isExternalProfileSource(state.profileImportProvider) &&
     (state.generation === undefined || typeof state.generation === 'string') &&
     (state.vaultEpoch === undefined || typeof state.vaultEpoch === 'string') &&
     state.profileImportStage === 'waiting-for-response' &&

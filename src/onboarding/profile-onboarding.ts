@@ -4,7 +4,6 @@ import {
   type ProfileQuestion,
 } from './profile-basics';
 import { renderProfileBrief } from './profile-brief';
-import { createProfileDemo } from './profile-demo';
 import { createLanguageChoice } from './language-choice';
 import {
   mergeProfiles,
@@ -32,34 +31,33 @@ import {
   type SourceAttribution,
 } from '../profile/schema';
 import type { QuickProfileAnswers } from '../profile/quick-builder';
-import { deleteProfile, loadProfile, saveProfile } from '../profile/storage';
+import {
+  profilePersistence,
+  ProfileSaveDeferredError,
+  type ProfilePersistence,
+} from './profile-persistence';
 import { validatePortableProfile } from '../profile/validator';
 import { isProfileReady } from '../profile/readiness';
 import type { CognitiveEffort } from '../shared/types';
 import { captureProfileLabels, profileText as p } from '../i18n/profile';
 import { normalizeUiLanguage, type UiLanguage } from '../i18n/ui';
 import {
-  beginDataOperation,
-  commitDataOperation,
-  assertDataOperationCurrent,
   DataOperationCancelledError,
   type DataOperation,
 } from '../privacy/data-operations';
 import {
   launchClaudeWebFallback,
   launchProfileHandoff,
-  prepareChatGptProfileHandoff,
+  prepareWebProfileHandoff,
 } from './handoff/launchers';
 import {
-  clearProfileHandoffState,
   createProfileHandoffState,
-  loadProfileHandoffState,
-  saveProfileHandoffState,
   type ProfileHandoffState,
   type ProfileHandoffProviderId,
 } from './handoff/state';
 
 interface ProfileOnboardingOptions {
+  persistence?: ProfilePersistence;
   onComplete: () => void | Promise<void>;
   onLanguageChange?: (language: UiLanguage) => void | Promise<void>;
   buildQuickProfile?: (
@@ -70,6 +68,9 @@ interface ProfileOnboardingOptions {
 const sourceLabels: Record<ProfileSource, string> = {
   chatgpt: 'ChatGPT',
   claude: 'Claude',
+  gemini: 'Gemini',
+  copilot: 'Copilot',
+  perplexity: 'Perplexity',
   other: 'Другой AI',
   manual: 'Вручную',
   quick_ai: 'Быстрая AI-настройка',
@@ -330,6 +331,7 @@ export class ProfileOnboarding {
     'generate-quick-profile',
   );
   private readonly options: ProfileOnboardingOptions;
+  private readonly persistence: ProfilePersistence;
   private source: ProfileSource = 'manual';
   private draft: PersonalProfile | null = null;
   private existing: PersonalProfile | null = null;
@@ -341,6 +343,7 @@ export class ProfileOnboarding {
 
   constructor(options: ProfileOnboardingOptions) {
     this.options = options;
+    this.persistence = options.persistence ?? profilePersistence;
     this.languageChoice = createLanguageChoice(
       normalizeUiLanguage(document.documentElement.lang),
       (language) => this.options.onLanguageChange?.(language),
@@ -348,7 +351,6 @@ export class ProfileOnboarding {
     this.root.prepend(this.languageChoice.root);
     this.bindEvents();
     this.translateStatic();
-    this.renderExample();
     element<HTMLDetailsElement>('profile-review-details').addEventListener(
       'toggle',
       () => {
@@ -363,26 +365,11 @@ export class ProfileOnboarding {
     });
   }
 
-  private renderExample(): void {
-    const language = normalizeUiLanguage(document.documentElement.lang);
-    element<HTMLElement>('profile-welcome-demo').replaceChildren(
-      createProfileDemo(language),
-    );
-    const slot = document.getElementById('profile-example-slot');
-    if (!slot) return;
-    const details = document.createElement('details');
-    const summary = document.createElement('summary');
-    summary.textContent = p('Учебный пример');
-    details.append(summary, createProfileDemo(language));
-    slot.replaceChildren(details);
-  }
-
   translate(): void {
     this.translateStatic();
     this.languageChoice.update(
       normalizeUiLanguage(document.documentElement.lang),
     );
-    this.renderExample();
     this.renderProfileBar();
     // Changing the interface language must not reopen an inactive import view.
     if (this.root.hidden) return;
@@ -421,7 +408,7 @@ export class ProfileOnboarding {
   }
 
   async initialize(showOnboarding: boolean): Promise<boolean> {
-    this.existing = await loadProfile();
+    this.existing = await this.persistence.loadProfile();
     this.renderProfileBar();
     const rawTab = new URLSearchParams(location.search).get('sourceTab');
     if (rawTab && /^\d+$/u.test(rawTab)) this.sourceTabId = Number(rawTab);
@@ -437,15 +424,15 @@ export class ProfileOnboarding {
         /* Setup works without a source tab. */
       }
     }
-    const handoff = await loadProfileHandoffState();
+    const handoff = await this.persistence.loadProfileHandoffState();
     if (handoff) {
-      const current = await beginDataOperation();
+      const current = await this.persistence.beginDataOperation();
       this.operation = {
         ...current,
         generation: handoff.generation ?? current.generation,
       };
       handoff.vaultEpoch = current.vaultEpoch;
-      await assertDataOperationCurrent(this.operation);
+      await this.persistence.assertDataOperationCurrent(this.operation);
       this.sourceTabId = handoff.sourceTabId ?? this.sourceTabId;
       this.restoreHandoff(handoff);
       return true;
@@ -458,7 +445,7 @@ export class ProfileOnboarding {
   }
 
   async refreshProfile(): Promise<void> {
-    this.existing = await loadProfile();
+    this.existing = await this.persistence.loadProfile();
     this.renderProfileBar();
   }
 
@@ -469,7 +456,7 @@ export class ProfileOnboarding {
     this.root.hidden = false;
     if (
       !isProfileReady(this.existing) &&
-      document.documentElement.dataset.profileDemoSeen !== 'true'
+      document.documentElement.dataset.profileWelcomeSeen !== 'true'
     ) {
       this.showStep(this.welcomeStep);
     } else this.showStep(this.sourceStep);
@@ -481,7 +468,7 @@ export class ProfileOnboarding {
     element<HTMLButtonElement>('profile-start').addEventListener(
       'click',
       () => {
-        document.documentElement.dataset.profileDemoSeen = 'true';
+        document.documentElement.dataset.profileWelcomeSeen = 'true';
         this.showStep(this.sourceStep);
       },
     );
@@ -628,7 +615,8 @@ export class ProfileOnboarding {
     this.quickError.hidden = true;
     this.quickError.textContent = '';
     try {
-      const operation = this.operation ?? (await beginDataOperation());
+      const operation =
+        this.operation ?? (await this.persistence.beginDataOperation());
       this.operation = operation;
       if (!this.options.buildQuickProfile) {
         throw new Error(p('Быстрая AI-настройка сейчас недоступна.'));
@@ -639,7 +627,7 @@ export class ProfileOnboarding {
         knownTopics: this.quickKnowledge.value,
         leisure: this.quickLeisure.value,
       });
-      await assertDataOperationCurrent(operation);
+      await this.persistence.assertDataOperationCurrent(operation);
       this.draft = draft;
       this.renderQuickSummary();
       this.showStep(this.quickReviewStep);
@@ -702,23 +690,22 @@ export class ProfileOnboarding {
 
   private async beginProvider(source: ProfileHandoffProviderId): Promise<void> {
     const operation = await this.beginProfileOperation();
-    const chatGptPreparation =
-      source === 'chatgpt'
-        ? prepareChatGptProfileHandoff(PROFILE_PROVIDERS.chatgpt.prompt)
-        : null;
+    const usesClipboard = source !== 'claude' && source !== 'other';
+    const webPreparation = usesClipboard
+      ? prepareWebProfileHandoff(PROFILE_PROVIDERS[source].prompt)
+      : null;
     const state = createProfileHandoffState(source);
     state.sourceTabId = this.sourceTabId;
     state.generation = operation.generation;
     state.vaultEpoch = operation.vaultEpoch;
-    if (source === 'chatgpt') state.method = 'clipboard-and-web';
+    if (usesClipboard) state.method = 'clipboard-and-web';
     if (source === 'claude') state.method = 'deep-link';
     if (source === 'other') state.method = 'manual';
     await this.saveHandoff(state);
     this.restoreHandoff(state);
     if (source === 'other') return;
-    if (source === 'chatgpt') {
-      if (!chatGptPreparation) return;
-      const prepared = await chatGptPreparation;
+    if (webPreparation) {
+      const prepared = await webPreparation;
       const preparedState: ProfileHandoffState = {
         ...state,
         ...prepared,
@@ -757,14 +744,15 @@ export class ProfileOnboarding {
       provider !== 'claude' || state.method === 'clipboard-and-web';
     if (provider !== 'other') {
       this.reopenProviderButton.textContent =
-        provider === 'chatgpt' && state.providerOpened !== true
-          ? p('Открыть ChatGPT')
+        provider !== 'claude' && state.providerOpened !== true
+          ? p('Открыть {provider}', { provider: providerName })
           : p('Открыть {provider} снова', { provider: providerName });
     }
 
     const openFailed = state.providerOpened === false;
     const copyRequired =
-      provider === 'chatgpt' || state.method === 'clipboard-and-web';
+      (provider !== 'claude' && provider !== 'other') ||
+      state.method === 'clipboard-and-web';
     const copyFailed = copyRequired && state.promptCopied === false;
     const usesWebFallback =
       provider === 'claude' && state.method === 'clipboard-and-web';
@@ -774,21 +762,26 @@ export class ProfileOnboarding {
       p('Скопируйте весь ответ и вставьте сюда.'),
     ];
 
-    if (provider === 'chatgpt') {
+    if (provider !== 'claude' && provider !== 'other') {
       statusText =
         state.promptCopied === undefined
-          ? p('Копируем запрос и открываем ChatGPT…')
+          ? p('Готовим запрос для {provider}…', { provider: providerName })
           : copyFailed
             ? p(
                 'Не удалось скопировать автоматически. Покажите запрос и скопируйте его вручную.',
               )
             : state.providerOpened === true
-              ? p('Запрос скопирован, ChatGPT открыт.')
+              ? p('Запрос скопирован, {provider} открыт.', {
+                  provider: providerName,
+                })
               : p(
-                  'Запрос уже скопирован. Откройте ChatGPT кнопкой ниже, вставьте его в поле сообщения и отправьте.',
+                  'Запрос уже скопирован. Откройте {provider} кнопкой ниже, вставьте его в поле сообщения и отправьте.',
+                  { provider: providerName },
                 );
       instructions = [
-        p('Вставьте запрос в ChatGPT и отправьте его.'),
+        p('Вставьте запрос в {provider} и отправьте его.', {
+          provider: providerName,
+        }),
         p('Скопируйте весь ответ и вставьте сюда.'),
       ];
     } else if (provider === 'claude') {
@@ -1771,11 +1764,16 @@ export class ProfileOnboarding {
     const operation = this.operation;
     if (!operation) return;
     try {
-      await commitDataOperation(operation, async () => {
-        await saveProfile(profile, this.source, this.draft ?? profile);
-        await clearProfileHandoffState();
+      await this.persistence.commitDataOperation(operation, async () => {
+        await this.persistence.saveProfile(
+          profile,
+          this.source,
+          this.draft ?? profile,
+        );
+        await this.persistence.clearProfileHandoffState();
       });
     } catch (error) {
+      if (error instanceof ProfileSaveDeferredError) return;
       if (!(error instanceof DataOperationCancelledError)) throw error;
       this.draft = null;
       this.pendingMerge = null;
@@ -1809,7 +1807,11 @@ export class ProfileOnboarding {
     document.body.classList.remove('profile-flow-active');
     this.renderProfileBar();
     await this.options.onComplete();
-    if (!isProfileReady(await loadProfile())) return;
+    if (!isProfileReady(await this.persistence.loadProfile())) return;
+    this.showComplete();
+  }
+
+  showComplete(): void {
     this.root.hidden = false;
     document.body.classList.add('profile-flow-active');
     element<HTMLButtonElement>('profile-return').hidden =
@@ -1821,10 +1823,11 @@ export class ProfileOnboarding {
   private async skip(): Promise<void> {
     // The old skip action cannot activate an empty installation, even when
     // invoked directly or left over in a previously open popup.
-    if (!isProfileReady(await loadProfile())) return;
-    const operation = this.operation ?? (await beginDataOperation());
-    await commitDataOperation(operation, async () => {
-      await clearProfileHandoffState();
+    if (!isProfileReady(await this.persistence.loadProfile())) return;
+    const operation =
+      this.operation ?? (await this.persistence.beginDataOperation());
+    await this.persistence.commitDataOperation(operation, async () => {
+      await this.persistence.clearProfileHandoffState();
     });
     this.handoffState = null;
     this.root.hidden = true;
@@ -1835,7 +1838,7 @@ export class ProfileOnboarding {
 
   private async removeProfile(): Promise<void> {
     if (!window.confirm(p('Удалить весь локальный личный профиль?'))) return;
-    await deleteProfile();
+    await this.persistence.deleteProfile();
     this.existing = null;
     this.renderProfileBar();
     await this.options.onComplete();
@@ -1895,13 +1898,16 @@ export class ProfileOnboarding {
   private async beginProfileOperation(
     clearHandoff = true,
   ): Promise<DataOperation> {
-    const operation = await beginDataOperation();
+    const operation = await this.persistence.beginDataOperation();
     this.operation = operation;
-    const existing = await commitDataOperation(operation, async () => {
-      const profile = await loadProfile();
-      if (clearHandoff) await clearProfileHandoffState();
-      return profile;
-    });
+    const existing = await this.persistence.commitDataOperation(
+      operation,
+      async () => {
+        const profile = await this.persistence.loadProfile();
+        if (clearHandoff) await this.persistence.clearProfileHandoffState();
+        return profile;
+      },
+    );
     if (this.operation !== operation) throw new DataOperationCancelledError();
     this.existing = existing;
     return operation;
@@ -1943,8 +1949,8 @@ export class ProfileOnboarding {
         }
       : this.operation;
     if (!operation) throw new DataOperationCancelledError();
-    await commitDataOperation(operation, () =>
-      saveProfileHandoffState({
+    await this.persistence.commitDataOperation(operation, () =>
+      this.persistence.saveProfileHandoffState({
         ...state,
         generation: operation.generation,
         vaultEpoch: operation.vaultEpoch,

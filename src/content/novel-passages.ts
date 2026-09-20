@@ -184,6 +184,7 @@ interface PassageView {
   known: HTMLButtonElement;
   novel: HTMLButtonElement;
   readwise: HTMLButtonElement;
+  readwiseHint: HTMLParagraphElement;
   status: HTMLSpanElement;
   close: HTMLButtonElement;
 }
@@ -218,6 +219,9 @@ function installPassageView(): PassageView {
       .nav { justify-content: space-between; }
       .actions { flex-wrap: wrap; margin-top: 10px; }
       .readwise { margin-left: auto; }
+      .readwise[data-unavailable="true"] { color: #59636e; background: #e9ecef; border-color: #c7cdd2; opacity: 1; }
+      .readwise-hint { margin: 6px 0 0; color: var(--attention-muted); font-size: 10px; }
+      @media (prefers-color-scheme: dark) { .readwise[data-unavailable="true"] { color: #b0b7c3; background: #2b3038; border-color: #616b75; } }
       .status { min-height: 16px; margin-top: 8px; color: var(--attention-muted); font-size: 10px; }
     </style>
     <section class="panel" role="dialog" aria-live="polite">
@@ -225,6 +229,7 @@ function installPassageView(): PassageView {
       <p class="excerpt"></p>
       <div class="nav"><button class="previous" type="button">←</button><span class="counter"></span><button class="next" type="button">→</button></div>
       <div class="actions"><button class="known" type="button"></button><button class="novel" type="button"></button><button class="readwise" type="button"></button></div>
+      <p id="readwise-hint" class="readwise-hint" hidden></p>
       <div class="status" role="status"></div>
     </section>`;
   document.documentElement.append(host);
@@ -238,6 +243,9 @@ function installPassageView(): PassageView {
     known: shadow.querySelector('.known') as HTMLButtonElement,
     novel: shadow.querySelector('.novel') as HTMLButtonElement,
     readwise: shadow.querySelector('.readwise') as HTMLButtonElement,
+    readwiseHint: shadow.querySelector(
+      '.readwise-hint',
+    ) as HTMLParagraphElement,
     status: shadow.querySelector('.status') as HTMLSpanElement,
     close: shadow.querySelector('.close') as HTMLButtonElement,
   };
@@ -287,7 +295,14 @@ export class NovelPassageController {
     this.view.known.textContent = uiText(this.language, 'alreadyKnew');
     this.view.novel.textContent = uiText(this.language, 'newToMe');
     this.view.readwise.textContent = uiText(this.language, 'saveToReadwise');
-    this.view.readwise.hidden = !this.readwiseConnected;
+    this.view.readwise.dataset.unavailable = String(!this.readwiseConnected);
+    this.view.readwiseHint.hidden = this.readwiseConnected;
+    this.view.readwiseHint.textContent = passageText(
+      this.language,
+      'connectReadwiseHint',
+    );
+    if (!this.readwiseConnected)
+      this.view.readwise.setAttribute('aria-describedby', 'readwise-hint');
     this.view.close.setAttribute(
       'aria-label',
       uiText(this.language, 'closePassages'),
@@ -436,7 +451,8 @@ export class NovelPassageController {
     const selected = this.feedback.get(match.excerpt);
     this.view.known.disabled = selected === 'known';
     this.view.novel.disabled = selected === 'new';
-    this.view.readwise.disabled = this.readwiseSaved.has(match.excerpt);
+    this.view.readwise.disabled =
+      !this.readwiseConnected || this.readwiseSaved.has(match.excerpt);
     this.view.readwise.textContent = uiText(
       this.language,
       this.readwiseSaved.has(match.excerpt)
