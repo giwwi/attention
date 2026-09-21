@@ -437,30 +437,6 @@ h3 {
 .film-heading h2 {
   font-size: clamp(42px, 4.5vw, 62px);
 }
-.audio-choice {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  flex-wrap: wrap;
-  font-size: 11px;
-}
-.audio-choice > span {
-  width: 100%;
-  margin-bottom: 6px;
-  color: #c1c8b7;
-}
-.audio-choice button {
-  padding: 10px 14px;
-  border: 1px solid #8a9a8a;
-  background: transparent;
-  color: var(--paper);
-  font-size: 12px;
-}
-.audio-choice button[aria-pressed='true'] {
-  background: var(--paper);
-  color: var(--ink);
-  border-color: var(--paper);
-}
 .demo-frame {
   border: 1px solid #697666;
 }
