@@ -13,6 +13,7 @@ const en = {
   unavailable: 'AI selection unavailable · local selection used.',
   stale: 'The article changed. Open the card again to update the passages.',
   hint: 'With context · ~{minutes} min',
+  mostOfArticle: 'Covers most of the article · ~{minutes} min',
 };
 type Copy = Record<keyof typeof en, string>;
 const copies: Record<UiLanguage, Copy> = {
@@ -33,6 +34,7 @@ const copies: Record<UiLanguage, Copy> = {
     stale:
       'Статья изменилась. Откройте карточку снова, чтобы обновить фрагменты.',
     hint: 'С контекстом · ~{minutes} мин',
+    mostOfArticle: 'Почти вся статья · ~{minutes} мин',
   },
   de: {
     title: 'Textstellen für Sie',
@@ -50,6 +52,7 @@ const copies: Record<UiLanguage, Copy> = {
     unavailable: 'KI-Auswahl nicht verfügbar · lokale Auswahl verwendet.',
     stale: 'Der Artikel hat sich geändert. Öffnen Sie die Karte erneut.',
     hint: 'Mit Kontext · ~{minutes} Min.',
+    mostOfArticle: 'Fast der gesamte Artikel · ~{minutes} Min.',
   },
   fr: {
     title: 'Passages pour vous',
@@ -67,6 +70,7 @@ const copies: Record<UiLanguage, Copy> = {
     unavailable: 'Sélection IA indisponible · sélection locale utilisée.',
     stale: 'L’article a changé. Rouvrez la carte.',
     hint: 'Avec contexte · ~{minutes} min',
+    mostOfArticle: 'Presque tout l’article · ~{minutes} min',
   },
   es: {
     title: 'Fragmentos para ti',
@@ -84,6 +88,7 @@ const copies: Record<UiLanguage, Copy> = {
     unavailable: 'Selección con IA no disponible · se usó la selección local.',
     stale: 'El artículo cambió. Abre la tarjeta de nuevo.',
     hint: 'Con contexto · ~{minutes} min',
+    mostOfArticle: 'Casi todo el artículo · ~{minutes} min',
   },
   it: {
     title: 'Passaggi per te',
@@ -101,6 +106,7 @@ const copies: Record<UiLanguage, Copy> = {
     unavailable: 'Selezione IA non disponibile · selezione locale utilizzata.',
     stale: 'L’articolo è cambiato. Riapri la scheda.',
     hint: 'Con contesto · ~{minutes} min',
+    mostOfArticle: 'Quasi tutto l’articolo · ~{minutes} min',
   },
   zh: {
     title: '适合你的段落',
@@ -116,6 +122,7 @@ const copies: Record<UiLanguage, Copy> = {
     unavailable: 'AI 段落选择不可用，已使用本地筛选。',
     stale: '文章已更改，请重新打开卡片。',
     hint: '含上下文 · 约 {minutes} 分钟',
+    mostOfArticle: '涵盖几乎整篇文章 · 约 {minutes} 分钟',
   },
   ar: {
     title: 'مقاطع مناسبة لك',
@@ -133,6 +140,7 @@ const copies: Record<UiLanguage, Copy> = {
       'اختيار المقاطع بالذكاء الاصطناعي غير متاح · تم استخدام الاختيار المحلي.',
     stale: 'تغيرت المقالة. افتح البطاقة مجددًا.',
     hint: 'مع السياق · نحو {minutes} دقيقة',
+    mostOfArticle: 'يشمل معظم المقالة · نحو {minutes} دقيقة',
   },
   hi: {
     title: 'आपके लिए अंश',
@@ -148,6 +156,7 @@ const copies: Record<UiLanguage, Copy> = {
     unavailable: 'AI चयन उपलब्ध नहीं है · स्थानीय चयन का उपयोग किया गया।',
     stale: 'लेख बदल गया है। कार्ड फिर से खोलें।',
     hint: 'संदर्भ सहित · लगभग {minutes} मिनट',
+    mostOfArticle: 'लगभग पूरा लेख · लगभग {minutes} मिनट',
   },
 };
 export function passageText(

@@ -246,7 +246,7 @@ describe('hover preview content script', () => {
     expect(hosts).toHaveLength(1);
     expect(hosts[0]?.dataset.attentionVersion).toBe(EXTENSION_RUNTIME_VERSION);
     expect(hosts[0]?.dataset.attentionContract).toBe(
-      'article-decision-confidence-v20',
+      'resource-entry-passages-v21',
     );
   });
 
@@ -273,7 +273,7 @@ describe('hover preview content script', () => {
     expect(hosts).toHaveLength(1);
     expect(hosts[0]).not.toBe(staleHost);
     expect(hosts[0]?.dataset.attentionContract).toBe(
-      'article-decision-confidence-v20',
+      'resource-entry-passages-v21',
     );
   });
 
@@ -1042,6 +1042,124 @@ describe('hover preview content script', () => {
     expect(host?.style.display).toBe('none');
   });
 
+  it.each(['current', 'changed-profile', 'ai'] as const)(
+    'keeps the immediate card and accepts only current local semantic results (%s)',
+    async (mode) => {
+      vi.useFakeTimers();
+      window.history.replaceState({}, '', '/article/semantic');
+      document.title = 'Checking generated answers';
+      document.body.innerHTML = `<main><article><a href="${window.location.href}"><h1>${document.title}</h1></a><h2>Verification</h2><p>Check factual claims against independent primary references.</p><h2>Limitations</h2><p>Agreement between models does not prove that an answer is true.</p><p>${'Check factual claims against independent primary references. '.repeat(25)}</p></article></main>`;
+      let finish: ((value: unknown) => void) | undefined;
+      let invalidate: ((message: unknown) => void) | undefined;
+      let fingerprint: string | undefined;
+      let count = 0;
+      const sendMessage = vi.fn().mockImplementation((message) => {
+        if (message.type === 'ATTENTION_SEMANTIC/PASSAGES') {
+          fingerprint = message.capture.readingMap.fingerprint;
+          return new Promise((resolve) => {
+            finish = resolve;
+          });
+        }
+        if (message.type !== 'ATTENTION_PREVIEW/REQUEST')
+          return Promise.resolve(undefined);
+        count++;
+        return Promise.resolve({
+          ok: true,
+          analysisSource: mode === 'ai' || count > 1 ? 'ai' : 'local',
+          aiState: 'ready',
+          preview: {
+            utilityScore: 78,
+            recommendedAction: 'open',
+            reason: 'Useful material.',
+            expectedValue: 'Evidence.',
+            risk: '',
+            confidence: 'high',
+            source: 'full-analysis',
+            signalIds: [],
+            calibrationSampleSize: 0,
+            components: {
+              relevance: 90,
+              novelty: 70,
+              actionability: 65,
+              quality: 85,
+            },
+            insights: {
+              keyClaims: [],
+              likelyNewClaims: [],
+              familiarClaims: [],
+              noveltySummary: '',
+              noveltyConfidence: 0.5,
+              qualityStrengths: [],
+              qualityLimitations: [],
+              qualityBreakdown: {
+                evidence: 80,
+                reasoning: 80,
+                specificity: 80,
+                calibration: 80,
+              },
+              qualitySummary: 'Specific workflow.',
+              qualityConfidence: 0.8,
+            },
+          },
+        });
+      });
+      Object.defineProperty(globalThis, 'chrome', {
+        configurable: true,
+        value: {
+          runtime: {
+            sendMessage,
+            onMessage: {
+              addListener: (listener: (message: unknown) => void) => {
+                invalidate = listener;
+              },
+              removeListener: vi.fn(),
+            },
+          },
+        },
+      });
+      installHoverPreview();
+      document
+        .querySelector('h1')!
+        .dispatchEvent(new Event('pointerover', { bubbles: true }));
+      await vi.advanceTimersByTimeAsync(500);
+      const host = document.querySelector<HTMLElement>(
+        '[data-attention-preview="true"]',
+      )!;
+      expect(host.style.display).toBe('block');
+      expect(host.dataset.attentionPassageMethod).toBe('heuristic');
+      if (mode === 'ai') {
+        expect(finish).toBeUndefined();
+        return;
+      }
+      expect(finish).toBeTypeOf('function');
+      if (mode === 'changed-profile') {
+        invalidate!({
+          type: 'ATTENTION_INPUTS/INVALIDATED',
+          changedKeys: ['personalProfile'],
+        });
+        await vi.advanceTimersByTimeAsync(500);
+        expect(host.dataset.attentionAnalysisSource).toBe('ai');
+      }
+      finish!({
+        ok: true,
+        selection: {
+          version: 1,
+          fingerprint,
+          source: 'local',
+          method: 'semantic',
+          coverage: 'complete',
+          status: 'no-match',
+          items: [],
+        },
+      });
+      await vi.advanceTimersByTimeAsync(10);
+      expect(host.dataset.attentionPassageMethod).toBe(
+        mode === 'current' ? 'semantic' : 'heuristic',
+      );
+      expect(host.dataset.attentionScore).toBe('78');
+    },
+  );
+
   it('opens the full card on a linked article title despite metadata hyphenation', async () => {
     vi.useFakeTimers();
     window.history.replaceState({}, '', '/home/post/p-215609071');
@@ -1583,9 +1701,7 @@ describe('hover preview content script', () => {
     );
     expect(host?.style.display).toBe('none');
     expect(host?.dataset.attentionExpanded).toBe('false');
-    expect(host?.dataset.attentionContract).toBe(
-      'article-decision-confidence-v20',
-    );
+    expect(host?.dataset.attentionContract).toBe('resource-entry-passages-v21');
   });
 
   it('does not render compact recommendations for links inside an open article', async () => {

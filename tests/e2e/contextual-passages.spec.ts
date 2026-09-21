@@ -172,6 +172,21 @@ for (const [mode, legacyPreference] of [
         'block',
       );
       if (mode !== 'local') {
+        if (mode === 'ai') {
+          // Opening a newer assessment must close the prior local reading session.
+          await clickCardElement(context, page, '.passages-button');
+          await expect(
+            page.locator('[data-attention-novel-passages]'),
+          ).toBeVisible();
+          await page.locator('[data-attention-trigger]').click();
+          await expect(page.locator('[data-attention-preview]')).toHaveCSS(
+            'display',
+            'block',
+          );
+          await expect(
+            page.locator('[data-attention-novel-passages]'),
+          ).toHaveCount(0);
+        }
         await clickCardElement(context, page, '.ai-button');
         await expect(page.locator('[data-attention-preview]')).toHaveAttribute(
           'data-attention-analysis-source',

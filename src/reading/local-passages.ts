@@ -9,7 +9,12 @@ import type {
   PageCapture,
   RelevantProfileContext,
 } from '../shared/types';
-import { articleMap, passageWindow, exactPassageWindow } from './blocks';
+import {
+  articleMap,
+  passageWindow,
+  exactPassageWindow,
+  isListIntroduction,
+} from './blocks';
 import type {
   ArticleBlock,
   ArticleMap,
@@ -112,7 +117,14 @@ export function mergePassages(
       blockIds: window.map((block) => block.id),
     };
     const overlapping = results.find((item) =>
-      item.blockIds.some((id) => normalized.blockIds.includes(id)),
+      map.blocks.find((block) => block.id === item.coreBlockId)?.kind ===
+        'list-item' &&
+      map.blocks.find((block) => block.id === normalized.coreBlockId)?.kind ===
+        'list-item'
+        ? item.coreBlockId === normalized.coreBlockId ||
+          item.blockIds.includes(normalized.coreBlockId) ||
+          normalized.blockIds.includes(item.coreBlockId)
+        : item.blockIds.some((id) => normalized.blockIds.includes(id)),
     );
     if (overlapping) {
       if (contextMode === 'preserve') continue;
@@ -175,7 +187,12 @@ export function selectLocalPassages(
       frequency.set(token, (frequency.get(token) ?? 0) + 1);
   const candidates: ReadingPassage[] = [];
   map.blocks.forEach((block, index) => {
-    if (block.text.length < 60 || blockAlreadyKnown(block, profile)) return;
+    if (
+      block.text.length < 60 ||
+      isListIntroduction(map, block) ||
+      blockAlreadyKnown(block, profile)
+    )
+      return;
     const tokens = tokenSets[index]!;
     let best: { score: number; basis: ReadingPassage['basis'] } | undefined;
     for (const query of queries) {
@@ -190,7 +207,9 @@ export function selectLocalPassages(
           0,
         ) / Math.sqrt(query.tokens.size);
       const structural =
-        block.kind === 'list' || block.kind === 'table'
+        block.kind === 'list' ||
+        block.kind === 'list-item' ||
+        block.kind === 'table'
           ? 0.35
           : GERMAN_PRACTICAL_MARKERS.test(block.text) ||
               /\b(?:because|however|unless|example|compare|steps|limitation)\b|потому|однако|например|сравн|огранич|исключ|шаг/iu.test(

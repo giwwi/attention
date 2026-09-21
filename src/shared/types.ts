@@ -389,7 +389,7 @@ export interface StoredEvaluation {
 }
 
 export interface EvaluationCacheVersion {
-  schemaVersion: 6 | 7 | 8 | 9 | 10;
+  schemaVersion: 6 | 7 | 8 | 9 | 10 | 11;
   profile: string;
   history: string;
   readwise: string;

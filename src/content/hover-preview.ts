@@ -48,6 +48,8 @@ import {
 } from './article-root';
 import { captureDocument, countWords, calculateReadingTime } from './capture';
 import { HOVER_PREVIEW_CONFIG } from './config';
+import { SEMANTIC_REQUEST } from '../semantic/model';
+import type { ReadingPassages } from '../reading/types';
 import {
   buildPageCaptureSignature,
   PageCaptureCache,
@@ -70,7 +72,7 @@ interface HoverPreviewGlobal {
 }
 
 const hoverGlobal = globalThis as typeof globalThis & HoverPreviewGlobal;
-const HOVER_CONTRACT_VERSION = 'article-decision-confidence-v20';
+const HOVER_CONTRACT_VERSION = 'resource-entry-passages-v21';
 const MATERIAL_TITLE_SELECTOR = [
   'h1',
   'h2',
@@ -111,15 +113,29 @@ const extractedPageCache = new PageCaptureCache<PageCapture | null>();
 
 export function previewVerdict(preview: HoverPreview): HoverPreviewVerdict {
   if (assessmentNeedsContext(preview.insights)) return 'maybe';
-  if (preview.recommendedAction === 'open') return 'read';
-  if (preview.recommendedAction === 'skip') return 'skip';
+  const decision = fullCardDecision(preview);
+  if (decision === 'read') return 'read';
+  if (decision === 'skip') return 'skip';
   return 'maybe';
 }
 
 export function fullCardDecision(preview: HoverPreview): MaterialDecision {
+  // A semantic body match supports selective reading, not a higher quality or novelty score.
+  if (hasSemanticPassages(preview) && preview.recommendedAction === 'skip')
+    return 'skim';
   if (preview.recommendedAction === 'open') return 'read';
   if (preview.recommendedAction === 'maybe') return 'skim';
   return preview.recommendedAction;
+}
+
+function hasSemanticPassages(preview: HoverPreview): boolean {
+  const selection = preview.insights?.readingPassages;
+  return (
+    selection?.source === 'local' &&
+    selection.method === 'semantic' &&
+    selection.status === 'ready' &&
+    selection.items.length > 0
+  );
 }
 
 function normalizedText(value: string | null | undefined): string {
@@ -1333,6 +1349,19 @@ export function personalValueReason(
   preview: HoverPreview,
   language: UiLanguage = DEFAULT_UI_LANGUAGE,
 ): string {
+  if (hasSemanticPassages(preview)) {
+    const focus = normalizedText(
+      preview.insights?.readingPassages?.items.find((item) => item.focus)
+        ?.focus,
+    );
+    return focus
+      ? assessmentNote(
+          language,
+          'focus',
+          focus.length > 160 ? `${focus.slice(0, 157)}…` : focus,
+        )
+      : assessmentNote(language, 'relatedPassages');
+  }
   const explanation = preview.insights?.assessmentReason;
   if (explanation?.language === language && explanation.text.trim())
     return normalizedText(explanation.text);
@@ -1387,7 +1416,13 @@ export function personalValueReason(
     return uiText(language, 'noStrongConnection');
   }
   const relevance = preview.components?.relevance ?? 50;
-  if (relevance < 50) return uiText(language, 'outsideInterests');
+  if (relevance < 50)
+    return assessmentNote(
+      language,
+      preview.insights?.readingPassages?.items.length
+        ? 'relatedPassages'
+        : 'noMatch',
+    );
   const relevanceText =
     relevance >= 70
       ? uiText(language, 'topicFits')
@@ -1520,6 +1555,7 @@ export function installHoverPreview(
   view.host.dataset.attentionContract = HOVER_CONTRACT_VERSION;
   view.host.dataset.attentionExpanded = 'false';
   const cache = new Map<string, HoverPreviewResponse>();
+  const semanticAttempted = new WeakSet<HoverPreviewResponse>();
   const savedUrls = new Set<string>();
   const novelPassages = new NovelPassageController();
   let activeTarget: HTMLElement | null = null;
@@ -1987,6 +2023,7 @@ export function installHoverPreview(
       hide();
       return;
     }
+    if (details.currentPage) novelPassages.clear();
     const verdict = previewVerdict(preview);
     const language = currentLanguage();
     view.card.dir = language === 'ar' ? 'rtl' : 'ltr';
@@ -2049,7 +2086,8 @@ export function installHoverPreview(
     activeReadwiseConnected = cachedResponse?.readwiseConnected === true;
     const hasPassages = activeNovelMatches.length > 0;
     view.verdict.textContent = expanded
-      ? assessmentNeedsContext(preview.insights)
+      ? assessmentNeedsContext(preview.insights) &&
+        !hasSemanticPassages(preview)
         ? assessmentNote(language, 'unclear')
         : primaryDecision === 'skim' && hasPassages
           ? assessmentNote(language, 'passages')
@@ -2074,16 +2112,20 @@ export function installHoverPreview(
         count: activeNovelMatches.length,
       },
     );
-    const passageMinutes = Math.max(
-      1,
-      calculateReadingTime(
-        countWords(
-          [...new Set(activeNovelMatches.map((match) => match.excerpt))].join(
+    const selectedBlockIds = new Set(
+      activeNovelMatches.flatMap((match) => match.passage?.blockIds ?? []),
+    );
+    const passageWords = countWords(
+      selectedBlockIds.size && cachedPageCapture?.readingMap
+        ? cachedPageCapture.readingMap.blocks
+            .filter((block) => selectedBlockIds.has(block.id))
+            .map((block) => block.text)
+            .join(' ')
+        : [...new Set(activeNovelMatches.map((match) => match.excerpt))].join(
             ' ',
           ),
-        ),
-      ),
     );
+    const passageMinutes = Math.max(1, calculateReadingTime(passageWords));
     const selection = preview.insights?.readingPassages;
     view.passageHint.hidden = !expanded || (!hasPassages && !selection);
     const passageStatus =
@@ -2094,7 +2136,10 @@ export function installHoverPreview(
             ((selection.modelCandidates ?? 0) > 0 || selection.items.length > 0)
             ? 'notShown'
             : 'empty'
-          : 'hint';
+          : cachedPageCapture &&
+              passageWords >= cachedPageCapture.wordCount * 0.85
+            ? 'mostOfArticle'
+            : 'hint';
     const coverageStatus =
       selection?.status === 'unavailable'
         ? 'unavailable'
@@ -2228,6 +2273,8 @@ export function installHoverPreview(
     view.host.dataset.attentionScenario = preview.scenario;
     view.host.dataset.attentionVerdict = verdict;
     view.host.dataset.attentionSource = preview.source;
+    view.host.dataset.attentionPassageMethod =
+      preview.insights?.readingPassages?.method ?? 'heuristic';
     view.host.dataset.attentionHeadline = view.verdict.textContent;
     view.host.dataset.attentionScore = String(preview.utilityScore ?? '');
     view.host.dataset.attentionDecision = primaryDecision;
@@ -2252,6 +2299,56 @@ export function installHoverPreview(
       focusTarget.focus({ preventScroll: true });
     }
     emitPreviewEvent('shown', details, preview);
+    // Paint the fast card first. Slow local inference must neither delay it nor
+    // replace a later cloud result, a changed profile, or another article.
+    if (
+      expanded &&
+      pageCapture &&
+      cachedResponse?.analysisSource === 'local' &&
+      cachedResponse.preview.insights &&
+      !semanticAttempted.has(cachedResponse)
+    ) {
+      const original = cachedResponse;
+      semanticAttempted.add(original);
+      void chrome.runtime
+        .sendMessage({ type: SEMANTIC_REQUEST, capture: pageCapture })
+        .then(
+          (
+            response: { ok?: boolean; selection?: ReadingPassages } | undefined,
+          ) => {
+            if (
+              !response?.ok ||
+              !response.selection ||
+              response.selection.method !== 'semantic' ||
+              response.selection.fingerprint !==
+                pageCapture.readingMap?.fingerprint ||
+              cache.get(key) !== original ||
+              listenerController.signal.aborted
+            )
+              return;
+            const next: HoverPreviewResponse = {
+              ...original,
+              preview: {
+                ...original.preview,
+                insights: {
+                  ...original.preview.insights!,
+                  readingPassages: response.selection,
+                },
+              },
+            };
+            semanticAttempted.add(next);
+            cache.set(key, next);
+            if (
+              version === requestVersion &&
+              activeTarget === details.element &&
+              activeCacheKey === key
+            ) {
+              void show(details, version);
+            }
+          },
+        )
+        .catch(() => undefined);
+    }
     if (
       details.currentPage &&
       pendingCardOpen?.url === canonicalPageUrl(details.url)
@@ -2283,6 +2380,7 @@ export function installHoverPreview(
       };
       const key = activeCacheKey;
       const version = ++requestVersion;
+      novelPassages.clear();
       view.host.focus({ preventScroll: true });
       view.aiButton.disabled = true;
       view.aiButton.textContent = uiText(currentLanguage(), 'checkingWithAi');

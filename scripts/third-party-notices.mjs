@@ -15,6 +15,23 @@ const licensesDirectory = fileURLToPath(
   new URL('./licenses/', import.meta.url),
 );
 const missingPackageLicenses = {
+  'onnxruntime-web@1.22.0-dev.20250409-89f8206ba4': {
+    filename: 'onnxruntime-1.22-dev-LICENSE.txt',
+    license: 'MIT',
+    source:
+      'https://github.com/microsoft/onnxruntime/blob/89f8206ba4f1c22c39e0297fb55272e8ce8cd7d0/LICENSE',
+  },
+  'onnxruntime-common@1.22.0-dev.20250409-89f8206ba4': {
+    filename: 'onnxruntime-1.22-dev-LICENSE.txt',
+    license: 'MIT',
+    source:
+      'https://github.com/microsoft/onnxruntime/blob/89f8206ba4f1c22c39e0297fb55272e8ce8cd7d0/LICENSE',
+  },
+  'onnxruntime-common@1.21.0': {
+    filename: 'onnxruntime-1.21.0-LICENSE.txt',
+    license: 'MIT',
+    source: 'https://github.com/microsoft/onnxruntime/blob/v1.21.0/LICENSE',
+  },
   '@ai-sdk/provider-utils@5.0.36': {
     filename: 'ai-provider-utils-5.0.36-LICENSE.txt',
     license: 'Apache-2.0',

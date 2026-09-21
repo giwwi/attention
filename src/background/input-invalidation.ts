@@ -14,6 +14,7 @@ const INPUT_KEYS = new Set([
   'analysisContext',
   'aiAnalyzerSettings',
   'privacySettings',
+  'semanticSearchSettings',
   'browserHistoryEvidence',
   'browserHistorySettings',
   'readwiseEvidence',

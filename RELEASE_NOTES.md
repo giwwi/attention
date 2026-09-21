@@ -1,3 +1,15 @@
+# Attention 0.30.3 — local meaning search and focused reading-list passages
+
+- Add optional on-device multilingual passage search using multilingual-e5-small (ONNX q8). It is off by default, downloads about 135 MB of pinned public model data only after enabling, and keeps article/profile text on the device. Runtime JavaScript and WASM are bundled. No API key is required.
+- Let a semantic body-text match support a selective reading recommendation when lexical matching missed the connection. Name the matched goal or interest without increasing quality/novelty scores or claiming AI verification. This remains experimental retrieval, not a guarantee of usefulness.
+- Split reading lists into individual source descriptions, retaining introductions, parent entries and trailing caveats without absorbing sibling resources. Exclude subscription prompts. Local and API selection use the same structural boundaries; API instructions distinguish source descriptions from the unread linked papers.
+- Navigate selected passages in page order. Close the previous passage panel when reopening the article assessment or starting AI. Count shared context once when estimating reading time and say when selected passages cover most of the article. Invalidate older cached evaluations.
+- Strengthen the shared profile prompt for ChatGPT, Claude, Gemini, Copilot and Perplexity: use accessible evidence, separate goals/interests/learning/knowledge, and do not treat assistant replies or pasted sources as demonstrated user knowledge. Existing profiles are not rewritten.
+- Add the offscreen permission and local WASM execution needed for on-device inference. Model download requests go to Hugging Face; inference does not send article or profile text there. See [local semantic search](docs/LOCAL_SEMANTIC_SEARCH.md) for privacy boundaries and limitations.
+- GitHub release only. No Chrome Web Store upload, withdrawal or review changes.
+
+Validation: 856 unit/integration tests verified; one test exceeded its time limit during the combined run and passed with the full 29-test card suite on an isolated rerun. TypeScript, ESLint and production builds passed. Six browser scenarios verified article actions and local/API passage behavior; the long-context case passed after correcting a test that assumed local matches always exist. API responses are fixtures, not live generations. A separate browser check with the actual local model and a synthetic Russian profile selected two focused English resource entries, excluded unrelated neighbors and subscription text, matched card/panel counts, and closed the old panel when reopening the card. This is regression coverage and a smoke check, not a broad quality benchmark.
+
 # Attention 0.30.2 — your context, your choice
 
 - Replace the introductory checklist with a short invitation to bring your AI context into Attention and choose what to read on your own terms. The primary action is “Take my profile with me →”.

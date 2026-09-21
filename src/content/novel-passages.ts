@@ -1,4 +1,4 @@
-import { collectReadingBlocks } from './reading-blocks';
+import { collectReadingBlocks, readingBlockRanges } from './reading-blocks';
 import { passageWindow, exactPassageWindow } from '../reading/blocks';
 import { passageText } from '../i18n/passages';
 import type { ReadingPassage, ReadingPassages } from '../reading/types';
@@ -122,19 +122,21 @@ export function findNovelPassageMatches(
       if (trace) trace.invalidWindows++;
       continue;
     }
-    if (blocks.some((block) => used.has(block.id))) {
+    const core = map.blocks.find(
+      (block) => block.id === entry.passage!.coreBlockId,
+    )!;
+    if (
+      blocks.some(
+        (block) =>
+          used.has(block.id) && !core.contextBlockIds?.includes(block.id),
+      )
+    ) {
       if (trace) trace.overlapping++;
       continue;
     }
     const nodes = blocks.map((block) => elements.get(block.id)!);
-    const ranges = nodes.map((element) => {
-      const range = sourceDocument.createRange();
-      range.selectNodeContents(element);
-      return range;
-    });
-    const core = map.blocks.find(
-      (block) => block.id === entry.passage!.coreBlockId,
-    )!;
+    const blockRanges = nodes.map(readingBlockRanges);
+    const ranges = blockRanges.flat();
     const claim = entry.claim ?? {
       claim: core.text,
       sourceExcerpt: core.text,
@@ -151,10 +153,11 @@ export function findNovelPassageMatches(
       range: ranges[0]!,
       ranges,
       elements: nodes,
-      element: nodes[0]!,
+      element: core.kind === 'list-item' ? elements.get(core.id)! : nodes[0]!,
       score: entry.passage.score,
       passage: selection ? entry.passage : undefined,
-      coreRanges: ranges.filter((_, index) => blocks[index]!.id === core.id),
+      coreRanges:
+        blockRanges[blocks.findIndex((block) => block.id === core.id)],
       fingerprint: map.fingerprint,
     });
     blocks.forEach((block) => used.add(block.id));
@@ -262,6 +265,7 @@ export class NovelPassageController {
   private readwiseConnected = false;
   private language: UiLanguage = 'ru';
   private fallbackElements: HTMLElement[] = [];
+  private fallbackWrappers: HTMLElement[] = [];
 
   show(
     matches: NovelPassageMatch[],
@@ -282,7 +286,14 @@ export class NovelPassageController {
     )
       return false;
     this.clear();
-    this.matches = matches;
+    // Relevance decides what is selected, not the reading route. Navigate the
+    // selected windows from top to bottom without mutating the ranked results.
+    this.matches = [...matches].sort((left, right) => {
+      const position = left.element.compareDocumentPosition(right.element);
+      if (position & Node.DOCUMENT_POSITION_FOLLOWING) return -1;
+      if (position & Node.DOCUMENT_POSITION_PRECEDING) return 1;
+      return 0;
+    });
     this.capture = capture;
     this.language = options.language;
     this.readwiseConnected = options.readwiseConnected;
@@ -351,6 +362,9 @@ export class NovelPassageController {
       element.classList.remove('attention-potential-new-fallback');
     }
     this.fallbackElements = [];
+    for (const wrapper of this.fallbackWrappers)
+      wrapper.replaceWith(...wrapper.childNodes);
+    this.fallbackWrappers = [];
   }
 
   private applyHighlights(): void {
@@ -375,7 +389,11 @@ export class NovelPassageController {
     if (css?.highlights && HighlightConstructor) {
       css.highlights.set(
         HIGHLIGHT_NAME,
-        new HighlightConstructor(...(match.ranges ?? [match.range])),
+        new HighlightConstructor(
+          ...(match.elements?.some((element) => element.matches('li'))
+            ? match.elements.flatMap(readingBlockRanges)
+            : (match.ranges ?? [match.range])),
+        ),
       );
       return;
     }
@@ -383,7 +401,16 @@ export class NovelPassageController {
       new Set(match.elements ?? [match.element]),
     );
     for (const element of this.fallbackElements) {
-      element.classList.add('attention-potential-new-fallback');
+      if (element.matches('li')) {
+        for (const range of readingBlockRanges(element)) {
+          const node = range.startContainer;
+          const wrapper = document.createElement('span');
+          wrapper.className = 'attention-potential-new-fallback';
+          node.parentNode?.insertBefore(wrapper, node);
+          wrapper.append(node);
+          this.fallbackWrappers.push(wrapper);
+        }
+      } else element.classList.add('attention-potential-new-fallback');
     }
   }
 

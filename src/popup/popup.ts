@@ -20,6 +20,7 @@ import { isProfileReady } from '../profile/readiness';
 import { AiSettingsController } from './controllers/ai-settings-controller';
 import { SavedMaterialsController } from './controllers/saved-materials-controller';
 import { PrivacyController } from './controllers/privacy-controller';
+import { SemanticSettings } from '../semantic/settings-ui';
 import { BrowserHistoryController } from './controllers/browser-history-controller';
 import { ReadwiseController } from './controllers/readwise-controller';
 import { ObsidianController } from './controllers/obsidian-controller';
@@ -72,6 +73,10 @@ const readwiseSettingsPanel = getElement<HTMLElement>('readwise-settings');
 const profileRoot = getElement<HTMLElement>('profile-onboarding');
 const historyPanel = getElement<HTMLElement>('browser-history-setup');
 let language: UiLanguage = DEFAULT_UI_LANGUAGE;
+const semanticSettings = new SemanticSettings(
+  getElement<HTMLElement>('semantic-settings'),
+  () => language,
+);
 let popupInvalidated = false;
 let popupOperation: DataOperation | null = null;
 let needsOnboarding = true;
@@ -207,6 +212,7 @@ function showSettings(): void {
   navigation.hidden = true;
   backButton.hidden = false;
   settingsHome.hidden = false;
+  void semanticSettings.refresh();
   clearStatus();
 }
 function translate(): void {
@@ -235,6 +241,7 @@ function translate(): void {
   translatePilotLauncher(language);
   ai.renderState();
   privacy.translate();
+  semanticSettings.render();
   readwise.translate();
   obsidian.translate();
   notion.translate();

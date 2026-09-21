@@ -4,6 +4,8 @@ import {
   NovelPassageController,
 } from '../src/content/novel-passages';
 import type { KeyClaimAssessment, PageCapture } from '../src/shared/types';
+import { collectReadingBlocks } from '../src/content/reading-blocks';
+import type { ReadingPassages } from '../src/reading/types';
 import {
   scrollToHeading,
   clearRecommendedSectionHighlights,
@@ -32,9 +34,16 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-it.each([true, false])(
-  'shows only the current whole passage and clears previous paint (native highlights: %s)',
-  (native) => {
+it.each(
+  [true, false].flatMap((native) =>
+    (['legacy', 'local', 'ai', 'semantic'] as const).map((source) => ({
+      native,
+      source,
+    })),
+  ),
+)(
+  'navigates whole passages in article order (native highlights: $native, source: $source)',
+  ({ native, source }) => {
     document.body.innerHTML = `<article><h1>A useful article</h1>
     <h2>First section</h2><p>Solar cells reached a measured efficiency of 34 percent in the reported experiment.</p>
     <p>However, the experiment used controlled conditions and a small test sample.</p>
@@ -64,13 +73,47 @@ it.each([true, false])(
     const paragraphs = [...document.querySelectorAll('article p')].map(
       (p) => p.textContent!,
     );
-    const matches = findNovelPassageMatches(document, capture, [
-      claim(paragraphs[0]!),
-      claim(paragraphs[2]!),
-    ]);
+    const { map } = collectReadingBlocks(document.querySelector('article')!);
+    const selection: ReadingPassages | undefined =
+      source === 'legacy'
+        ? undefined
+        : {
+            version: 1,
+            fingerprint: map.fingerprint,
+            source: source === 'ai' ? 'ai' : 'local',
+            ...(source === 'semantic' ? { method: 'semantic' as const } : {}),
+            coverage: 'complete',
+            status: 'ready',
+            items: [
+              {
+                coreBlockId: map.blocks[2]!.id,
+                blockIds: [map.blocks[2]!.id],
+                basis: 'goal',
+                knowledge: 'unknown',
+                score: 0.95,
+              },
+              {
+                coreBlockId: map.blocks[0]!.id,
+                blockIds: [map.blocks[0]!.id, map.blocks[1]!.id],
+                basis: 'goal',
+                knowledge: 'unknown',
+                score: 0.85,
+              },
+            ],
+          };
+    const matches = findNovelPassageMatches(
+      document,
+      capture,
+      [claim(paragraphs[2]!), claim(paragraphs[0]!)],
+      3,
+      selection,
+    );
     expect(matches).toHaveLength(2);
-    expect(matches[0]?.excerpt).toContain(paragraphs[1]);
+    // Relevance can rank the later paragraph first. Reading navigation must not.
+    expect(matches[0]?.excerpt).toBe(paragraphs[2]);
+    expect(matches[1]?.excerpt).toContain(paragraphs[1]);
     scrollToHeading(document, 'First section');
+    vi.mocked(Element.prototype.scrollIntoView).mockClear();
     if (native) registry.set('attention-reading-core', new Set());
     const controller = new NovelPassageController();
     const highlighted = () =>
@@ -94,6 +137,9 @@ it.each([true, false])(
         document.querySelector('[data-attention-reading-target]'),
       ).toBeNull();
       expect(panel!.querySelector('.counter')?.textContent).toBe('1 из 2');
+      expect(vi.mocked(Element.prototype.scrollIntoView).mock.contexts).toEqual(
+        [document.querySelector('article p')],
+      );
       const readwise = panel!.querySelector<HTMLButtonElement>('.readwise')!;
       const readwiseHint = panel!.querySelector<HTMLElement>('.readwise-hint')!;
       expect(readwise.hidden).toBe(false);
@@ -107,9 +153,24 @@ it.each([true, false])(
       panel!.querySelector<HTMLButtonElement>('.next')!.click();
       expect(highlighted()).toEqual([paragraphs[2]]);
       expect(panel!.querySelector('.counter')?.textContent).toBe('2 из 2');
+      expect(
+        vi.mocked(Element.prototype.scrollIntoView).mock.contexts.at(-1),
+      ).toBe(document.querySelectorAll('article p')[2]);
       expect(readwise.disabled).toBe(true);
       panel!.querySelector<HTMLButtonElement>('.previous')!.click();
       expect(highlighted()).toEqual(paragraphs.slice(0, 2));
+      expect(
+        vi.mocked(Element.prototype.scrollIntoView).mock.contexts.at(-1),
+      ).toBe(document.querySelector('article p'));
+      expect(matches[0]?.excerpt).toBe(paragraphs[2]);
+      // Opening again must restart at the first position, even after navigation.
+      panel!.querySelector<HTMLButtonElement>('.next')!.click();
+      controller.show(matches, capture, {
+        language: 'ru',
+        readwiseConnected: false,
+      });
+      expect(highlighted()).toEqual(paragraphs.slice(0, 2));
+      expect(panel!.querySelector('.counter')?.textContent).toBe('1 из 2');
       expect(
         [...document.querySelectorAll('article p')].map((p) => p.textContent),
       ).toEqual(paragraphs);
@@ -158,7 +219,9 @@ it('isolates passage actions and rejects synthetic mutations even with privilege
   expect(readwise.disabled).toBe(false);
   expect(readwise.dataset.unavailable).toBe('false');
   expect(readwise.hasAttribute('aria-describedby')).toBe(false);
-  expect(panel!.querySelector<HTMLElement>('.readwise-hint')!.hidden).toBe(true);
+  expect(panel!.querySelector<HTMLElement>('.readwise-hint')!.hidden).toBe(
+    true,
+  );
   for (const selector of ['.known', '.novel', '.readwise'])
     panel!.querySelector<HTMLButtonElement>(selector)!.click();
   expect(sendMessage).not.toHaveBeenCalled();

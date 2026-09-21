@@ -71,8 +71,8 @@ export function createEvaluationCacheVersion(
   sources: EvaluationSourceVersions,
 ): EvaluationCacheVersion {
   return {
-    // Revision 10 adds German matching and language-specific AI explanations.
-    schemaVersion: 10,
+    // Resource entries now have independent anchors and structural context.
+    schemaVersion: 11,
     ...sources,
     articleText: features.articleTextFingerprint,
     analysisContext: analysisContextFingerprint(context),
@@ -85,7 +85,7 @@ function sameSources(
   context: AnalysisContext,
 ): boolean {
   return Boolean(
-    stored?.schemaVersion === 10 &&
+    stored?.schemaVersion === 11 &&
     stored.profile === sources.profile &&
     stored.history === sources.history &&
     stored.readwise === sources.readwise &&

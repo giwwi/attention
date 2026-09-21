@@ -2,7 +2,7 @@
 
 **A local-first Chrome extension that helps you find passages relevant to your task, with their context.**
 
-[Website](https://giwwi.github.io/attention/) · [Chrome Web Store](https://chromewebstore.google.com/detail/attention/fcclhejgaklnkfgalglcmhmledgefhhp) · [Latest release](https://github.com/giwwi/attention/releases/tag/v0.30.2)
+[Website](https://giwwi.github.io/attention/) · [Chrome Web Store](https://chromewebstore.google.com/detail/attention/fcclhejgaklnkfgalglcmhmledgefhhp) · [Latest release](https://github.com/giwwi/attention/releases/tag/v0.30.3)
 
 [![Attention — bring your profile into your own hands](docs/media/attention-your-context-poster.jpg)](https://giwwi.github.io/attention/#demo)
 
@@ -16,9 +16,11 @@ Before a profile is saved, cards invite you to create one. Personal reading reco
 
 ## Try it in Chrome
 
-Install the published extension from the [Chrome Web Store](https://chromewebstore.google.com/detail/attention/fcclhejgaklnkfgalglcmhmledgefhhp). The latest GitHub release is **0.30.2**. This update has not been submitted to the Chrome Web Store. The earlier 0.30.1 store submission is unchanged. Store updates become available after Google review. The instructions below install the latest GitHub build manually.
+Version 0.30.3 includes an opt-in experiment: **Settings → Find passages by meaning** downloads a local multilingual model for passage selection. It needs no API key and keeps profile/article text on the device. When it finds a connection missed by word matching, the card recommends starting with those passages without claiming verified novelty or raising the quality score. See [local semantic search](docs/LOCAL_SEMANTIC_SEARCH.md) for limitations and privacy details.
 
-1. Download and unzip the [version 0.30.2](https://github.com/giwwi/attention/releases/download/v0.30.2/attention-0.30.2.zip).
+Install the published extension from the [Chrome Web Store](https://chromewebstore.google.com/detail/attention/fcclhejgaklnkfgalglcmhmledgefhhp). The latest GitHub release is **0.30.3**. This update has not been submitted to the Chrome Web Store, and this release does not change any existing store submission. Store updates become available after Google review. The instructions below install the latest GitHub build manually.
+
+1. Download and unzip the [version 0.30.3](https://github.com/giwwi/attention/releases/download/v0.30.3/attention-0.30.3.zip).
 2. Open `chrome://extensions`.
 3. Enable **Developer mode**.
 4. Click **Load unpacked** and select the unzipped `attention-extension` folder.
@@ -45,13 +47,15 @@ No API key is required for the local evaluation. To configure optional AI analys
 
 All nine interface languages, including English, Deutsch and Русский, are available in one selector from the welcome screen. A selection updates the interface immediately and is saved with the profile in the encrypted vault.
 
-Local matching now includes bounded German word-family rules, selected equivalents across English, German and Russian, and German cues for examples, procedures and caveats. Passage selection preserves neighboring context. This remains lexical matching, not general translation or a claim of equal accuracy across languages. AI explanations follow the selected interface language, while article quotations retain their original text. Changing the language invalidates incompatible cached evaluations; it does not trigger an AI request.
+Local matching now includes bounded German word-family rules, selected equivalents across English, German and Russian, and German cues for examples, procedures and caveats. Passage selection preserves neighboring context. The default mode remains lexical matching. Optional local semantic search can also match different wording across languages; neither mode guarantees equal accuracy across languages. AI explanations follow the selected interface language, while article quotations retain their original text. Changing the language invalidates incompatible cached evaluations; it does not trigger an AI request.
 
 ## Contextual passages and clearer setup (0.29.0)
 
 Local selection scans paragraphs, lists and tables across the extracted article and ranks their connection to your current goal and selected profile interests or learning topics. Examples, procedures and limitations can qualify even when they are not central claims. A highlight keeps whole neighboring blocks needed for context, within the same section; one consistent highlight marks the selected passage and its context. If the context cannot fit without clipping, that candidate is omitted. The panel saves the full selected text to Readwise, including its context.
 
-Local matches are described as related to your goal or interests. Missing knowledge evidence does not make a passage “new.” The card says when no clear matches were found. Local selection is a lexical heuristic: it can miss paraphrases and cannot reliably establish what a person knows or whether every reference has enough context.
+Reading lists are split into individual source descriptions. A selected entry retains its introduction, parent entry and nearby caveats when needed, without highlighting sibling resources or subscription prompts. Reading a description is not the same as reading the linked source. Passage navigation follows page order, and reopening the article card closes the previous passage panel.
+
+Local matches are described as related to your goal or interests. Missing knowledge evidence does not make a passage “new.” The card says when no clear matches were found. Default local selection is a lexical heuristic: it can miss paraphrases and cannot reliably establish what a person knows or whether every reference has enough context.
 
 An explicit **Check with AI** asks for the article assessment and passage IDs in **one request**. Attention prepares complete passage windows with neighboring context before the request; the model selects from those exact windows using their IDs. Assessment and selection share the same source text. Unknown IDs and invalid relevance or confidence values are rejected. An AI passage may be labeled as a possible addition to your knowledge only when the model cites concrete, explicitly stated knowledge from the selected profile; this remains an estimate.
 
@@ -79,6 +83,7 @@ Attention is local-first. Read the [privacy policy](https://giwwi.github.io/atte
 
 - Local evaluation works without an account, analytics or AI. Stored article text and URLs, profile, goals, decisions, feedback, saved items, reading memory, history-derived data and source indexes are encrypted in your Chrome profile. Reading time and scroll progress support local feedback prompts.
 - Optional browser-history import derives local encounter fingerprints, visit statistics, topics and source hostnames. Attention does not retain the raw history list and attempts to release history permission after import.
+- Optional semantic passage search downloads public model data from Hugging Face after you enable it. The model runs locally; profile and article text are not sent to Hugging Face. Its public model cache is separate from the encrypted vault. See [local semantic search](docs/LOCAL_SEMANTIC_SEARCH.md).
 - **Local only** blocks cloud AI and is on by default. It does not block Readwise or other connected services when you explicitly use them.
 - An explicit AI article check sends Vercel AI Gateway and your selected model provider the article, current goal and selected profile, knowledge and derived history signals. AI-assisted profile creation instead sends your short self-description answers. The complete profile, raw history and imported note/highlight bodies are not sent to AI. Providers apply their own data policies and account terms.
 - Readwise import authenticates directly with Readwise using your token. **Save to Readwise** sends your selected quotation, article title, optional author, cleaned source URL and timestamp. Obsidian reads the folder you choose locally. Notion connection is unavailable in the standard release without a separately configured OAuth service.
@@ -110,7 +115,7 @@ pnpm build
 
 Load `dist/` through `chrome://extensions` → **Load unpacked**.
 
-For an existing unpacked installation, rebuild and click **Reload** in `chrome://extensions`, then refresh open article tabs. The current source build is 0.30.2. It introduces a shorter welcome focused on bringing your personal context from an AI assistant, followed by a clearer transition to protecting your data. This is the first packaged release under PolyForm Shield 1.0.0. See [release notes](RELEASE_NOTES.md). Earlier raw-score versions are excluded from the new calibration fit. A saved profile is still required for evaluation.
+For an existing unpacked installation, rebuild and click **Reload** in `chrome://extensions`, then refresh open article tabs. The current source build is 0.30.3. It adds optional local semantic passage search, improves the assistant profile prompt, and fixes oversized reading-list highlights and stale passage panels. It remains under PolyForm Shield 1.0.0. See [release notes](RELEASE_NOTES.md). Earlier raw-score versions are excluded from the new calibration fit. A saved profile is still required for evaluation.
 
 Useful commands:
 

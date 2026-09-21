@@ -1,4 +1,14 @@
-import { cp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
+import {
+  cp,
+  mkdir,
+  readFile,
+  readdir,
+  realpath,
+  rm,
+  writeFile,
+} from 'node:fs/promises';
+import path from 'node:path';
+import { createRequire } from 'node:module';
 import { build } from 'esbuild';
 import { writeThirdPartyNotices } from './third-party-notices.mjs';
 
@@ -30,6 +40,40 @@ if (notionOAuthBrokerUrl) {
 }
 
 const buildResults = await Promise.all([
+  ...['worker', 'offscreen'].map((name) =>
+    build({
+      entryPoints: [`src/semantic/${name}.ts`],
+      outfile: `dist/semantic-${name}.js`,
+      banner,
+      bundle: true,
+      format: 'esm',
+      target: 'chrome116',
+      metafile: true,
+      minify: true,
+      legalComments: 'none',
+      define,
+      alias: {
+        '@huggingface/transformers': path.resolve(
+          'node_modules/@huggingface/transformers/src/transformers.js',
+        ),
+      },
+      plugins: [
+        {
+          name: 'transformers-browser-only',
+          setup(builder) {
+            builder.onResolve(
+              { filter: /^(?:node:.*|onnxruntime-node|sharp)$/ },
+              (args) => ({ path: args.path, namespace: 'browser-empty' }),
+            );
+            builder.onLoad(
+              { filter: /.*/, namespace: 'browser-empty' },
+              () => ({ contents: 'export default {};', loader: 'js' }),
+            );
+          },
+        },
+      ],
+    }),
+  ),
   build({
     entryPoints: ['src/pilot/page.ts'],
     outfile: 'dist/pilot.js',
@@ -103,6 +147,29 @@ const buildResults = await Promise.all([
     define,
   }),
 ]);
+
+// MV3 permits model data downloads, but every executable runtime file is bundled.
+const transformersRequire = createRequire(
+  path.join(
+    await realpath('node_modules/@huggingface/transformers'),
+    'package.json',
+  ),
+);
+const ortDirectory = path.dirname(
+  transformersRequire.resolve('onnxruntime-web'),
+);
+await mkdir('dist/semantic-runtime', { recursive: true });
+const runtimeInputs = {};
+for (const filename of await readdir(ortDirectory)) {
+  if (!/^ort-wasm-simd-threaded(?:\.jsep)?\.(?:mjs|wasm)$/.test(filename))
+    continue;
+  const source = path.join(ortDirectory, filename);
+  await cp(source, `dist/semantic-runtime/${filename}`);
+  runtimeInputs[source] = { bytesInOutput: 1 };
+}
+buildResults.push({
+  metafile: { outputs: { runtime: { inputs: runtimeInputs } } },
+});
 
 await writeThirdPartyNotices({
   metafiles: buildResults.map((result) => result.metafile),

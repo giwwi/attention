@@ -82,7 +82,9 @@ const schemaExample = `{
 }`;
 
 function buildPrompt(providerName: string, source: string): string {
-  return `Create a portable profile for me using only information you actually know from our previous interactions or stored context in ${providerName}.
+  return `Help me take the useful context you have about me out of this chat. Create a portable reading profile using only interactions or stored context you can actually access in ${providerName}. Do not imply that you can see other chats or a complete history if you cannot.
+
+Attention will use this profile to choose articles and specific passages for me. Capture what I am trying to do, what I want to understand, and what I have already demonstrated that I know. The goal is useful distinctions, not a flattering biography or a list of everything we have mentioned.
 
 Return ONLY valid JSON. Do not use Markdown or add commentary. Follow this schema exactly, replacing PROVIDER with "${source}":
 
@@ -93,14 +95,14 @@ Rules:
 2. Distinguish explicit knowledge from inference through the confidence values. Use numbers from 0 to 1.
 3. Represent uncertainty explicitly and keep confidence conservative.
 4. Separate interest, expertise, and concrete knowledge. Interest or repeated questions about a topic are NOT evidence that I know it.
-5. Put a concrete item in demonstrated_knowledge only when I explained, applied, corrected, or explicitly stated it. Prefer demonstrated over explicitly_stated, and explicitly_stated over inferred.
+5. Put a concrete item in demonstrated_knowledge only when I explained, applied, corrected, or explicitly stated it. Your explanations, pasted articles, quoted text, and my requests to summarise something are NOT evidence that I know or endorse their contents. Prefer demonstrated over explicitly_stated, and explicitly_stated over inferred.
 6. Expertise is only a broad prior. Never infer that I know a specific fact merely because I have advanced expertise in its domain.
 7. Use learning_areas for topics I am actively trying to understand. High interest plus repeated requests for explanation usually belongs here, not in demonstrated_knowledge.
 8. Record genuine ambiguity in uncertainties rather than guessing. Keep confidence conservative.
 9. Include only information useful for evaluating whether future content is worth my attention: interests, active goals, broad expertise, concrete knowledge, learning areas, content preferences, leisure preferences, and low-value topics.
 10. Do not create a personality or psychological profile.
 11. Exclude sensitive or unnecessary personal information, including health data, religion, political affiliation, sexual life or orientation, precise location or address, financial account information, passwords, account identifiers, identification numbers, and private family information.
-12. Keep each text field concise. Do not include conversation excerpts.
+12. Keep each text field concise but self-contained. Use the language in which my goals and interests are best supported by our conversation (English, German, Russian, or another language). Preserve useful specialist terms; do not duplicate entries just to translate them. Do not include conversation excerpts.
 13. Before finalizing the profile, make a separate evidence pass devoted only to leisure and entertainment. Actively look for supported preferences in films, series, YouTube or other videos, documentaries, fiction and reading for pleasure, games, podcasts, humour, music, recreational browsing, genres, formats, creators, and dislikes.
 14. Leisure items must describe an actionable taste signal rather than a broad work topic. Prefer specific entries such as a genre, format, creator, recurring recreational topic, or dislike. Keep separate preferences as separate items.
 15. Use explicit positive or negative statements as the strongest evidence. Repeated voluntary selection, repeated engagement after consuming something, enthusiastic comparison, returning to a creator or series, and positive follow-up behaviour may be included as inferred evidence with conservative confidence. Do not require the exact words "I like" when this repeated behavioural evidence exists.
@@ -110,7 +112,14 @@ Rules:
 19. leisure_profile is mandatory. Never invent its contents. If at least one leisure preference has real evidence, use status "available" even when the profile is incomplete, keep unknown optional fields null, and set conservative confidence. Only when there is no supported leisure preference at all, return exactly status "insufficient_data", empty preferences, null novelty/effort/session values, and confidence 0.
 20. Aim for a small set of distinct, useful leisure signals rather than an exhaustive media history. Do not include titles or creators that merely appeared in conversation unless they support a genuine preference.
 21. Use empty arrays when another category is unknown. Omit content_preferences if unknown.
-22. Output only the JSON object.`;
+22. Write an active goal as an action plus its subject and intended outcome. For example, "Compare ways to evaluate factual accuracy of language-model answers for a quality-review workflow" is more useful than "AI" or "career growth". This is a formatting example, not information about me; never copy it into my profile without evidence.
+23. Keep distinct goals separate. Prefer recent, repeated or explicitly prioritised goals; mark clearly superseded goals paused or completed. A one-off question is not automatically a lasting goal or interest. If timing is unclear, record that uncertainty instead of inventing urgency.
+24. Interests describe subjects I voluntarily return to. Learning areas describe the specific questions, skills, methods or distinctions I still want to understand. Expertise describes a broad level, supported by a short basis. These categories may overlap in subject but must not repeat the same vague sentence.
+25. In demonstrated_knowledge, state the actual concept or claim, with the conditions or limitation I demonstrated. For example, knowing a basic definition does not imply knowing applications, counterexamples or advanced techniques. Never expand narrow evidence into mastery of an entire field.
+26. Record low_value_topics only when I actually indicated that this content is not useful to me. Unmentioned topics, unknown knowledge, disagreement with an author, and beginner material in an unrelated field are not grounds for exclusion. Keep exclusions narrow enough not to suppress adjacent interests.
+27. Before answering, check each entry against evidence you can access. Remove unsupported specifics, duplicated paraphrases and contradictions. Preserve meaningful boundaries: what I know versus what I am learning, an active task versus a general interest, work versus leisure. Do not invent tools, methods, employers, dates, constraints or desired outcomes to make an entry sound specific.
+28. Aim for at most 8 active goals, 12 interests, 8 learning areas and 15 concrete knowledge items. These are ceilings, not targets: a short accurate profile is better than filling every category. If accessible context is sparse, return only supported entries and describe that limitation in uncertainties. Do not claim the profile is complete.
+29. Output only the JSON object.`;
 }
 
 export const PROFILE_PROVIDERS: Record<ExternalProfileSource, ProfileProvider> =

@@ -908,3 +908,10 @@ summary {
     grid-template-columns: 1fr 1fr;
   }
 }
+#semantic-settings {
+  display: block;
+}
+#semantic-settings progress {
+  width: 100%;
+  margin-bottom: 12px;
+}

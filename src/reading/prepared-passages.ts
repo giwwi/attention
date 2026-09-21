@@ -1,4 +1,8 @@
-import { exactPassageWindow, passageWindow } from './blocks';
+import {
+  exactPassageWindow,
+  passageWindow,
+  isListIntroduction,
+} from './blocks';
 import type { ArticleBlock, ArticleMap } from './types';
 
 export interface PreparedPassage {
@@ -15,13 +19,23 @@ export interface PassageBatch {
 export function preparePassages(map: ArticleMap): PreparedPassage[] {
   const passages: PreparedPassage[] = [];
   for (const [index, core] of map.blocks.entries()) {
+    if (isListIntroduction(map, core)) continue;
     let window = passageWindow(map, core.id);
     if (!window.length) continue;
     // A short standalone sentence often needs its explanation. Prefer the next
     // paragraph; mandatory introductions and caveats are already included above.
-    if (window.length === 1 && core.text.length < 400) {
+    if (
+      core.kind !== 'list-item' &&
+      window.length === 1 &&
+      core.text.length < 400
+    ) {
       for (const neighbor of [map.blocks[index + 1], map.blocks[index - 1]]) {
-        if (!neighbor || neighbor.section !== core.section) continue;
+        if (
+          !neighbor ||
+          neighbor.kind === 'list-item' ||
+          neighbor.section !== core.section
+        )
+          continue;
         const expanded = passageWindow(map, core.id, [neighbor.id]);
         if (
           exactPassageWindow(

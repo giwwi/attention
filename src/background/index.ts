@@ -34,6 +34,17 @@ import {
 import { loadProfile } from '../profile/storage';
 import { isProfileReady } from '../profile/readiness';
 import { selectRelevantPersonalContext } from '../history/relevance';
+import {
+  controlSemantic,
+  installSemanticLifecycle,
+  rankLocally,
+  semanticEnabled,
+} from '../semantic/broker';
+import { SEMANTIC_CONTROL, SEMANTIC_REQUEST } from '../semantic/model';
+import {
+  prepareSemanticInput,
+  selectSemanticPassages,
+} from '../semantic/selection';
 import { aggregateBrowserHistory } from '../history/evidence';
 import {
   loadBrowserHistoryEvidence,
@@ -1196,6 +1207,96 @@ chrome.runtime.onMessage.addListener(
   createCardContextMessageHandler({ storageReady }),
 );
 chrome.runtime.onMessage.addListener(handleAiPassageDisplay);
+
+installSemanticLifecycle();
+const semanticTabs = new Set<number>();
+chrome.runtime.onMessage.addListener((message, sender, respond) => {
+  if (message?.type === SEMANTIC_CONTROL) {
+    if (
+      sender.id !== chrome.runtime.id ||
+      sender.url !== chrome.runtime.getURL('popup.html')
+    ) {
+      respond({ ok: false });
+      return;
+    }
+    void controlSemantic(message.action)
+      .then((status) => respond({ ok: true, status }))
+      .catch(() => respond({ ok: false }));
+    return true;
+  }
+  if (message?.type !== SEMANTIC_REQUEST) return;
+  if (
+    sender.id !== chrome.runtime.id ||
+    !isPageCapture(message.capture) ||
+    message.capture.content.length > 240_000 ||
+    !messageSenderMatchesPage(sender, message.capture.url)
+  ) {
+    respond({ ok: false });
+    return;
+  }
+  const tabId = sender.tab!.id!;
+  if (semanticTabs.has(tabId)) {
+    respond({ ok: false });
+    return;
+  }
+  semanticTabs.add(tabId);
+  void (async () => {
+    if (!(await semanticEnabled())) return { ok: false };
+    const operation = await beginDataOperation();
+    const observation = await observeDataOperation(operation);
+    try {
+      const capture: PageCapture = message.capture;
+      const profile = await loadProfile();
+      if (!profile || !isProfileReady(profile) || !capture.isArticle)
+        return { ok: false };
+      const context = await loadCurrentAnalysisContext();
+      const versions = await loadEvaluationSourceVersions(profile);
+      const [history, readwise, obsidian, notion, feedback] = await Promise.all(
+        [
+          loadBrowserHistoryEvidence(),
+          loadReadwiseEvidence(),
+          loadObsidianEvidence(),
+          loadNotionEvidence(),
+          loadNovelPassageFeedback(),
+        ],
+      );
+      const evidence = await selectRelevantPersonalContext(
+        profile,
+        history,
+        readwise,
+        obsidian,
+        notion,
+        capture,
+        context,
+        feedback,
+      );
+      const input = prepareSemanticInput(capture, profile, context, evidence);
+      if (!input.queries.length || !input.chunks.length) return { ok: false };
+      const scores = await rankLocally(input, observation.signal);
+      await assertDataOperationCurrent(operation);
+      // A changed goal, profile or source invalidates the asynchronous result.
+      if (
+        JSON.stringify(context) !==
+          JSON.stringify(await loadCurrentAnalysisContext()) ||
+        JSON.stringify(versions) !==
+          JSON.stringify(
+            await loadEvaluationSourceVersions(await loadProfile()),
+          )
+      )
+        return { ok: false };
+      return {
+        ok: true,
+        selection: selectSemanticPassages(capture, input, scores),
+      };
+    } finally {
+      observation.dispose();
+    }
+  })()
+    .then(respond)
+    .catch(() => respond({ ok: false }))
+    .finally(() => semanticTabs.delete(tabId));
+  return true;
+});
 
 chrome.runtime.onMessage.addListener(
   createBackgroundMessageRouter({
