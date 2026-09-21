@@ -153,6 +153,40 @@ test('opens an ordinary article with the keyboard and closes with Escape', async
   await expect(page.locator('[data-attention-trigger]')).toBeFocused();
 });
 
+test('hovering a hyphenated reader title analyzes the article instead of its background feed', async () => {
+  const readerUrl = 'http://127.0.0.1:4317/home/post/p-215609071';
+  const readerTitle =
+    'The AI-as-Normal-Technology view of loss-of-control incidents';
+  await context.route(readerUrl, (route) =>
+    route.fulfill({
+      contentType: 'text/html',
+      body: `<!doctype html><html lang="en"><head><title>The AI-as-Normal-Technology view of loss of control incidents</title>
+      <style>body{font:18px/1.5 system-ui}main{position:fixed;inset:0}article{position:relative;background:white;max-width:760px;margin:50px auto;padding:30px}article>a{font-size:34px}</style>
+      </head><body><main class="reader-nav-page"><div role="article">
+        <a href="/p/other">Another feed article</a><p>${'Background feed preview should not be captured. '.repeat(20)}</p>
+      </div></main><article>
+        <a data-reader-title href="https://www.normaltech.ai/p/the-ai-as-normal-technology-view">${readerTitle}</a>
+        ${'<p>The foreground article explains loss of control, evidence and practical implications for AI evaluation.</p>'.repeat(80)}
+      </article></body></html>`,
+    }),
+  );
+  await page.goto(readerUrl);
+  await expect(page.locator('article [data-attention-trigger]')).toBeAttached();
+  await page.locator('[data-reader-title]').hover();
+  const card = page.locator('[data-attention-preview]');
+  await expect(card).toHaveCSS('display', 'block');
+  await expect(card).toHaveAttribute('data-attention-expanded', 'true');
+  await expect(card).toHaveAttribute('data-attention-source', 'full-analysis');
+  // 80 paragraphs of the open article, not the short preview behind it.
+  await expect(card).toHaveAttribute(
+    'data-attention-reading-info',
+    /Full article · ~6 min/,
+  );
+  await page.screenshot({
+    path: 'output/article-title-recovery-20260921/browser-regression.png',
+  });
+});
+
 for (const placement of ['right', 'below', 'above'] as const) {
   test(`hover card stays reachable across a slow diagonal ${placement} transition`, async () => {
     await page.setViewportSize({ width: 1280, height: 900 });

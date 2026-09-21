@@ -176,6 +176,7 @@ export interface ReadwiseControllerOptions {
 }
 
 export class ReadwiseController {
+  private onClose: (() => void) | undefined;
   private readonly openButton = getElement<HTMLButtonElement>(
     'open-readwise-settings',
   );
@@ -261,12 +262,17 @@ export class ReadwiseController {
 
   hide(): void {
     this.panel.hidden = true;
+    this.tokenInput.value = '';
     this.openButton.setAttribute('aria-expanded', 'false');
-    this.options.profileRoot.hidden = false;
+    const onClose = this.onClose;
+    this.onClose = undefined;
+    if (onClose) onClose();
+    else this.options.profileRoot.hidden = false;
   }
 
-  private async show(): Promise<void> {
+  async show(onClose?: () => void): Promise<void> {
     await this.refresh();
+    this.onClose = onClose;
     this.options.profileRoot.hidden = true;
     this.options.savedMaterialsView.hidden = true;
     this.options.aiSettingsPanel.hidden = true;

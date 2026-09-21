@@ -132,6 +132,13 @@ for (const provider of [
       await expect(setup.locator('#profile-review-step')).toBeVisible();
       await setup.locator('#save-profile').click();
       await createVaultThroughUi(setup);
+      await expect(setup.locator('#optional-sources')).toBeVisible();
+      await expect(setup.locator('#optional-sources')).toContainText(
+        'Это необязательно.',
+      );
+      await setup.locator('#optional-sources-continue').click();
+      await expect(setup.locator('#optional-ai')).toBeVisible();
+      await setup.locator('#optional-ai-skip').click();
       await expect(setup.locator('#profile-complete-step')).toBeVisible();
       const saved = await worker.evaluate(async () =>
         attentionVault.privateStorage.get([

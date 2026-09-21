@@ -114,6 +114,37 @@ describe('captureDocument', () => {
     expect(capture.wordCount).toBeGreaterThan(250);
     expect(capture.isArticle).toBe(true);
   });
+
+  it('captures a linked article title with different hyphenation in metadata', () => {
+    const title =
+      'The AI-as-Normal-Technology view of loss-of-control incidents';
+    document.title =
+      'The AI-as-Normal-Technology view of loss of control incidents';
+    document.body.innerHTML = `
+      <main class="reader-nav-page">
+        <div role="article"><a href="https://example.com/p/another-post">Another feed post</a>
+          <p>${'Background feed preview must not be analyzed. '.repeat(40)}</p>
+        </div>
+      </main>
+      <article class="newsletter-post post-viewer-post">
+        <a href="https://www.normaltech.ai/p/the-ai-as-normal-technology-view">${title}</a>
+        ${'<p>The foreground article discusses loss of control, evidence, practical examples and implications for AI evaluation.</p>'.repeat(80)}
+      </article>`;
+
+    const capture = captureDocument(
+      document,
+      'https://substack.com/home/post/p-215609071',
+    );
+
+    expect(capture.title).toBe(title);
+    expect(capture.content).toContain(
+      'The foreground article discusses loss of control',
+    );
+    expect(capture.content).not.toContain('Background feed preview');
+    expect(capture.wordCount).toBeGreaterThan(1_000);
+    expect(capture.readingTimeMinutes).toBeGreaterThan(4);
+    expect(capture.isArticle).toBe(true);
+  });
 });
 
 describe('reading metrics', () => {

@@ -62,6 +62,90 @@ async function eraseFromPopup(page: Page): Promise<void> {
   await expectVaultEmpty(worker);
 }
 
+test('privacy screen keeps details optional while mode, reports and deletion remain usable', async () => {
+  test.setTimeout(60_000);
+  const page = await extensionPage();
+  await page.setViewportSize({ width: 352, height: 600 });
+  await page.locator('#open-popup-settings').click();
+  for (const [language, title, help] of [
+    ['en', 'Privacy and data', 'Help with a problem'],
+    ['de', 'Datenschutz und Daten', 'Hilfe bei Problemen'],
+    ['ru', 'Конфиденциальность и данные', 'Помощь при неполадках'],
+  ]) {
+    await page.locator('#interface-language').selectOption(language);
+    await page.locator('#open-privacy-settings').click();
+    await expect(page.locator('#privacy-settings-title')).toHaveText(title);
+    await expect(page.locator('#privacy-help-title')).toHaveText(help);
+    await expect(page.locator('#export-diagnostic-profile')).toBeHidden();
+    await expect(page.locator('#gateway-disclosure-description')).toBeHidden();
+    await expect(page.locator('#site-access-description')).toBeHidden();
+    await expect(page.locator('#session-status')).toHaveCount(0);
+    await page.emulateMedia({
+      colorScheme: language === 'en' ? 'light' : 'dark',
+    });
+    await page.screenshot({
+      path: `output/privacy-screen-20260921/privacy-${language}.png`,
+      fullPage: true,
+    });
+    expect(
+      await page.evaluate(() => document.documentElement.scrollWidth),
+    ).toBeLessThanOrEqual(352);
+    await page.locator('#gateway-disclosure-title').focus();
+    await page.keyboard.press('Enter');
+    await expect(page.locator('#gateway-disclosure-description')).toBeVisible();
+    await expect(page.locator('#gateway-disclosure-description')).toContainText(
+      'Vercel AI Gateway',
+    );
+    await page.keyboard.press('Enter');
+    await page.locator('#close-privacy-settings').click();
+  }
+  await page.locator('#interface-language').selectOption('en');
+  await page.locator('#open-privacy-settings').click();
+  await page.locator('#local-only-mode').uncheck();
+  await expect
+    .poll(() =>
+      worker.evaluate(
+        async () =>
+          (await attentionVault.privateStorage.get('privacySettings'))
+            .privacySettings.localOnly,
+      ),
+    )
+    .toBe(false);
+  await page.locator('#local-only-mode').check();
+  await expect
+    .poll(() =>
+      worker.evaluate(
+        async () =>
+          (await attentionVault.privateStorage.get('privacySettings'))
+            .privacySettings.localOnly,
+      ),
+    )
+    .toBe(true);
+  await page.locator('#privacy-help-title').click();
+  const download = page.waitForEvent('download');
+  await page.locator('#export-diagnostic-profile').click();
+  expect((await download).suggestedFilename()).toMatch(
+    /^attention-diagnostic-profile-.*\.json$/,
+  );
+  await page.locator('#export-ai-analysis').click();
+  await expect(page.locator('#ai-report-status')).toContainText(
+    'No report yet',
+  );
+  await page.locator('#clear-diagnostics').click();
+  await expect(page.locator('#diagnostics-summary')).toHaveText(
+    'No errors recorded.',
+  );
+  page.once('dialog', async (dialog) => {
+    expect(dialog.message()).toContain('This cannot be undone');
+    await dialog.dismiss();
+  });
+  await page.locator('#delete-all-data').click();
+  await expect(page.locator('#privacy-settings')).toBeVisible();
+  await page.locator('#close-privacy-settings').click();
+  await page.locator('#open-privacy-settings').click();
+  await expect(page.locator('#local-only-mode')).toBeChecked();
+});
+
 interface DomNode {
   nodeId: number;
   backendNodeId: number;

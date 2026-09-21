@@ -67,12 +67,18 @@ describe('profile language switching', () => {
     'translates optional browser history setup into %s',
     (language) => {
       const parsed = new DOMParser().parseFromString(popup, 'text/html');
-      const root = parsed.getElementById('browser-history-setup')!;
-      document.body.append(root);
-      const translate = captureProfileLabels(root);
-      document.documentElement.lang = language;
-      translate();
-      expect(root.textContent).not.toMatch(/[а-яё]/iu);
+      for (const id of [
+        'browser-history-setup',
+        'optional-sources',
+        'optional-ai',
+      ]) {
+        const root = parsed.getElementById(id)!;
+        document.body.append(root);
+        const translate = captureProfileLabels(root);
+        document.documentElement.lang = language;
+        translate();
+        expect(root.textContent).not.toMatch(/[а-яё]/iu);
+      }
     },
   );
 

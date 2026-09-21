@@ -1042,6 +1042,79 @@ describe('hover preview content script', () => {
     expect(host?.style.display).toBe('none');
   });
 
+  it('opens the full card on a linked article title despite metadata hyphenation', async () => {
+    vi.useFakeTimers();
+    window.history.replaceState({}, '', '/home/post/p-215609071');
+    const title =
+      'The AI-as-Normal-Technology view of loss-of-control incidents';
+    document.title =
+      'The AI-as-Normal-Technology view of loss of control incidents';
+    document.body.innerHTML = `
+      <main class="reader-nav-page"><div role="article">
+        <a href="https://example.com/p/another">Another feed story</a>
+        <p>${'Background feed preview should not be analyzed. '.repeat(40)}</p>
+      </div></main>
+      <article>
+        <a data-current-title href="https://www.normaltech.ai/p/the-ai-as-normal-technology-view">${title}</a>
+        ${'<p>The foreground article explains loss of control, evidence and practical implications for AI evaluation.</p>'.repeat(80)}
+      </article>`;
+    const sendMessage = vi.fn().mockResolvedValue({
+      ok: true,
+      preview: {
+        utilityScore: 76,
+        recommendedAction: 'open',
+        reason: 'Useful material.',
+        expectedValue: 'New evidence.',
+        risk: 'Some familiar context.',
+        confidence: 'high',
+        source: 'full-analysis',
+        signalIds: [],
+        calibrationSampleSize: 0,
+        components: {
+          relevance: 82,
+          novelty: 69,
+          actionability: 73,
+          quality: 81,
+        },
+        estimatedUsefulMinutes: 7,
+      },
+    });
+    Object.defineProperty(globalThis, 'chrome', {
+      configurable: true,
+      value: { runtime: { sendMessage } },
+    });
+
+    installHoverPreview();
+    expect(
+      document.querySelector('article [data-attention-trigger]'),
+    ).not.toBeNull();
+    document
+      .querySelector('[data-current-title]')
+      ?.dispatchEvent(new Event('pointerover', { bubbles: true }));
+    await vi.advanceTimersByTimeAsync(150);
+
+    expect(sendMessage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: 'ATTENTION_PREVIEW/REQUEST',
+        capture: expect.objectContaining({
+          title,
+          content: expect.stringContaining(
+            'The foreground article explains loss of control',
+          ),
+        }),
+      }),
+    );
+    const capture = sendMessage.mock.calls.find(
+      ([message]) => message.capture,
+    )?.[0].capture;
+    expect(capture.content).not.toContain('Background feed preview');
+    const host = document.querySelector<HTMLElement>(
+      '[data-attention-preview="true"]',
+    );
+    expect(host?.style.display).toBe('block');
+    expect(host?.dataset.attentionExpanded).toBe('true');
+  });
+
   it('shows the expanded card on the first SPA open while the feed stays mounted', async () => {
     vi.useFakeTimers();
     const title = 'What makes slop, slop?';

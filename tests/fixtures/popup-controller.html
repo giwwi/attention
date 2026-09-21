@@ -610,21 +610,6 @@
       </section>
 
       <section id="settings-home" class="settings-home" hidden>
-        <label
-          class="settings-card settings-toggle-card"
-          for="novel-passage-highlights"
-        >
-          <span class="settings-row-copy">
-            <strong data-i18n="potentialNewPassages"
-              >Подсвечивать потенциально новое</strong
-            >
-            <small data-i18n="potentialNewPassagesDescription"
-              >До трёх фрагментов — только по вашему запросу</small
-            >
-          </span>
-          <input id="novel-passage-highlights" type="checkbox" />
-        </label>
-
         <section
           id="profile-bar"
           class="settings-card settings-account-card"
@@ -875,102 +860,116 @@
         hidden
       >
         <div class="privacy-settings-header">
-          <div>
-            <p id="privacy-eyebrow" class="eyebrow">Контроль пользователя</p>
-            <h2 id="privacy-settings-title">Приватность и данные</h2>
-          </div>
+          <h2 id="privacy-settings-title">Конфиденциальность и данные</h2>
           <button id="close-privacy-settings" type="button">Готово</button>
         </div>
 
         <section class="privacy-panel privacy-mode-panel">
           <label class="privacy-toggle" for="local-only-mode">
             <span>
-              <strong id="local-only-title">Только локально</strong>
+              <strong id="local-only-title"
+                >Работать только на устройстве</strong
+              >
               <small id="local-only-description"
-                >Жёстко запрещает любые облачные AI-запросы</small
+                >Не отправлять статьи и данные профиля в ИИ.</small
               >
             </span>
-            <input id="local-only-mode" type="checkbox" />
+            <input
+              id="local-only-mode"
+              type="checkbox"
+              aria-describedby="local-only-description local-only-status"
+            />
           </label>
-          <p id="local-only-status" class="privacy-status"></p>
+          <p id="local-only-status" class="privacy-status" role="status"></p>
         </section>
 
-        <section class="privacy-panel">
-          <h3 id="gateway-disclosure-title">Когда используется Gateway</h3>
+        <p id="privacy-ai-summary">
+          Когда вы запускаете проверку с ИИ, текст статьи и выбранные сведения
+          из профиля передаются сервису анализа.
+        </p>
+        <details class="privacy-disclosure">
+          <summary id="gateway-disclosure-title">
+            Какие данные передаются
+          </summary>
           <p id="gateway-disclosure-description">
-            Только после вашего действия и только если локальный режим выключен.
-            Передаются текст текущей страницы, задача и не более нескольких
-            локально выбранных сигналов — никогда не полный профиль.
+            По вашему запросу Vercel AI Gateway и выбранная модель получают
+            текст статьи, вашу цель и выбранные сведения из профиля, знаний и
+            истории. При создании профиля с ИИ передаются ваши ответы. Полный
+            профиль и исходные заметки не отправляются. Локальный режим
+            запрещает эти ИИ-запросы; синхронизация подключённых сервисов
+            остаётся доступной по вашему действию.
           </p>
-        </section>
+        </details>
 
-        <section class="privacy-panel">
-          <h3 id="site-access-title">Доступ ко всем сайтам</h3>
+        <details class="privacy-disclosure">
+          <summary id="site-access-title">Зачем нужен доступ к сайтам</summary>
           <p id="site-access-description">
             Он нужен, чтобы карточки работали на обычных веб-страницах.
             Attention читает видимый текст локально; само разрешение не означает
             отправку данных в сеть.
           </p>
-        </section>
+        </details>
 
-        <section class="privacy-panel">
-          <h3 id="session-title">Публичная сессия</h3>
-          <p id="session-status" class="privacy-status"></p>
-        </section>
-
-        <section class="privacy-panel">
-          <h3 id="profile-export-title">Диагностический профиль</h3>
-          <p id="profile-export-description">
-            Скачивает сигналы профиля и агрегированную статистику для анализа.
-            Без ключей, токенов, списка посещённых страниц и текстов заметок.
+        <details id="privacy-help" class="privacy-disclosure">
+          <summary id="privacy-help-title">Помощь при неполадках</summary>
+          <p id="privacy-help-description">
+            Если что-то не работает, сохраните отчёт для поддержки. Ничего не
+            отправляется автоматически.
           </p>
-          <div class="privacy-actions">
-            <button
-              id="export-diagnostic-profile"
-              class="privacy-primary-action"
-              type="button"
-            >
-              Скачать безопасный JSON
-            </button>
-          </div>
-        </section>
+          <section class="privacy-panel">
+            <h3 id="profile-export-title">Отчёт для поддержки</h3>
+            <p id="profile-export-description">
+              Версия расширения и общая статистика. Без содержимого профиля,
+              статей, заметок, адресов и ключей.
+            </p>
+            <div class="privacy-actions">
+              <button id="export-diagnostic-profile" type="button">
+                Скачать отчёт
+              </button>
+            </div>
+          </section>
 
-        <section class="privacy-panel">
-          <h3 id="ai-report-title">Последняя проверка с ИИ</h3>
-          <p id="ai-report-description">
-            Если ИИ не показывает фрагменты, скачайте отчёт после проверки
-            статьи. Без текста статьи, профиля и ключей.
-          </p>
-          <div class="privacy-actions">
-            <button id="export-ai-analysis" type="button">
-              Скачать отчёт ИИ-анализа
-            </button>
-          </div>
-          <p id="ai-report-status" class="privacy-status" role="status"></p>
-        </section>
+          <section class="privacy-panel">
+            <h3 id="ai-report-title">Последняя проверка с ИИ</h3>
+            <p id="ai-report-description">
+              Поможет разобраться с результатом проверки статьи. Без текста
+              статьи, профиля и ключей.
+            </p>
+            <div class="privacy-actions">
+              <button id="export-ai-analysis" type="button">
+                Скачать отчёт ИИ-анализа
+              </button>
+            </div>
+            <p id="ai-report-status" class="privacy-status" role="status"></p>
+          </section>
 
-        <section class="privacy-panel">
-          <h3 id="diagnostics-title">Диагностика</h3>
-          <p id="diagnostics-summary" class="privacy-status"></p>
-          <p id="diagnostics-description">
-            Журнал содержит только коды сбоев и время. Без URL, текста страниц,
-            профиля, ключей, токенов и исходных сообщений ошибок.
-          </p>
-          <div class="privacy-actions">
-            <button id="copy-diagnostics" type="button">
-              Копировать диагностику
-            </button>
-            <button id="clear-diagnostics" type="button">Очистить</button>
-          </div>
-        </section>
+          <section class="privacy-panel">
+            <h3 id="diagnostics-title">Журнал ошибок</h3>
+            <p
+              id="diagnostics-summary"
+              class="privacy-status"
+              role="status"
+            ></p>
+            <p id="diagnostics-description">
+              Поможет найти причину сбоя. Без содержимого страниц, профиля,
+              адресов и ключей.
+            </p>
+            <div class="privacy-actions">
+              <button id="copy-diagnostics" type="button">
+                Копировать журнал
+              </button>
+              <button id="clear-diagnostics" type="button">Очистить</button>
+            </div>
+          </section>
+        </details>
 
         <section class="privacy-panel privacy-danger-panel">
-          <h3 id="delete-all-title">Удалить все данные Attention</h3>
+          <h3 id="delete-all-title">Удалить мои данные</h3>
           <p id="delete-all-description">
-            Удалит профиль, историю, сохранённые материалы, настройки,
-            диагностику, сессию и подключённый Gateway-ключ из Chrome.
+            Удалит данные Attention из этого браузера: профиль, сохранённые
+            материалы, настройки и подключения. Отменить это нельзя.
           </p>
-          <button id="delete-all-data" type="button">Удалить всё</button>
+          <button id="delete-all-data" type="button">Удалить мои данные</button>
         </section>
       </section>
 

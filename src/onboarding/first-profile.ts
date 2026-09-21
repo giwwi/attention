@@ -9,6 +9,7 @@ import { ProfileOnboarding } from './profile-onboarding';
 import { ProfileSaveDeferredError, type ProfilePersistence } from './profile-persistence';
 import { loadProfileHandoffState, saveProfileHandoffState, clearProfileHandoffState } from './handoff/state';
 import { firstRunNoticePublisher } from './handoff/first-run-notice';
+import { OPTIONAL_SOURCES_PENDING_KEY } from './optional-sources-state';
 
 /** Neither Chrome storage, localStorage nor IndexedDB receives a plaintext draft. */
 export function createFirstProfilePersistence(
@@ -65,6 +66,7 @@ export function createFirstProfilePersistence(
         async remove() {},
       });
       records[UI_LANGUAGE_KEY] = getLanguage();
+      records[OPTIONAL_SOURCES_PENDING_KEY] = true;
       try {
         await protect(records);
       } catch (error) {

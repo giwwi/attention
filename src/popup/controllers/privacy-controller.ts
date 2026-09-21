@@ -3,7 +3,6 @@ import {
   assertDataOperationCurrent,
   withAttentionDataLock,
 } from '../../privacy/data-operations';
-import { loadPublicSession } from '../../auth/session';
 import {
   clearDiagnostics,
   diagnosticsExport,
@@ -26,20 +25,19 @@ import {
 interface PrivacyCopy {
   navigationTitle: string;
   navigationDescription: string;
-  eyebrow: string;
   title: string;
   done: string;
   localTitle: string;
   localDescription: string;
   localOn: string;
   localOff: string;
+  aiSummary: string;
+  helpTitle: string;
+  helpDescription: string;
   gatewayTitle: string;
   gatewayDescription: string;
   accessTitle: string;
   accessDescription: string;
-  sessionTitle: string;
-  sessionActive: string;
-  sessionInactive: string;
   profileExportTitle: string;
   profileExportDescription: string;
   exportProfile: string;
@@ -67,122 +65,153 @@ interface PrivacyCopy {
 const ru: PrivacyCopy = {
   aiReportTitle: 'Последняя проверка с ИИ',
   aiReportDescription:
-    'Если ИИ не показывает фрагменты, скачайте этот отчёт после проверки статьи. Он покажет, на каком шаге они пропали. Без текста статьи, профиля и ключей.',
+    'Поможет разобраться с результатом проверки статьи. Без текста статьи, профиля и ключей.',
   aiReportButton: 'Скачать отчёт ИИ-анализа',
   aiReportEmpty:
     'Отчёта пока нет. Откройте статью и нажмите «Проверить с AI» в карточке.',
   aiReportSaved: 'Отчёт скачан. Его можно прислать для разбора.',
-  navigationTitle: 'Приватность и данные',
-  navigationDescription: 'Локальный режим, разрешения и удаление',
-  eyebrow: 'Контроль пользователя',
-  title: 'Приватность и данные',
+  navigationTitle: 'Конфиденциальность и данные',
+  navigationDescription: 'Отправка данных в ИИ и удаление',
+  title: 'Конфиденциальность и данные',
   done: 'Готово',
-  localTitle: 'Только локально',
-  localDescription: 'Жёстко запрещает любые облачные AI-запросы',
-  localOn:
-    'Включено: облачный AI заблокирован. Подключённые сервисы работают по вашему запросу.',
-  localOff: 'Выключено: облачный AI доступен после вашего действия.',
-  gatewayTitle: 'Когда используется Gateway',
+  localTitle: 'Работать только на устройстве',
+  localDescription: 'Не отправлять статьи и данные профиля в ИИ.',
+  localOn: 'Включено. Проверка с ИИ отключена.',
+  localOff: 'Выключено. Проверка с ИИ — только по вашему запросу.',
+  aiSummary:
+    'Когда вы запускаете проверку с ИИ, текст статьи и выбранные сведения из профиля передаются сервису анализа.',
+  helpTitle: 'Помощь при неполадках',
+  helpDescription:
+    'Если что-то не работает, сохраните отчёт для поддержки. Ничего не отправляется автоматически.',
+  gatewayTitle: 'Какие данные передаются',
   gatewayDescription:
-    'После вашего запроса, если локальный режим выключен, Vercel AI Gateway и выбранная модель получают текст статьи, цель и выбранные сигналы профиля, знаний и истории. При создании профиля с AI передаются ваши ответы. Полный профиль и исходные заметки не отправляются.',
-  accessTitle: 'Доступ ко всем сайтам',
+    'По вашему запросу Vercel AI Gateway и выбранная модель получают текст статьи, вашу цель и выбранные сведения из профиля, знаний и истории. При создании профиля с ИИ передаются ваши ответы. Полный профиль и исходные заметки не отправляются. Локальный режим запрещает эти ИИ-запросы; синхронизация подключённых сервисов остаётся доступной по вашему действию.',
+  accessTitle: 'Зачем нужен доступ к сайтам',
   accessDescription:
     'Он нужен, чтобы карточки работали на обычных веб-страницах. Attention читает видимый текст локально; само разрешение не означает отправку данных в сеть.',
-  sessionTitle: 'Публичная сессия',
-  sessionActive: 'Активна защищённая краткосрочная сессия.',
-  sessionInactive: 'Сессии нет. Общий секрет не встроен в расширение.',
-  profileExportTitle: 'Сводка для диагностики',
+  profileExportTitle: 'Отчёт для поддержки',
   profileExportDescription:
-    'Только версия расширения и общие счётчики. Без содержания профиля, целей, тем, адресов, текстов и ключей.',
-  exportProfile: 'Скачать безопасный JSON',
-  profileExported: 'Диагностическая сводка скачана: {filename}',
-  profileExportFailed: 'Не удалось создать диагностическую сводку.',
-  diagnosticsTitle: 'Диагностика',
+    'Версия расширения и общая статистика. Без содержимого профиля, статей, заметок, адресов и ключей.',
+  exportProfile: 'Скачать отчёт',
+  profileExported: 'Отчёт скачан: {filename}',
+  profileExportFailed: 'Не удалось создать отчёт.',
+  diagnosticsTitle: 'Журнал ошибок',
   diagnosticsDescription:
-    'Только коды сбоев и время. Без URL, текста страниц, профиля, ключей, токенов и исходных сообщений ошибок.',
+    'Поможет найти причину сбоя. Без содержимого страниц, профиля, адресов и ключей.',
   diagnosticsEmpty: 'Ошибок пока не зафиксировано.',
-  diagnosticsCount: 'Событий в локальном журнале: {count}.',
-  copyDiagnostics: 'Копировать диагностику',
-  copied: 'Безопасная диагностика скопирована.',
+  diagnosticsCount: 'Записей в журнале: {count}.',
+  copyDiagnostics: 'Копировать журнал',
+  copied: 'Журнал скопирован.',
   clearDiagnostics: 'Очистить',
-  deleteTitle: 'Удалить все данные Attention',
+  deleteTitle: 'Удалить мои данные',
   deleteDescription:
-    'Удалит профиль, историю, локальные индексы Obsidian и Notion, сохранённые материалы, настройки, диагностику, сессию и подключённые ключи из Chrome.',
-  deleteButton: 'Удалить всё',
+    'Удалит данные Attention из этого браузера: профиль, сохранённые материалы, настройки и подключения. Отменить это нельзя.',
+  deleteButton: 'Удалить мои данные',
   deleteConfirm:
-    'Безвозвратно удалить все локальные данные Attention, включая профиль, историю, настройки и Gateway-ключ?',
+    'Безвозвратно удалить все данные Attention из этого браузера: профиль, историю, сохранённые материалы, локальные копии подключённых источников, настройки, отчёты и ключи? Оригиналы в подключённых сервисах останутся. Отменить это действие нельзя.',
   deleted: 'Все данные Attention удалены.',
 };
 
 const en: PrivacyCopy = {
   aiReportTitle: 'Last AI check',
   aiReportDescription:
-    'If AI shows no passages, download this report after checking an article. It shows where the passages were lost. No article text, profile or keys.',
+    'Helps troubleshoot an article check. No article text, profile or keys.',
   aiReportButton: 'Download AI analysis report',
   aiReportEmpty:
     'No report yet. Open an article and select “Check with AI” on its card.',
   aiReportSaved: 'Report downloaded. You can share it for troubleshooting.',
   navigationTitle: 'Privacy and data',
-  navigationDescription: 'Local mode, permissions and deletion',
-  eyebrow: 'Your control',
+  navigationDescription: 'AI data sharing and deletion',
   title: 'Privacy and data',
   done: 'Done',
-  localTitle: 'Local only',
-  localDescription: 'Hard-block every cloud AI request',
-  localOn:
-    'On: cloud AI is blocked. Connected services still work when you request them.',
-  localOff: 'Off: cloud AI is available after your action.',
-  gatewayTitle: 'When Gateway is used',
+  localTitle: 'Work only on this device',
+  localDescription: 'Prevent articles and profile data from being sent to AI.',
+  localOn: 'On. Cloud AI checks are off.',
+  localOff: 'Off. AI checks run only when you ask.',
+  aiSummary:
+    'When you request an AI check, the article text and selected details from your profile are shared with the analysis service.',
+  helpTitle: 'Help with a problem',
+  helpDescription:
+    'If something goes wrong, save a report for support. Nothing is sent automatically.',
+  gatewayTitle: 'What data is shared',
   gatewayDescription:
-    'On your request, with local-only mode off, Vercel AI Gateway and your selected model receive article text, your goal and selected profile, knowledge and history signals. AI profile creation sends your answers instead. Your full profile and original notes are not sent.',
-  accessTitle: 'Access to all websites',
+    'At your request, Vercel AI Gateway and your selected model receive article text, your goal and selected details from your profile, knowledge and history. AI profile creation sends your answers instead. Your full profile and original notes are not sent. Local-only mode blocks these AI requests; connected services can still sync when you ask.',
+  accessTitle: 'Why website access is needed',
   accessDescription:
     'This is required for cards on normal web pages. Attention reads visible text locally; the permission itself does not send data anywhere.',
-  sessionTitle: 'Public session',
-  sessionActive: 'A protected short-lived session is active.',
-  sessionInactive: 'No session. No shared secret is embedded in the extension.',
-  profileExportTitle: 'Diagnostic summary',
+  profileExportTitle: 'Support report',
   profileExportDescription:
-    'Extension version and aggregate counts only. No profile content, goals, topics, addresses, text or keys.',
-  exportProfile: 'Download safe JSON',
-  profileExported: 'Diagnostic summary downloaded: {filename}',
-  profileExportFailed: 'Could not create the diagnostic summary.',
-  diagnosticsTitle: 'Diagnostics',
+    'Extension version and general usage counts. No profile content, articles, notes, addresses or keys.',
+  exportProfile: 'Download report',
+  profileExported: 'Report downloaded: {filename}',
+  profileExportFailed: 'Could not create the report.',
+  diagnosticsTitle: 'Error log',
   diagnosticsDescription:
-    'Failure codes and timestamps only. No URLs, page text, profile values, keys, tokens or raw error messages.',
+    'Helps identify what went wrong. No page content, profile, addresses or keys.',
   diagnosticsEmpty: 'No errors recorded.',
-  diagnosticsCount: 'Events in the local log: {count}.',
-  copyDiagnostics: 'Copy diagnostics',
-  copied: 'Safe diagnostics copied.',
+  diagnosticsCount: 'Log entries: {count}.',
+  copyDiagnostics: 'Copy error log',
+  copied: 'Error log copied.',
   clearDiagnostics: 'Clear',
-  deleteTitle: 'Delete all Attention data',
+  deleteTitle: 'Delete my data',
   deleteDescription:
-    'Deletes your profile, history, local Obsidian and Notion indexes, saved items, settings, diagnostics, session and connected keys from Chrome.',
-  deleteButton: 'Delete everything',
+    'Removes Attention data from this browser: your profile, saved items, settings and connections. This cannot be undone.',
+  deleteButton: 'Delete my data',
   deleteConfirm:
-    'Permanently delete all local Attention data, including your profile, history, settings and Gateway key?',
+    'Permanently delete all Attention data from this browser: your profile, history, saved items, local copies of connected sources, settings, reports and keys? Originals in connected services will remain. This cannot be undone.',
   deleted: 'All Attention data was deleted.',
 };
 
 const overrides: Partial<Record<UiLanguage, Partial<PrivacyCopy>>> = {
   de: {
     navigationTitle: 'Datenschutz und Daten',
-    navigationDescription: 'Lokaler Modus, Berechtigungen und Löschen',
+    navigationDescription: 'Daten für KI und Daten löschen',
     title: 'Datenschutz und Daten',
     done: 'Fertig',
-    localTitle: 'Nur lokal',
-    localDescription: 'Blockiert alle Cloud-AI-Anfragen vollständig',
-    localOn:
-      'Aktiv: Cloud-KI ist blockiert. Verbundene Dienste funktionieren weiterhin auf Ihre Anfrage.',
-    localOff: 'Inaktiv: Cloud-KI ist nach Ihrer Aktion verfügbar.',
-    gatewayTitle: 'Wann Gateway verwendet wird',
+    localTitle: 'Nur auf diesem Gerät arbeiten',
+    localDescription: 'Keine Artikel oder Profildaten an KI senden.',
+    localOn: 'An. KI-Prüfungen in der Cloud sind ausgeschaltet.',
+    localOff: 'Aus. KI-Prüfungen starten nur auf Ihren Wunsch.',
+    aiSummary:
+      'Wenn Sie eine KI-Prüfung starten, werden der Artikeltext und ausgewählte Angaben aus Ihrem Profil an den Analysedienst übermittelt.',
+    helpTitle: 'Hilfe bei Problemen',
+    helpDescription:
+      'Wenn etwas nicht funktioniert, speichern Sie einen Bericht für den Support. Nichts wird automatisch gesendet.',
+    gatewayTitle: 'Welche Daten werden übermittelt?',
     gatewayDescription:
-      'Auf Ihre Anfrage und bei deaktiviertem lokalen Modus erhalten Vercel AI Gateway und das gewählte Modell Artikeltext, Ziel und ausgewählte Profil-, Wissens- und Verlaufssignale. Bei der KI-Profilerstellung werden stattdessen Ihre Antworten gesendet. Das vollständige Profil und Originalnotizen werden nicht gesendet.',
-    profileExportTitle: 'Diagnoseübersicht',
+      'Auf Ihren Wunsch erhalten Vercel AI Gateway und das gewählte Modell den Artikeltext, Ihr Ziel und ausgewählte Angaben aus Profil, Wissen und Verlauf. Bei der KI-Profilerstellung werden stattdessen Ihre Antworten gesendet. Das vollständige Profil und Originalnotizen werden nicht gesendet. Der lokale Modus blockiert diese KI-Anfragen; verbundene Dienste können auf Ihren Wunsch weiterhin synchronisieren.',
+    accessTitle: 'Warum ist Zugriff auf Websites nötig?',
+    accessDescription:
+      'Damit Attention Karten auf Webseiten anzeigen kann. Der sichtbare Text wird lokal gelesen. Die Berechtigung allein sendet keine Daten.',
+    profileExportTitle: 'Bericht für den Support',
     profileExportDescription:
-      'Nur Erweiterungsversion und Gesamtzahlen. Keine Profilinhalte, Ziele, Themen, Adressen, Texte oder Schlüssel.',
-    exportProfile: 'Sicheres JSON herunterladen',
-    deleteButton: 'Alles löschen',
+      'Version der Erweiterung und allgemeine Nutzungszahlen. Keine Profilinhalte, Artikel, Notizen, Adressen oder Schlüssel.',
+    exportProfile: 'Bericht herunterladen',
+    profileExported: 'Bericht heruntergeladen: {filename}',
+    profileExportFailed: 'Der Bericht konnte nicht erstellt werden.',
+    aiReportTitle: 'Letzte KI-Prüfung',
+    aiReportDescription:
+      'Hilft, Probleme bei einer Artikelprüfung zu verstehen. Ohne Artikeltext, Profil oder Schlüssel.',
+    aiReportButton: 'KI-Bericht herunterladen',
+    aiReportEmpty:
+      'Noch kein Bericht. Öffnen Sie einen Artikel und wählen Sie auf der Karte „Mit KI prüfen“.',
+    aiReportSaved:
+      'Bericht heruntergeladen. Sie können ihn zur Fehlersuche teilen.',
+    diagnosticsTitle: 'Fehlerprotokoll',
+    diagnosticsDescription:
+      'Hilft, die Fehlerursache zu finden. Ohne Seiteninhalte, Profil, Adressen oder Schlüssel.',
+    diagnosticsEmpty: 'Keine Fehler aufgezeichnet.',
+    diagnosticsCount: 'Protokolleinträge: {count}.',
+    copyDiagnostics: 'Protokoll kopieren',
+    copied: 'Protokoll kopiert.',
+    clearDiagnostics: 'Leeren',
+    deleteTitle: 'Meine Daten löschen',
+    deleteDescription:
+      'Entfernt Attention-Daten aus diesem Browser: Profil, gespeicherte Artikel, Einstellungen und Verbindungen. Das lässt sich nicht rückgängig machen.',
+    deleteButton: 'Meine Daten löschen',
+    deleteConfirm:
+      'Alle Attention-Daten aus diesem Browser dauerhaft löschen: Profil, Verlauf, gespeicherte Artikel, lokale Kopien verbundener Quellen, Einstellungen, Berichte und Schlüssel? Die Originale in verbundenen Diensten bleiben erhalten. Das lässt sich nicht rückgängig machen.',
+    deleted: 'Alle Attention-Daten wurden gelöscht.',
   },
   es: {
     navigationTitle: 'Privacidad y datos',
@@ -365,16 +394,17 @@ export class PrivacyController {
       'export-ai-analysis': copy.aiReportButton,
       'privacy-navigation-title': copy.navigationTitle,
       'privacy-navigation-description': copy.navigationDescription,
-      'privacy-eyebrow': copy.eyebrow,
       'privacy-settings-title': copy.title,
       'close-privacy-settings': copy.done,
       'local-only-title': copy.localTitle,
       'local-only-description': copy.localDescription,
+      'privacy-ai-summary': copy.aiSummary,
+      'privacy-help-title': copy.helpTitle,
+      'privacy-help-description': copy.helpDescription,
       'gateway-disclosure-title': copy.gatewayTitle,
       'gateway-disclosure-description': copy.gatewayDescription,
       'site-access-title': copy.accessTitle,
       'site-access-description': copy.accessDescription,
-      'session-title': copy.sessionTitle,
       'profile-export-title': copy.profileExportTitle,
       'profile-export-description': copy.profileExportDescription,
       'export-diagnostic-profile': copy.exportProfile,
@@ -394,17 +424,13 @@ export class PrivacyController {
   async refresh(): Promise<void> {
     this.translate();
     const copy = copyFor(this.options.getLanguage());
-    const [settings, diagnostics, session] = await Promise.all([
+    const [settings, diagnostics] = await Promise.all([
       loadPrivacySettings(),
       loadDiagnostics(),
-      loadPublicSession(),
     ]);
     this.localOnly.checked = settings.localOnly;
     getElement<HTMLElement>('local-only-status').textContent =
       settings.localOnly ? copy.localOn : copy.localOff;
-    getElement<HTMLElement>('session-status').textContent = session
-      ? copy.sessionActive
-      : copy.sessionInactive;
     getElement<HTMLElement>('diagnostics-summary').textContent =
       diagnostics.length
         ? copy.diagnosticsCount.replace('{count}', String(diagnostics.length))

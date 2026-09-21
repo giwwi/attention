@@ -18,7 +18,17 @@ function normalizedText(value: string | null | undefined): string {
 }
 
 function normalizedTitle(value: string | null | undefined): string {
-  return normalizedText(value).toLowerCase();
+  // Reader headings and metadata can spell the same compound differently
+  // ("loss-of-control" / "loss of control"). Compare the whole title with
+  // only typography folded; keep words, numbers and operators significant.
+  // The displayed title and the extracted article text are never rewritten.
+  return normalizedText(
+    (value ?? '')
+      .normalize('NFC')
+      .replace(/[‘’]/g, "'")
+      .replace(/[“”]/g, '"')
+      .replace(/(?<=\p{L})[-\u2010\u2011](?=\p{L})/gu, ' '),
+  ).toLowerCase();
 }
 
 function documentTitleAliases(

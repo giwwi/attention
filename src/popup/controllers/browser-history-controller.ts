@@ -44,6 +44,7 @@ export class BrowserHistoryController {
     'browser-history-summary',
   );
   private origin: HistoryScreenOrigin = 'settings';
+  private onClose: (() => void) | undefined;
   private readonly translateStatic = captureProfileLabels(this.root);
   private statusSource: string | null = null;
 
@@ -108,8 +109,9 @@ export class BrowserHistoryController {
     this.updateImportLabel();
   }
 
-  private open(origin: HistoryScreenOrigin): void {
+  open(origin: HistoryScreenOrigin, onClose?: () => void): void {
     this.origin = origin;
+    this.onClose = onClose;
     this.profileRoot.hidden = true;
     this.settingsHome.hidden = true;
     this.root.hidden = false;
@@ -120,7 +122,10 @@ export class BrowserHistoryController {
   private close(): void {
     this.root.hidden = true;
     document.body.classList.remove('history-flow-active');
-    if (this.origin === 'profile') this.profileRoot.hidden = false;
+    const onClose = this.onClose;
+    this.onClose = undefined;
+    if (onClose) onClose();
+    else if (this.origin === 'profile') this.profileRoot.hidden = false;
     else this.settingsHome.hidden = false;
   }
 

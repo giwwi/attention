@@ -15,8 +15,14 @@ const useful =
 const caveat =
   'However, this comparison only applies when the test examples represent the actual tasks and users.';
 
-for (const mode of ['local', 'ai', 'ai-long-context'] as const)
-  test(`${mode}: contextual passages retain caveats and disappear after article mutation`, async () => {
+for (const [mode, legacyPreference] of [
+  ['local', false],
+  ['local', undefined],
+  ['ai', false],
+  ['ai', undefined],
+  ['ai-long-context', undefined],
+] as const)
+  test(`${mode}, legacy setting ${legacyPreference}: passages appear only on request and retain context`, async () => {
     test.setTimeout(60_000);
     const qualifications =
       mode === 'ai-long-context'
@@ -44,7 +50,7 @@ for (const mode of ['local', 'ai', 'ai-long-context'] as const)
       await initializeTestProfile(context);
       const worker = context.serviceWorkers()[0]!;
       await worker.evaluate(
-        async ({ mode, useful }) => {
+        async ({ mode, useful, legacyPreference }) => {
           await attentionVault.privateStorage.set({
             interfaceLanguage: 'ru',
             analysisContext: {
@@ -52,7 +58,9 @@ for (const mode of ['local', 'ai', 'ai-long-context'] as const)
               intent: 'compare model evaluation methods',
               availableMinutes: 15,
             },
-            novelPassageHighlightsEnabled: true,
+            ...(legacyPreference === false
+              ? { novelPassageHighlightsEnabled: false }
+              : {}),
             privacySettings: {
               localOnly: mode === 'local',
               updatedAt: new Date().toISOString(),
@@ -144,7 +152,7 @@ for (const mode of ['local', 'ai', 'ai-long-context'] as const)
             });
           };
         },
-        { mode, useful },
+        { mode, useful, legacyPreference },
       );
       const url = 'http://127.0.0.1:4317/article/context-passages';
       await context.route(url, (route) =>
@@ -182,6 +190,15 @@ for (const mode of ['local', 'ai', 'ai-long-context'] as const)
             .passageRequests,
       );
       expect(requests).toBe(mode === 'local' ? 0 : 1);
+      // Merely opening the card or running AI must not paint the article.
+      await expect(page.locator('[data-attention-novel-passages]')).toHaveCount(
+        0,
+      );
+      expect(
+        await page.evaluate(() =>
+          CSS.highlights.has('attention-potential-new'),
+        ),
+      ).toBe(false);
       await clickCardElement(context, page, '.passages-button');
       const panel = page.locator('[data-attention-novel-passages]');
       await expect(panel).toBeVisible();

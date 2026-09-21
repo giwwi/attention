@@ -59,7 +59,9 @@ test.afterEach(async () => {
 test('the real password gate encrypts data, rejects a wrong password without changes, and restores access', async () => {
   const popup = await popupPage();
   const inspector = await openVaultInspector(context);
-  await expect(popup.locator('#profile-welcome-step .profile-welcome-needs')).toBeVisible();
+  await expect(
+    popup.locator('#profile-welcome-step .profile-welcome-needs'),
+  ).toBeVisible();
   await preparePasswordStep(popup);
   await expect(popup.locator('#vault-confirm-password')).toBeVisible();
   await expect(popup.locator('#profile-onboarding')).toHaveCount(0);
@@ -81,7 +83,41 @@ test('the real password gate encrypts data, rejects a wrong password without cha
     'unconfigured',
   );
   await createVaultThroughUi(popup);
+  await expect(popup.locator('#optional-sources')).toBeVisible();
+  await popup.locator('#optional-sources-continue').click();
+  await expect(popup.locator('#optional-ai')).toBeVisible();
+  await popup.locator('#optional-ai-connect').click();
+  await expect(popup.locator('#optional-ai-key')).toHaveAttribute(
+    'aria-invalid',
+    'true',
+  );
+  await popup
+    .locator('#optional-ai-key')
+    .fill('PRIVATE_VAULT_AI_KEY_not-a-real-key');
+  await popup.locator('#optional-ai-connect').click();
   await expect(popup.locator('#profile-onboarding')).toBeVisible();
+  expect(
+    await inspector.evaluate(() =>
+      attentionVault.privateStorage.get([
+        'aiAnalyzerSettings',
+        'privacySettings',
+        'optionalAiSetupPending',
+      ]),
+    ),
+  ).toMatchObject({
+    aiAnalyzerSettings: {
+      apiKey: 'PRIVATE_VAULT_AI_KEY_not-a-real-key',
+      model: 'google/gemini-2.5-flash-lite',
+    },
+    privacySettings: { localOnly: false },
+  });
+  await expect(popup.locator('#optional-ai-key')).toHaveValue('');
+  // The rest of this encryption test exercises local article cards, not a real AI service.
+  await inspector.evaluate(() =>
+    attentionVault.privateStorage.set({
+      privacySettings: { localOnly: true, updatedAt: new Date().toISOString() },
+    }),
+  );
   await initializeTestProfile(context);
   const secrets = {
     interfaceLanguage: 'en',
@@ -318,6 +354,9 @@ test('worker suspension preserves this browser session but a full browser restar
   let popup = await popupPage();
   let inspector = await openVaultInspector(context);
   await createVaultThroughUi(popup);
+  await expect(popup.locator('#optional-sources')).toBeVisible();
+  await popup.locator('#optional-sources-continue').click();
+  await expect(popup.locator('#optional-ai')).toBeVisible();
   await initializeTestProfile(context);
   await inspector.evaluate(() =>
     attentionVault.privateStorage.set({
@@ -353,6 +392,10 @@ test('worker suspension preserves this browser session but a full browser restar
   );
   await popup.locator('#vault-password').fill(TEST_VAULT_PASSWORD);
   await popup.locator('#vault-submit').click();
+  // The optional step was not dismissed before closing the browser.
+  await expect(popup.locator('#optional-ai')).toBeVisible();
+  await popup.locator('#optional-ai-skip').click();
+  await popup.locator('#profile-finish').click();
   await expect(popup.locator('#launcher-home')).toBeVisible();
   expect(
     await inspector.evaluate(() =>

@@ -23,7 +23,6 @@ const INPUT_KEYS = new Set([
   'novelPassageFeedback',
   'claimMemoryRevision',
   'utilityCalibration',
-  'novelPassageHighlightsEnabled',
   'savedMaterials',
 ]);
 

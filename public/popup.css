@@ -554,6 +554,60 @@ summary {
   justify-content: space-between;
   gap: 12px;
 }
+.privacy-toggle > span {
+  display: grid;
+  gap: 4px;
+}
+.privacy-toggle input {
+  flex: 0 0 18px;
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  accent-color: var(--accent);
+}
+.privacy-settings .privacy-panel {
+  padding: 12px 0;
+}
+.privacy-settings .privacy-mode-panel {
+  padding-top: 0;
+  border-bottom: 1px solid var(--border);
+}
+.privacy-settings h3 {
+  margin: 0 0 6px;
+  font-size: 13px;
+}
+.privacy-settings p {
+  margin: 8px 0;
+}
+.privacy-toggle small,
+.privacy-settings .privacy-status,
+.privacy-disclosure p,
+.privacy-danger-panel p {
+  color: var(--muted);
+  font-size: 12px;
+}
+.privacy-status:empty {
+  display: none;
+}
+.privacy-disclosure {
+  padding: 12px 0;
+  border-bottom: 1px solid var(--border);
+}
+.privacy-disclosure > summary {
+  cursor: pointer;
+  font-weight: 600;
+}
+.privacy-disclosure > summary:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 4px;
+  border-radius: 2px;
+}
+#privacy-help .privacy-panel + .privacy-panel {
+  border-top: 1px solid var(--border);
+}
+.privacy-settings .privacy-danger-panel {
+  padding-top: 16px;
+}
 .privacy-danger button,
 #delete-all-data {
   color: var(--danger);
@@ -602,7 +656,102 @@ summary {
   }
 }
 
-/* Only the two providers compete for attention during first setup. */
+/* Optional setup keeps an exit visible even in the compact popup. */
+.optional-sources-intro {
+  margin-bottom: 8px;
+}
+.optional-sources-note {
+  margin: 0 0 20px;
+  color: var(--muted);
+}
+#optional-sources h2,
+#optional-ai h2 {
+  line-height: 1.25;
+  margin: 8px 0 12px;
+}
+#optional-sources-title:focus,
+#optional-ai-title:focus {
+  outline: none;
+}
+.optional-source-list {
+  display: grid;
+  gap: 12px;
+}
+.optional-source {
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+}
+.optional-source h3 {
+  margin: 0 0 6px;
+  font-size: 15px;
+}
+.optional-source p {
+  margin: 0 0 12px;
+  color: var(--muted);
+}
+.optional-source-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.optional-source-status {
+  color: var(--muted);
+  font-size: 12px;
+}
+.optional-source-actions button {
+  margin-inline-start: auto;
+}
+.optional-sources-footer {
+  position: sticky;
+  bottom: 0;
+  padding-block: 12px;
+  margin-top: 8px;
+  background: var(--page-background);
+}
+#optional-sources-continue {
+  width: 100%;
+}
+#optional-sources-error {
+  color: var(--danger);
+}
+.optional-ai-setup {
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+}
+.optional-ai-setup h3 {
+  margin: 0 0 6px;
+  font-size: 15px;
+}
+.optional-ai-setup p,
+.optional-ai-note {
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.5;
+}
+.optional-ai-setup p {
+  margin: 0 0 10px;
+}
+.optional-ai-setup label {
+  margin-top: 20px;
+}
+.optional-ai-footer {
+  display: grid;
+  gap: 8px;
+}
+.optional-ai-footer button,
+#optional-ai-connect {
+  width: 100%;
+}
+#optional-ai-key[aria-invalid='true'] {
+  border-color: var(--danger);
+}
+#optional-ai-status {
+  font-size: 13px;
+}
 .profile-activation-note {
   margin: 14px 0;
   padding: 10px 12px;

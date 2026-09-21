@@ -2,7 +2,7 @@
 
 **A local-first Chrome extension that helps you find passages relevant to your task, with their context.**
 
-[Website](https://giwwi.github.io/attention/) · [Chrome Web Store](https://chromewebstore.google.com/detail/attention/fcclhejgaklnkfgalglcmhmledgefhhp) · [Latest release](https://github.com/giwwi/attention/releases/tag/v0.30.0)
+[Website](https://giwwi.github.io/attention/) · [Chrome Web Store](https://chromewebstore.google.com/detail/attention/fcclhejgaklnkfgalglcmhmledgefhhp) · [Latest release](https://github.com/giwwi/attention/releases/tag/v0.30.1)
 
 ![Attention demo](docs/attention-demo.gif)
 
@@ -14,26 +14,28 @@ Before a profile is saved, cards invite you to create one. Personal reading reco
 
 ## Try it in Chrome
 
-Install the published extension from the [Chrome Web Store](https://chromewebstore.google.com/detail/attention/fcclhejgaklnkfgalglcmhmledgefhhp). The 0.30.0 release is available on GitHub. The Chrome Web Store currently serves **0.29.1**; the 0.30.0 update is being submitted for review. Store updates become available after Google review. The instructions below install the latest GitHub build manually.
+Install the published extension from the [Chrome Web Store](https://chromewebstore.google.com/detail/attention/fcclhejgaklnkfgalglcmhmledgefhhp). The 0.30.1 release is available on GitHub. The Chrome Web Store currently serves **0.29.1**; the 0.30.1 update has been submitted for review. Store updates become available after Google review. The instructions below install the latest GitHub build manually.
 
-1. Download and unzip the [version 0.30.0](https://github.com/giwwi/attention/releases/download/v0.30.0/attention-0.30.0.zip).
+1. Download and unzip the [version 0.30.1](https://github.com/giwwi/attention/releases/download/v0.30.1/attention-0.30.1.zip).
 2. Open `chrome://extensions`.
 3. Enable **Developer mode**.
 4. Click **Load unpacked** and select the unzipped `attention-extension` folder.
 5. Pin **Attention**, open an article, and click the extension icon.
 6. The welcome screen explains how your interests, goals and existing knowledge guide recommendations. Choose **Create my profile**, then **Let ChatGPT introduce me**, **Let Claude introduce me**, **Let Gemini introduce me**, **Let Copilot introduce me** or **Let Perplexity introduce me**. First setup opens in a separate extension tab so switching to your AI does not close the draft. Paste the whole returned answer and review the three editable groups—interests, goals and what you know. Only then choose a password of at least 12 characters and save the profile encrypted. Until that final save, the draft stays in the open tab’s memory only; returning from the password step preserves it, while closing or reloading the tab discards it. You can return directly to the article where you started. Attention does not access your chats. You can add another profile later, or use the guided manual questions if you do not use these services. Until a meaningful profile is saved, feed and article cards invite you to create one; they do not extract articles, evaluate them or track reading. Existing profiles continue to work. Keep your vault password: Attention cannot recover it.
 
+In the current source build, saving the encrypted profile is followed by two optional steps: add Readwise, Obsidian or browser history, then connect AI with your own Vercel AI Gateway key. Both can be skipped and revisited in Settings. The AI step links to key creation and explains usage charges and data sharing before connection. Merely opening or skipping it does not send AI requests. Unfinished optional setup resumes after reopening Attention; no key is saved until you choose to connect.
+
 Deleting the profile returns article and feed cards to the setup invitation. A locked existing vault stays silent until you unlock it. An old “onboarding complete” flag, an unfinished import, empty profile or format preferences alone does not enable recommendations. Existing saved profiles with personal context continue to work.
 
-Unlock the vault when you start a new browser session. On macOS, the password field supports the system **AutoFill → Passwords** context menu. Save the Attention password in Apple Passwords yourself, then select that entry to fill it. Attention does not save passwords to Apple Passwords automatically; Chrome’s built-in password manager does not save or fill credentials on extension pages. **Lock** closes access to Attention's personal data until you unlock again. If you forget the password, the reset option deletes the local vault and lets you start over; it cannot recover the old data.
+Unlock the vault with your password when you start a new browser session. **Lock** closes access to Attention's personal data until you unlock again. If you forget the password, the reset option deletes the local vault and lets you start over; it cannot recover the old data.
 
-The article card shows one recommendation, a short reason and the estimated reading time for the whole article. Its green, neutral gray or red surface follows the recommendation; the wording also conveys the decision without relying on color. Its actions are **Go to passages** (when relevant passages are found and passage highlighting is enabled) and **Save for later**. The first highlights the actual text, scrolls to the first passage and closes the large card. The passage panel lets you move between matches. Saving adds the whole article to the local reading list and shows **Saved ✓** without closing the card. There are no Read, Skim or Skip buttons on an already open article.
+The article card shows one recommendation, a short reason and the estimated reading time for the whole article. Its green, neutral gray or red surface follows the recommendation; the wording also conveys the decision without relying on color. Its actions are **Go to passages** (when relevant passages are found) and **Save for later**. No separate setting is required; the page stays unhighlighted until you click **Go to passages**. That button highlights the actual text, scrolls to the first passage and closes the large card. The passage panel lets you move between matches. Saving adds the whole article to the local reading list and shows **Saved ✓** without closing the card. There are no Read, Skim or Skip buttons on an already open article.
 
 Your scenario and current goal appear above the recommendation. Expand that context row to edit them, then choose **Apply**. There is no time-budget selector: the displayed duration estimates the article’s length rather than asking you for another setting. Applying context updates the local assessment without requesting external AI. The AI action and analysis status remain visible. **Why this assessment** is collapsed by default and contains the Utility Score, explanation and recommended sections when available.
 
 To reopen the card, click the extension icon and choose **Evaluate this page**. The popup also opens your saved articles and settings for language, profile, sources, AI, and privacy. On the article itself, Tab to the **Attention** button beside its title and press Enter or Space. Focus moves to a visible action; Tab reaches the other controls and expandable details. Escape closes the card and returns focus to the title button. Hovering over the title opens the same card. On a protected or unsupported page, the launcher explains that you need an accessible article.
 
-To save a selected passage with context to Readwise, enable **Settings → Highlight useful passages** and connect Readwise through the personalization sources. Open the Attention card beside the article title, choose **Go to passages**, then **Save to Readwise** in the passage panel. The panel is available when matching passages are found; its Readwise button is gray and disabled until Readwise is connected. Marking a passage **New to me** or **Already knew** keeps the selected passage open so you can save it afterward. **Save for later** adds the whole article to Attention's local reading list.
+To save a selected passage with context to Readwise, connect Readwise through the personalization sources. Open the Attention card beside the article title, choose **Go to passages**, then **Save to Readwise** in the passage panel. The panel is available when matching passages are found; its Readwise button is gray and disabled until Readwise is connected. Marking a passage **New to me** or **Already knew** keeps the selected passage open so you can save it afterward. **Save for later** adds the whole article to Attention's local reading list.
 
 No API key is required for the local evaluation. To configure optional AI analysis, open **Settings → AI**, paste a Vercel AI Gateway key, and keep the suggested Gemini model or enter another `provider/model` identifier. Choose **Check with AI** directly on the article card. The same visible row shows **Checked with AI** after success or lets you retry after an error. If AI is not connected or local-only mode is enabled, the disabled control explains why it is unavailable. Opening the card, popup, or details does not itself send an AI request.
 
@@ -55,7 +57,7 @@ The shared source budget is 24,000 characters of whole blocks and their context,
 
 Local relevance uses weighted coverage of the task, with each concept and its aliases counted once. A title match can suggest a topic, but applicability requires evidence in the body. Local assessment considers all relevant goals, learning topics and interests from the profile, while an explicit current task takes priority. A related topic can lead to selective reading without claiming task-specific benefit; no detected relation leads to a tentative Skip. **Not sure yet** is reserved for missing user context. Recommendation direction and confidence are handled separately before and after calibration. Browsing history cannot silently replace the current goal. Quality wording describes visible explanations, links and other textual markers; it does not claim fact-checking. These remain heuristics, not demonstrated measures of usefulness.
 
-If an AI analysis shows no passages, **Settings → Privacy and data → Download AI analysis report** exports stage counts and rejection reasons from the last check. It excludes the article text, profile content and keys; the report is not sent automatically.
+If an AI analysis shows no passages, **Settings → Privacy and data → Help with a problem → Download AI report** exports stage counts and rejection reasons from the last check. It excludes the article text, profile content and keys; the report is not sent automatically.
 
 ## What it does
 
@@ -106,7 +108,7 @@ pnpm build
 
 Load `dist/` through `chrome://extensions` → **Load unpacked**.
 
-For an existing unpacked installation, rebuild and click **Reload** in `chrome://extensions`, then refresh open article tabs. The current source build is 0.30.0. It adds profile-first onboarding with the password at the final step, five assistant choices, restored clipboard guidance, a single language selector and an always-visible Readwise action. See [release notes](RELEASE_NOTES.md). Earlier raw-score versions are excluded from the new calibration fit. A saved profile is still required for evaluation.
+For an existing unpacked installation, rebuild and click **Reload** in `chrome://extensions`, then refresh open article tabs. The current source build is 0.30.1. It adds optional sources and AI-key steps after profile protection, simpler privacy settings, more reliable article-title detection and passages available directly from the card without a separate highlight switch. See [release notes](RELEASE_NOTES.md). Earlier raw-score versions are excluded from the new calibration fit. A saved profile is still required for evaluation.
 
 Useful commands:
 

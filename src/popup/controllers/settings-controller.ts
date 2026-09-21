@@ -31,10 +31,6 @@ import type {
 import { getElement, setPopupStatus } from '../dom';
 import { isAnalysisContext } from '../guards';
 import { ANALYSIS_CONTEXT_KEY } from '../storage-keys';
-import {
-  NOVEL_PASSAGE_HIGHLIGHTS_KEY,
-  novelPassageHighlightsEnabled,
-} from '../../novelty/settings';
 
 export interface SettingsControllerOptions {
   status: HTMLParagraphElement;
@@ -59,9 +55,6 @@ export class SettingsController {
     getElement<HTMLSelectElement>('relax-intent');
   private readonly desiredEffortSelect =
     getElement<HTMLSelectElement>('desired-effort');
-  private readonly novelPassageHighlights = getElement<HTMLInputElement>(
-    'novel-passage-highlights',
-  );
   private scenarioState: ScenarioState = createDefaultScenarioState();
   private interfaceLanguage: UiLanguage = DEFAULT_UI_LANGUAGE;
   private intentSaveTimer: number | null = null;
@@ -103,14 +96,7 @@ export class SettingsController {
   }
 
   async initializeScenario(): Promise<void> {
-    const [scenarioState, stored] = await Promise.all([
-      loadScenarioState(),
-      privateStorage.get(NOVEL_PASSAGE_HIGHLIGHTS_KEY),
-    ]);
-    this.scenarioState = scenarioState;
-    this.novelPassageHighlights.checked = novelPassageHighlightsEnabled(
-      stored[NOVEL_PASSAGE_HIGHLIGHTS_KEY],
-    );
+    this.scenarioState = await loadScenarioState();
     this.renderScenarioControls();
     await this.restoreContext();
   }
@@ -193,22 +179,6 @@ export class SettingsController {
           popupText(this.language, 'settingsFailed'),
         );
       });
-    });
-
-    this.novelPassageHighlights.addEventListener('change', () => {
-      void privateStorage
-        .set({
-          [NOVEL_PASSAGE_HIGHLIGHTS_KEY]: this.novelPassageHighlights.checked,
-        })
-        .catch(() => {
-          this.novelPassageHighlights.checked =
-            !this.novelPassageHighlights.checked;
-          setPopupStatus(
-            this.options.status,
-            'error',
-            popupText(this.language, 'settingsFailed'),
-          );
-        });
     });
   }
 

@@ -69,10 +69,6 @@ import {
   type NovelPassageActionResponse,
   type NovelPassageMessage,
 } from '../novelty/messages';
-import {
-  NOVEL_PASSAGE_HIGHLIGHTS_KEY,
-  novelPassageHighlightsEnabled,
-} from '../novelty/settings';
 import { loadObsidianEvidence } from '../obsidian/evidence';
 import { loadNotionEvidence } from '../notion/evidence';
 import { NotionApiClient } from '../notion/client';
@@ -659,38 +655,24 @@ async function hoverPreviewResponse(
   if (!isProfileReady(profile)) return undefined;
   const pageCapabilities = request.capture
     ? await Promise.all([
-        privateStorage.get(NOVEL_PASSAGE_HIGHLIGHTS_KEY),
         loadReadwiseSettings(),
         loadAiAnalyzerSettings(),
         loadPrivacySettings(),
-      ]).then(
-        ([
-          highlightSettings,
-          readwiseSettings,
-          aiSettings,
-          privacySettings,
-        ]) => ({
-          aiSettings,
-          aiState: privacySettings.localOnly
-            ? ('local-only' as const)
-            : aiSettings
-              ? ('ready' as const)
-              : ('not-connected' as const),
-          novelPassageHighlightsEnabled: novelPassageHighlightsEnabled(
-            highlightSettings[NOVEL_PASSAGE_HIGHLIGHTS_KEY],
-          ),
-          readwiseConnected: readwiseSettings.connected,
-        }),
-      )
+      ]).then(([readwiseSettings, aiSettings, privacySettings]) => ({
+        aiSettings,
+        aiState: privacySettings.localOnly
+          ? ('local-only' as const)
+          : aiSettings
+            ? ('ready' as const)
+            : ('not-connected' as const),
+        readwiseConnected: readwiseSettings.connected,
+      }))
     : {
         aiSettings: null,
         aiState: 'not-connected' as const,
-        novelPassageHighlightsEnabled: novelPassageHighlightsEnabled(undefined),
         readwiseConnected: false,
       };
   const capabilities = {
-    novelPassageHighlightsEnabled:
-      pageCapabilities.novelPassageHighlightsEnabled,
     readwiseConnected: pageCapabilities.readwiseConnected,
     aiState: pageCapabilities.aiState,
   };

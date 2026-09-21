@@ -2016,10 +2016,10 @@ export function installHoverPreview(
     const passageDiagnostic = emptyDisplayTrace(
       preview.insights?.readingPassages?.items.length ?? 0,
     );
+    // Finding passages does not alter the page. Only the trusted button click
+    // above paints them; the retired highlight preference must not hide them.
     activeNovelMatches =
-      expanded &&
-      cachedPageCapture &&
-      cachedResponse?.novelPassageHighlightsEnabled === true
+      expanded && cachedPageCapture
         ? findNovelPassageMatches(
             document,
             cachedPageCapture,
@@ -2030,8 +2030,6 @@ export function installHoverPreview(
           )
         : [];
     if (expanded && cachedPageCapture && preview.insights?.aiAnalysisId) {
-      if (cachedResponse?.novelPassageHighlightsEnabled !== true)
-        passageDiagnostic.reason = 'highlights-disabled';
       const message = {
         type: AI_PASSAGE_DISPLAY_TYPE,
         analysisId: preview.insights.aiAnalysisId,
@@ -2087,10 +2085,7 @@ export function installHoverPreview(
       ),
     );
     const selection = preview.insights?.readingPassages;
-    view.passageHint.hidden =
-      !expanded ||
-      cachedResponse?.novelPassageHighlightsEnabled !== true ||
-      (!hasPassages && !selection);
+    view.passageHint.hidden = !expanded || (!hasPassages && !selection);
     const passageStatus =
       selection?.status === 'no-context'
         ? 'noContext'

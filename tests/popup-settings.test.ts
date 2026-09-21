@@ -37,7 +37,6 @@ describe('compact popup settings', () => {
     for (const id of [
       'profile-bar',
       'open-ai-settings',
-      'novel-passage-highlights',
       'interface-language',
       'open-privacy-settings',
     ]) {
@@ -47,6 +46,7 @@ describe('compact popup settings', () => {
       settings?.querySelector('details #open-voluntary-pilot'),
     ).not.toBeNull();
     expect(settings?.querySelector('#open-saved-materials')).toBeNull();
+    expect(document.querySelector('#novel-passage-highlights')).toBeNull();
     const languages = Array.from(
       document.querySelectorAll<HTMLOptionElement>(
         '#interface-language option',

@@ -57,8 +57,13 @@ test('erasure from another extension page invalidates a displayed popup without 
     await erasingPopup.locator('#open-privacy-settings').click();
     erasingPopup.once('dialog', (dialog) => dialog.accept());
     await erasingPopup.locator('#delete-all-data').click();
-    await expect(oldPopup.locator('#vault-confirm-password')).toBeVisible();
-    await expect(oldPopup.locator('#launcher-home')).toHaveCount(0);
+    // Reset returns to profile-first onboarding, before password creation.
+    await expect(
+      oldPopup.getByRole('button', { name: 'Create my profile', exact: true }),
+    ).toBeVisible();
+    // Fresh static markup can exist behind the onboarding gate, but no
+    // previously unlocked controls or their JS context may remain usable.
+    await expect(oldPopup.locator('#launcher-home')).toBeHidden();
     await expect(oldPopup.locator('#result')).toHaveCount(0);
     // The old JS context is destroyed by the production lock guard. A retained
     // automation handle must be unable to invoke the formerly available action.

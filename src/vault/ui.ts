@@ -172,12 +172,6 @@ export function ensureVaultUnlocked(options: VaultGateOptions = {}): Promise<voi
     password.setAttribute('autocapitalize', 'off');
     password.setAttribute('aria-describedby', 'vault-status');
     form.append(passwordLabel, password);
-    if (/Mac/iu.test(navigator.platform)) {
-      const help = element('details', undefined, 'vault-password-help');
-      help.append(element('summary', t('applePasswords')));
-      help.append(element('p', t('applePasswordsHelp'), 'vault-hint'));
-      form.append(help);
-    }
     const confirm = element('input');
     if (creating) {
       password.minLength = 12;

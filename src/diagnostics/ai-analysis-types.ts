@@ -46,7 +46,7 @@ export interface PassageValidationTrace {
 export const DISPLAY_REASONS = [
   'matched',
   'no-selection',
-  'highlights-disabled',
+  'highlights-disabled', // Retained only for reports from earlier versions.
   'article-root-not-found',
   'fingerprint-changed',
   'no-dom-matches',

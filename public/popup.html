@@ -56,6 +56,144 @@
         </button>
       </nav>
 
+      <section
+        id="optional-sources"
+        aria-labelledby="optional-sources-title"
+        hidden
+      >
+        <p class="eyebrow">По желанию</p>
+        <h2 id="optional-sources-title" tabindex="-1">
+          Профиль готов — уже можно начинать
+        </h2>
+        <p class="optional-sources-intro">
+          Хотите помочь Attention лучше понимать, что вам уже знакомо? Добавьте
+          один из источников ниже.
+        </p>
+        <p class="optional-sources-note">
+          Это необязательно. Всё можно пропустить и подключить позже в
+          настройках профиля.
+        </p>
+        <div class="optional-source-list">
+          <article class="optional-source">
+            <h3>Readwise</h3>
+            <p>
+              Уже сохраняете цитаты в Readwise? Attention сможет учитывать их и
+              ваши заметки.
+            </p>
+            <div class="optional-source-actions">
+              <span
+                id="optional-readwise-status"
+                class="optional-source-status"
+                role="status"
+              ></span>
+              <button id="optional-readwise" type="button">
+                Подключить Readwise
+              </button>
+            </div>
+          </article>
+          <article class="optional-source">
+            <h3>Obsidian</h3>
+            <p>
+              Ваши заметки помогут замечать знакомые идеи. Вы сами выберете
+              папку с заметками.
+            </p>
+            <div class="optional-source-actions">
+              <span
+                id="optional-obsidian-status"
+                class="optional-source-status"
+                role="status"
+              ></span>
+              <button id="optional-obsidian" type="button">
+                Выбрать заметки
+              </button>
+            </div>
+          </article>
+          <article class="optional-source">
+            <h3>История браузера</h3>
+            <p>
+              Поможет узнавать страницы, которые вы уже открывали. Вы выберете
+              период и разрешите доступ отдельно.
+            </p>
+            <div class="optional-source-actions">
+              <span
+                id="optional-history-status"
+                class="optional-source-status"
+                role="status"
+              ></span>
+              <button id="optional-history" type="button">
+                Выбрать период
+              </button>
+            </div>
+          </article>
+        </div>
+        <p id="optional-sources-error" role="status" hidden></p>
+        <div class="optional-sources-footer">
+          <button
+            id="optional-sources-continue"
+            class="primary-button"
+            type="button"
+          >
+            Пропустить этот шаг
+          </button>
+        </div>
+      </section>
+
+      <section id="optional-ai" aria-labelledby="optional-ai-title" hidden>
+        <p class="eyebrow">По желанию</p>
+        <h2 id="optional-ai-title" tabindex="-1">
+          Хотите оценивать статьи с AI?
+        </h2>
+        <p class="optional-sources-intro">
+          AI сопоставляет смысл статьи с вашими целями и помогает находить
+          полезные фрагменты.
+        </p>
+        <p class="optional-sources-note">
+          Это необязательно. Без ключа Attention работает локально. Подключить
+          AI можно позже в настройках.
+        </p>
+        <div class="optional-ai-setup">
+          <h3>1. Создайте ключ в Vercel</h3>
+          <p>
+            Войдите или зарегистрируйтесь, нажмите Create key и скопируйте ключ.
+            Затем вернитесь сюда.
+          </p>
+          <a
+            id="optional-ai-create-key"
+            class="ai-key-link"
+            href="https://vercel.com/d?title=AI+Gateway+API+Keys&amp;to=%2F%5Bteam%5D%2F~%2Fai-gateway%2Fapi-keys"
+            target="_blank"
+            rel="noopener noreferrer"
+            >Создать API-ключ в Vercel ↗</a
+          >
+          <label for="optional-ai-key">2. Вставьте API-ключ</label>
+          <input
+            id="optional-ai-key"
+            type="password"
+            autocomplete="off"
+            spellcheck="false"
+            autocapitalize="none"
+            placeholder="Ключ Vercel AI Gateway"
+            aria-describedby="optional-ai-cost optional-ai-privacy optional-ai-status"
+          />
+        </div>
+        <p id="optional-ai-cost" class="optional-ai-note">
+          У Vercel свои лимиты и оплата за AI-запросы. Подписка ChatGPT или
+          Claude их не покрывает.
+        </p>
+        <p id="optional-ai-privacy" class="optional-ai-note">
+          При проверке с AI текст статьи и подходящие сведения из профиля
+          отправляются модели через Vercel. Ключ хранится зашифрованным на этом
+          устройстве.
+        </p>
+        <p id="optional-ai-status" role="status" hidden></p>
+        <button id="optional-ai-connect" class="primary-button" type="button">
+          Подключить и продолжить
+        </button>
+        <div class="optional-sources-footer optional-ai-footer">
+          <button id="optional-ai-skip" type="button">Пока без AI</button>
+        </div>
+      </section>
+
       <section id="profile-onboarding" class="profile-onboarding" hidden>
         <div id="profile-welcome-step" class="profile-step" hidden>
           <h2>Читайте то, что полезно именно вам</h2>
@@ -586,17 +724,6 @@
             Настроить
           </button>
         </section>
-        <label
-          class="settings-card settings-toggle-card"
-          for="novel-passage-highlights"
-          ><span class="settings-row-copy"
-            ><strong data-launcher-i18n="highlights"
-              >Подсветка полезных фрагментов</strong
-            ><small data-launcher-i18n="highlightsHint"
-              >По вашему запросу на странице</small
-            ></span
-          ><input id="novel-passage-highlights" type="checkbox"
-        /></label>
         <label class="settings-card language-setting" for="interface-language"
           ><strong data-launcher-i18n="language">Язык</strong
           ><select id="interface-language" aria-label="Язык интерфейса">
@@ -824,102 +951,116 @@
         hidden
       >
         <div class="privacy-settings-header">
-          <div>
-            <p id="privacy-eyebrow" class="eyebrow">Контроль пользователя</p>
-            <h2 id="privacy-settings-title">Приватность и данные</h2>
-          </div>
+          <h2 id="privacy-settings-title">Конфиденциальность и данные</h2>
           <button id="close-privacy-settings" type="button">Готово</button>
         </div>
 
         <section class="privacy-panel privacy-mode-panel">
           <label class="privacy-toggle" for="local-only-mode">
             <span>
-              <strong id="local-only-title">Только локально</strong>
+              <strong id="local-only-title"
+                >Работать только на устройстве</strong
+              >
               <small id="local-only-description"
-                >Жёстко запрещает любые облачные AI-запросы</small
+                >Не отправлять статьи и данные профиля в ИИ.</small
               >
             </span>
-            <input id="local-only-mode" type="checkbox" />
+            <input
+              id="local-only-mode"
+              type="checkbox"
+              aria-describedby="local-only-description local-only-status"
+            />
           </label>
-          <p id="local-only-status" class="privacy-status"></p>
+          <p id="local-only-status" class="privacy-status" role="status"></p>
         </section>
 
-        <section class="privacy-panel">
-          <h3 id="gateway-disclosure-title">Когда используется Gateway</h3>
+        <p id="privacy-ai-summary">
+          Когда вы запускаете проверку с ИИ, текст статьи и выбранные сведения
+          из профиля передаются сервису анализа.
+        </p>
+        <details class="privacy-disclosure">
+          <summary id="gateway-disclosure-title">
+            Какие данные передаются
+          </summary>
           <p id="gateway-disclosure-description">
-            Только после вашего действия и только если локальный режим выключен.
-            Передаются текст текущей страницы, задача и не более нескольких
-            локально выбранных сигналов — никогда не полный профиль.
+            По вашему запросу Vercel AI Gateway и выбранная модель получают
+            текст статьи, вашу цель и выбранные сведения из профиля, знаний и
+            истории. При создании профиля с ИИ передаются ваши ответы. Полный
+            профиль и исходные заметки не отправляются. Локальный режим
+            запрещает эти ИИ-запросы; синхронизация подключённых сервисов
+            остаётся доступной по вашему действию.
           </p>
-        </section>
+        </details>
 
-        <section class="privacy-panel">
-          <h3 id="site-access-title">Доступ ко всем сайтам</h3>
+        <details class="privacy-disclosure">
+          <summary id="site-access-title">Зачем нужен доступ к сайтам</summary>
           <p id="site-access-description">
             Он нужен, чтобы карточки работали на обычных веб-страницах.
             Attention читает видимый текст локально; само разрешение не означает
             отправку данных в сеть.
           </p>
-        </section>
+        </details>
 
-        <section class="privacy-panel">
-          <h3 id="session-title">Публичная сессия</h3>
-          <p id="session-status" class="privacy-status"></p>
-        </section>
-
-        <section class="privacy-panel">
-          <h3 id="profile-export-title">Диагностический профиль</h3>
-          <p id="profile-export-description">
-            Скачивает сигналы профиля и агрегированную статистику для анализа.
-            Без ключей, токенов, списка посещённых страниц и текстов заметок.
+        <details id="privacy-help" class="privacy-disclosure">
+          <summary id="privacy-help-title">Помощь при неполадках</summary>
+          <p id="privacy-help-description">
+            Если что-то не работает, сохраните отчёт для поддержки. Ничего не
+            отправляется автоматически.
           </p>
-          <div class="privacy-actions">
-            <button
-              id="export-diagnostic-profile"
-              class="privacy-primary-action"
-              type="button"
-            >
-              Скачать безопасный JSON
-            </button>
-          </div>
-        </section>
+          <section class="privacy-panel">
+            <h3 id="profile-export-title">Отчёт для поддержки</h3>
+            <p id="profile-export-description">
+              Версия расширения и общая статистика. Без содержимого профиля,
+              статей, заметок, адресов и ключей.
+            </p>
+            <div class="privacy-actions">
+              <button id="export-diagnostic-profile" type="button">
+                Скачать отчёт
+              </button>
+            </div>
+          </section>
 
-        <section class="privacy-panel">
-          <h3 id="ai-report-title">Последняя проверка с ИИ</h3>
-          <p id="ai-report-description">
-            Если ИИ не показывает фрагменты, скачайте отчёт после проверки
-            статьи. Без текста статьи, профиля и ключей.
-          </p>
-          <div class="privacy-actions">
-            <button id="export-ai-analysis" type="button">
-              Скачать отчёт ИИ-анализа
-            </button>
-          </div>
-          <p id="ai-report-status" class="privacy-status" role="status"></p>
-        </section>
+          <section class="privacy-panel">
+            <h3 id="ai-report-title">Последняя проверка с ИИ</h3>
+            <p id="ai-report-description">
+              Поможет разобраться с результатом проверки статьи. Без текста
+              статьи, профиля и ключей.
+            </p>
+            <div class="privacy-actions">
+              <button id="export-ai-analysis" type="button">
+                Скачать отчёт ИИ-анализа
+              </button>
+            </div>
+            <p id="ai-report-status" class="privacy-status" role="status"></p>
+          </section>
 
-        <section class="privacy-panel">
-          <h3 id="diagnostics-title">Диагностика</h3>
-          <p id="diagnostics-summary" class="privacy-status"></p>
-          <p id="diagnostics-description">
-            Журнал содержит только коды сбоев и время. Без URL, текста страниц,
-            профиля, ключей, токенов и исходных сообщений ошибок.
-          </p>
-          <div class="privacy-actions">
-            <button id="copy-diagnostics" type="button">
-              Копировать диагностику
-            </button>
-            <button id="clear-diagnostics" type="button">Очистить</button>
-          </div>
-        </section>
+          <section class="privacy-panel">
+            <h3 id="diagnostics-title">Журнал ошибок</h3>
+            <p
+              id="diagnostics-summary"
+              class="privacy-status"
+              role="status"
+            ></p>
+            <p id="diagnostics-description">
+              Поможет найти причину сбоя. Без содержимого страниц, профиля,
+              адресов и ключей.
+            </p>
+            <div class="privacy-actions">
+              <button id="copy-diagnostics" type="button">
+                Копировать журнал
+              </button>
+              <button id="clear-diagnostics" type="button">Очистить</button>
+            </div>
+          </section>
+        </details>
 
         <section class="privacy-panel privacy-danger-panel">
-          <h3 id="delete-all-title">Удалить все данные Attention</h3>
+          <h3 id="delete-all-title">Удалить мои данные</h3>
           <p id="delete-all-description">
-            Удалит профиль, историю, сохранённые материалы, настройки,
-            диагностику, сессию и подключённый Gateway-ключ из Chrome.
+            Удалит данные Attention из этого браузера: профиль, сохранённые
+            материалы, настройки и подключения. Отменить это нельзя.
           </p>
-          <button id="delete-all-data" type="button">Удалить всё</button>
+          <button id="delete-all-data" type="button">Удалить мои данные</button>
         </section>
       </section>
     </main>

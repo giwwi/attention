@@ -638,6 +638,7 @@ export interface HoverPreviewResponse {
   preview: HoverPreview;
   context?: AnalysisContext;
   saved?: boolean;
+  /** Legacy response field; ignored. Passage highlighting now starts on click. */
   novelPassageHighlightsEnabled?: boolean;
   readwiseConnected?: boolean;
   analysisSource?: 'local' | 'ai';

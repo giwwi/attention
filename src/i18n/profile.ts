@@ -1,4 +1,5 @@
 import { ONBOARDING_ROWS } from './onboarding';
+import { OPTIONAL_AI_ROWS } from './optional-ai';
 import { normalizeUiLanguage, type UiLanguage } from './ui';
 
 // The first column is the source label. User-entered profile values are never
@@ -211,7 +212,7 @@ export const PROFILE_TRANSLATIONS = new Map<
   string,
   Readonly<Record<UiLanguage, string>>
 >(
-  (rows.trim() + '\n' + ONBOARDING_ROWS.trim())
+  (rows.trim() + '\n' + ONBOARDING_ROWS.trim() + '\n' + OPTIONAL_AI_ROWS.trim())
     .trim()
     .split('\n')
     .map((row) => {

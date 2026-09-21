@@ -10,6 +10,10 @@ import {
 } from '../pilot/launcher';
 import { ProfileOnboarding } from '../onboarding/profile-onboarding';
 import { prepareFirstProfile } from '../onboarding/first-profile';
+import { OptionalSources } from '../onboarding/optional-sources';
+import { OPTIONAL_SOURCES_PENDING_KEY } from '../onboarding/optional-sources-state';
+import { OptionalAi } from '../onboarding/optional-ai';
+import { OPTIONAL_AI_PENDING_KEY } from '../onboarding/optional-ai-state';
 import { AiQuickProfileBuilder } from '../profile/quick-builder';
 import { PERSONAL_PROFILE_KEY, loadProfile } from '../profile/storage';
 import { isProfileReady } from '../profile/readiness';
@@ -38,10 +42,6 @@ import {
   type UiTextKey,
 } from '../i18n/ui';
 import {
-  NOVEL_PASSAGE_HIGHLIGHTS_KEY,
-  novelPassageHighlightsEnabled,
-} from '../novelty/settings';
-import {
   assertDataOperationCurrent,
   beginDataOperation,
   observeDataOperation,
@@ -65,7 +65,6 @@ openCardButton.disabled = true;
 const backButton = getElement<HTMLButtonElement>('back-to-launcher');
 const settingsHome = getElement<HTMLElement>('settings-home');
 const languageSelect = getElement<HTMLSelectElement>('interface-language');
-const highlights = getElement<HTMLInputElement>('novel-passage-highlights');
 const aiSettingsPanel = getElement<HTMLElement>('ai-settings');
 const savedMaterialsView = getElement<HTMLElement>('saved-materials-view');
 const privacySettingsPanel = getElement<HTMLElement>('privacy-settings');
@@ -129,6 +128,23 @@ const readwise = new ReadwiseController({
 });
 const obsidian = new ObsidianController({ getLanguage: () => language });
 const notion = new NotionController(() => language);
+const optionalAi = new OptionalAi({
+  getLanguage: () => language,
+  isCurrent: () => !popupInvalidated && !needsOnboarding,
+  onComplete: () => {
+    void ai.refresh().catch(() => undefined);
+    profileOnboarding?.showComplete();
+  },
+});
+const optionalSources = new OptionalSources({
+  getLanguage: () => language,
+  isCurrent: () => !popupInvalidated && !needsOnboarding,
+  openReadwise: (onClose) => readwise.show(onClose),
+  openHistory: (onClose) => browserHistory.open('profile', onClose),
+  onComplete: () => {
+    void optionalAi.show();
+  },
+});
 installPilotLauncher();
 
 function clearStatus(): void {
@@ -150,6 +166,7 @@ function showStatus(key: PopupLauncherTextKey, error = false): void {
   );
 }
 function hidePanels(): void {
+  optionalAi.hide();
   for (const panel of [
     launcher,
     settingsHome,
@@ -159,6 +176,8 @@ function hidePanels(): void {
     readwiseSettingsPanel,
     profileRoot,
     historyPanel,
+    optionalSources.root,
+    optionalAi.root,
   ])
     panel.hidden = true;
   document.body.classList.remove('profile-flow-active', 'history-flow-active');
@@ -219,6 +238,8 @@ function translate(): void {
   readwise.translate();
   obsidian.translate();
   notion.translate();
+  optionalSources.translate();
+  optionalAi.translate();
   if (launchStatus)
     status.textContent = popupLauncherText(language, launchStatus);
 }
@@ -292,34 +313,10 @@ function selectLanguage(selected: UiLanguage): Promise<void> {
     });
   return languageChanges;
 }
-for (const [element, key] of [
-  [languageSelect, UI_LANGUAGE_KEY],
-  [highlights, NOVEL_PASSAGE_HIGHLIGHTS_KEY],
-] as const) {
-  element.addEventListener('change', () => {
-    if (popupInvalidated) return;
-    if (key === UI_LANGUAGE_KEY) {
-      void selectLanguage(normalizeUiLanguage(languageSelect.value));
-      return;
-    }
-    const value = highlights.checked;
-    void currentPopupOperation()
-      .then(async (operation) => {
-        await commitDataOperation(operation, () =>
-          privateStorage.set({ [key]: value }),
-        );
-        if (popupInvalidated) return;
-      })
-      .catch((error) => {
-        if (!(error instanceof DataOperationCancelledError))
-          setPopupStatus(
-            status,
-            'error',
-            popupText(language, 'settingsFailed'),
-          );
-      });
-  });
-}
+languageSelect.addEventListener('change', () => {
+  if (popupInvalidated) return;
+  void selectLanguage(normalizeUiLanguage(languageSelect.value));
+});
 
 let profileRefreshRevision = 0;
 privateStorageChanges.addListener((changes, area) => {
@@ -360,6 +357,7 @@ privateStorageChanges.addListener((changes, area) => {
     field.value = '';
   }
   ai.resetAfterErasure();
+  optionalAi.hide();
   profileOnboarding?.resetAfterErasure();
   profileOnboarding = null;
   const panel = document.createElement('main');
@@ -389,8 +387,9 @@ async function initialize(): Promise<void> {
   await storageReady;
   const stored = await privateStorage.get([
     UI_LANGUAGE_KEY,
-    NOVEL_PASSAGE_HIGHLIGHTS_KEY,
     PERSONAL_PROFILE_KEY,
+    OPTIONAL_SOURCES_PENDING_KEY,
+    OPTIONAL_AI_PENDING_KEY,
   ]);
   await assertDataOperationCurrent(operation);
   const initialChoice = document.documentElement.dataset.onboardingLanguage;
@@ -405,9 +404,6 @@ async function initialize(): Promise<void> {
     );
     delete document.documentElement.dataset.onboardingLanguage;
   }
-  highlights.checked = novelPassageHighlightsEnabled(
-    stored[NOVEL_PASSAGE_HIGHLIGHTS_KEY],
-  );
   // Construct before translating: profile forms retain their original labels
   // for the existing nine-language profile translator.
   profileOnboarding = new ProfileOnboarding({
@@ -455,12 +451,29 @@ async function initialize(): Promise<void> {
     backButton.hidden = false;
   } else showLauncher();
   const url = new URL(location.href);
-  if (!needsOnboarding && url.searchParams.get('profileCreated') === '1') {
+  const profileCreated = url.searchParams.get('profileCreated') === '1';
+  if (profileCreated) {
     url.searchParams.delete('profileCreated');
     history.replaceState(null, '', url.href);
-    launcher.hidden = true;
+  }
+  if (
+    !needsOnboarding &&
+    (profileCreated ||
+      (stored[OPTIONAL_SOURCES_PENDING_KEY] === true && !restoredProfile))
+  ) {
+    hidePanels();
     navigation.hidden = true;
-    profileOnboarding.showComplete();
+    backButton.hidden = true;
+    await optionalSources.show();
+  } else if (
+    !needsOnboarding &&
+    !restoredProfile &&
+    stored[OPTIONAL_AI_PENDING_KEY] === true
+  ) {
+    hidePanels();
+    navigation.hidden = true;
+    backButton.hidden = true;
+    await optionalAi.show();
   }
 }
 void initialize()

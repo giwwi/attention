@@ -3,6 +3,7 @@ import {
   fullCardDecision,
   installHoverPreview,
 } from '../src/content/hover-preview';
+import { AI_PASSAGE_DISPLAY_TYPE } from '../src/diagnostics/ai-analysis-messages';
 import { captureDocument } from '../src/content/capture';
 import { LocalAnalyzer } from '../src/analyzer/local-analyzer';
 import { createFullAnalysisHoverPreview } from '../src/analyzer/preview';
@@ -322,54 +323,81 @@ describe('large article card surface', () => {
     ).toBe(false);
   });
 
-  it('offers actual passages for a topic match without claiming it solves the explicit task', async () => {
-    for (const paragraph of document.querySelectorAll('p'))
-      paragraph.textContent = paragraph.textContent!.replace(
-        'This article',
-        'The article',
+  it.each([
+    { source: 'local' as const, legacyPreference: undefined },
+    { source: 'local' as const, legacyPreference: false },
+    { source: 'ai' as const, legacyPreference: undefined },
+    { source: 'ai' as const, legacyPreference: false },
+  ])(
+    'offers $source passages with legacy preference $legacyPreference without painting the page',
+    async ({ source, legacyPreference }) => {
+      for (const paragraph of document.querySelectorAll('p'))
+        paragraph.textContent = paragraph.textContent!.replace(
+          'This article',
+          'The article',
+        );
+      const capture = captureDocument(document, window.location.href);
+      const evaluation = await new LocalAnalyzer().analyze(
+        capture,
+        {
+          ...context,
+          scenario: 'work',
+          intent: 'coral restoration',
+        },
+        {
+          profileUpdatedAt: '2026-09-13',
+          signals: [
+            {
+              id: 'research',
+              profileEntryId: null,
+              kind: 'interest',
+              effect: 'positive',
+              label: 'compare observations',
+              explanation: '',
+              confidence: 0.9,
+              matchScore: 1,
+            },
+          ],
+        },
       );
-    const capture = captureDocument(document, window.location.href);
-    const evaluation = await new LocalAnalyzer().analyze(
-      capture,
-      {
-        ...context,
-        scenario: 'work',
-        intent: 'coral restoration',
-      },
-      {
-        profileUpdatedAt: '2026-09-13',
-        signals: [
-          {
-            id: 'research',
-            profileEntryId: null,
-            kind: 'interest',
-            effect: 'positive',
-            label: 'compare observations',
-            explanation: '',
-            confidence: 0.9,
-            matchScore: 1,
-          },
-        ],
-      },
-    );
-    const response = previewResponse();
-    expect(evaluation.insights?.readingPassages?.items.length).toBeGreaterThan(
-      0,
-    );
-    response.preview = createFullAnalysisHoverPreview(evaluation);
-    response.novelPassageHighlightsEnabled = true;
-    const { shadow } = await openCard(response);
-    expect(element(shadow, '.verdict').textContent).toBe(
-      'Start with the passages',
-    );
-    expect(element(shadow, '.score').textContent).toContain(
-      'compare observations',
-    );
-    expect(element(shadow, '.score').textContent).toContain('selective look');
-    expect(element<HTMLButtonElement>(shadow, '.passages-button').hidden).toBe(
-      false,
-    );
-  });
+      const response = previewResponse();
+      expect(
+        evaluation.insights?.readingPassages?.items.length,
+      ).toBeGreaterThan(0);
+      response.preview = createFullAnalysisHoverPreview(evaluation);
+      response.analysisSource = source;
+      if (legacyPreference !== undefined)
+        response.novelPassageHighlightsEnabled = legacyPreference;
+      response.preview.insights!.readingPassages!.source = source;
+      if (source === 'ai')
+        response.preview.insights!.aiAnalysisId =
+          'd34930d9-f378-440c-8bd7-993461ba4ff7';
+      const { shadow, api } = await openCard(response);
+      expect(
+        document.querySelector('[data-attention-novel-passages]'),
+      ).toBeNull();
+      if (source === 'ai')
+        expect(api.sendMessage).toHaveBeenCalledWith(
+          expect.objectContaining({
+            type: AI_PASSAGE_DISPLAY_TYPE,
+            display: expect.objectContaining({
+              reason: 'matched',
+              matched: expect.any(Number),
+            }),
+          }),
+        );
+      expect(element(shadow, '.verdict').textContent).toBe(
+        'Start with the passages',
+      );
+      expect(element(shadow, '.score').textContent).toContain(
+        'compare observations',
+      );
+      expect(element(shadow, '.score').textContent).toContain('selective look');
+      expect(
+        element<HTMLButtonElement>(shadow, '.passages-button').hidden,
+      ).toBe(false);
+    },
+  );
 
   it.each([
     {

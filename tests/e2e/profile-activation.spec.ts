@@ -125,7 +125,9 @@ test('cold cards guide setup; profile save activates existing tabs; deletion res
     });
     await languageChoice.selectOption('de');
     await expect(popup.locator('#vault-password')).toHaveCount(0);
-    expect(await worker.evaluate(() => attentionVault.getVaultStatus())).toBe('unconfigured');
+    expect(await worker.evaluate(() => attentionVault.getVaultStatus())).toBe(
+      'unconfigured',
+    );
     await languageChoice.selectOption('en');
     await popup.locator('#profile-start').click();
     await expect(popup.locator('#profile-source-step')).toBeVisible();
@@ -143,9 +145,14 @@ test('cold cards guide setup; profile save activates existing tabs; deletion res
       fullPage: true,
     });
     await languageChoice.selectOption('ru');
-    expect(JSON.stringify(await readRawVaultStorage(worker))).not.toContain('personalProfile');
+    expect(JSON.stringify(await readRawVaultStorage(worker))).not.toContain(
+      'personalProfile',
+    );
     for (const tab of [article, feed])
-      await expect(tab.locator('[data-attention-preview]')).toHaveAttribute('data-attention-profile-required', 'true');
+      await expect(tab.locator('[data-attention-preview]')).toHaveAttribute(
+        'data-attention-profile-required',
+        'true',
+      );
     // Finish the cold scroll before returning later for the first hover.
     await article.locator('h1').scrollIntoViewIfNeeded();
 
@@ -167,8 +174,12 @@ test('cold cards guide setup; profile save activates existing tabs; deletion res
     await popup.locator('#profile-import-json').fill(PROFILE_IMPORT);
     await popup.locator('#validate-profile').click();
     await expect(popup.locator('#profile-review-step')).toBeVisible();
-    expect(await worker.evaluate(() => attentionVault.getVaultStatus())).toBe('unconfigured');
-    expect(JSON.stringify(await readRawVaultStorage(worker))).not.toContain('Software quality');
+    expect(await worker.evaluate(() => attentionVault.getVaultStatus())).toBe(
+      'unconfigured',
+    );
+    expect(JSON.stringify(await readRawVaultStorage(worker))).not.toContain(
+      'Software quality',
+    );
     await expect(article.locator('[data-attention-preview]')).toHaveAttribute(
       'data-attention-profile-required',
       'true',
@@ -180,6 +191,114 @@ test('cold cards guide setup; profile save activates existing tabs; deletion res
     await popup.locator('#save-profile').click();
     await createVaultThroughUi(popup);
 
+    await expect(popup.locator('#optional-sources')).toBeVisible();
+    await expect(popup.locator('#profile-complete-step')).toBeHidden();
+    await expect(popup.locator('#optional-sources-continue')).toHaveText(
+      'Пропустить этот шаг',
+    );
+    expect(
+      await worker.evaluate(() =>
+        chrome.permissions.contains({ permissions: ['history'] }),
+      ),
+    ).toBe(false);
+    await popup.screenshot({
+      path: 'output/playwright/optional-sources-ru.png',
+      fullPage: true,
+    });
+    await popup.setViewportSize({ width: 380, height: 600 });
+    await expect(popup.locator('#optional-sources-continue')).toBeInViewport();
+    await popup.screenshot({
+      path: 'output/playwright/optional-sources-compact.png',
+    });
+    await popup.setViewportSize({ width: 1024, height: 900 });
+    await popup.emulateMedia({ colorScheme: 'dark' });
+    await popup.screenshot({
+      path: 'output/playwright/optional-sources-dark.png',
+    });
+    await popup.emulateMedia({ colorScheme: 'light' });
+    await popup.screenshot({
+      path: 'output/playwright/optional-sources-desktop.png',
+    });
+    await popup.setViewportSize({ width: 380, height: 850 });
+    // Reload must preserve the new step without rerunning profile/password setup.
+    await popup.reload();
+    await expect(popup.locator('#optional-sources')).toBeVisible();
+    await popup.locator('#optional-readwise').click();
+    await expect(popup.locator('#readwise-settings')).toBeVisible();
+    await expect(popup.locator('#optional-sources')).toBeHidden();
+    await popup.locator('#readwise-token').fill('unsaved-test-token');
+    await popup.locator('#close-readwise-settings').click();
+    await expect(popup.locator('#optional-sources')).toBeVisible();
+    await expect(popup.locator('#readwise-token')).toHaveValue('');
+    await popup.locator('#optional-history').click();
+    await expect(popup.locator('#browser-history-setup')).toBeVisible();
+    expect(
+      await worker.evaluate(() =>
+        chrome.permissions.contains({ permissions: ['history'] }),
+      ),
+    ).toBe(false);
+    await popup.locator('#close-browser-history').click();
+    await expect(popup.locator('#optional-sources')).toBeVisible();
+    const obsidianOpened = context.waitForEvent('page');
+    await popup.locator('#optional-obsidian').click();
+    const obsidianSetup = await obsidianOpened;
+    await expect(obsidianSetup).toHaveURL(/obsidian.html$/);
+    await expect(obsidianSetup.locator('#close-obsidian')).toBeVisible();
+    expect(popup.isClosed()).toBe(false);
+    await obsidianSetup.locator('#close-obsidian').click();
+    await popup.bringToFront();
+    await expect(popup.locator('#optional-sources')).toBeVisible();
+    await popup.locator('#optional-sources-continue').click();
+    await expect(popup.locator('#optional-ai')).toBeVisible();
+    await expect(popup.locator('#profile-complete-step')).toBeHidden();
+    await expect(popup.locator('#optional-ai')).toContainText(
+      'Это необязательно.',
+    );
+    await expect(popup.locator('#optional-ai-create-key')).toHaveAttribute(
+      'target',
+      '_blank',
+    );
+    await expect(popup.locator('#optional-ai-key')).toHaveAttribute(
+      'type',
+      'password',
+    );
+    await context.route('https://vercel.com/d?*', (route) =>
+      route.fulfill({
+        contentType: 'text/html',
+        body: '<title>API key setup fixture</title>',
+      }),
+    );
+    const keyPageOpened = context.waitForEvent('page');
+    await popup.locator('#optional-ai-create-key').click();
+    const keyPage = await keyPageOpened;
+    await expect(keyPage).toHaveURL(/vercel\.com\/d\?.*api-keys/);
+    expect(popup.isClosed()).toBe(false);
+    await keyPage.close();
+    await popup.bringToFront();
+    await expect(popup.locator('#optional-ai')).toBeVisible();
+    await popup.setViewportSize({ width: 380, height: 600 });
+    await expect(popup.locator('#optional-ai-skip')).toBeInViewport();
+    await popup.screenshot({
+      path: 'output/playwright/optional-ai-compact.png',
+    });
+    await popup.setViewportSize({ width: 1024, height: 950 });
+    await popup.screenshot({
+      path: 'output/playwright/optional-ai-desktop.png',
+    });
+    await popup.emulateMedia({ colorScheme: 'dark' });
+    await popup.screenshot({ path: 'output/playwright/optional-ai-dark.png' });
+    await popup.emulateMedia({ colorScheme: 'light' });
+    await popup.locator('#optional-ai-key').fill('UNSAVED_TEST_KEY');
+    await popup.reload();
+    await expect(popup.locator('#optional-ai')).toBeVisible();
+    await expect(popup.locator('#optional-sources')).toBeHidden();
+    await expect(popup.locator('#optional-ai-key')).toHaveValue('');
+    expect(
+      await worker.evaluate(() =>
+        attentionVault.privateStorage.get('aiAnalyzerSettings'),
+      ),
+    ).toEqual({});
+    await popup.locator('#optional-ai-skip').click();
     await expect(popup.locator('#profile-complete-step')).toBeVisible();
     await expect(popup.locator('#profile-return')).toBeVisible();
     await popup.locator('#profile-return').click();
@@ -195,6 +314,10 @@ test('cold cards guide setup; profile save activates existing tabs; deletion res
     await popup.bringToFront();
     await popup.locator('#profile-finish').click();
     await expect(popup.locator('#launcher-home')).toBeVisible();
+    await popup.reload();
+    await expect(popup.locator('#launcher-home')).toBeVisible();
+    await expect(popup.locator('#optional-sources')).toBeHidden();
+    await expect(popup.locator('#optional-ai')).toBeHidden();
     await expect(popup.locator('#open-page-card')).toBeEnabled();
     await expect(
       article.locator('[data-attention-profile-required]'),
