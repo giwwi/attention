@@ -957,3 +957,102 @@ h3 {
     display: none;
   }
 }
+
+/* The policy shares the same type and colours; its legal text remains unchanged. */
+.policy-page header,
+.policy-page main,
+.policy-page footer {
+  width: min(820px, calc(100% - 48px));
+  margin-inline: auto;
+}
+.policy-page header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  padding-block: 28px;
+  border-bottom: 1px solid var(--line);
+}
+.policy-page header > a:last-child:not(.brand) {
+  font-size: 14px;
+}
+.policy-page main {
+  padding-block: 62px;
+  line-height: 1.85;
+}
+.policy-page h1 {
+  font: 400 clamp(54px, 8vw, 84px)/1 var(--serif);
+  margin: 0 0 20px;
+}
+.policy-page h2 {
+  font: 400 36px/1.15 var(--serif);
+  letter-spacing: -0.02em;
+  margin: 44px 0 20px;
+  padding-top: 22px;
+  border-top: 1px solid var(--line);
+}
+.policy-page h3 {
+  font-size: 18px;
+  line-height: 1.5;
+  margin: 28px 0 12px;
+}
+.policy-page p,
+.policy-page ul {
+  margin: 0 0 18px;
+}
+.policy-page main > p:not(.date),
+.policy-page li {
+  color: #41544b;
+}
+.policy-page ul {
+  padding-left: 24px;
+}
+.policy-page li + li {
+  margin-top: 14px;
+}
+.policy-page .date {
+  color: var(--muted);
+  font-size: 13px;
+  margin-bottom: 36px;
+}
+.policy-page main a {
+  color: var(--green);
+  overflow-wrap: anywhere;
+}
+.policy-page footer {
+  border-top: 1px solid var(--line);
+  padding-block: 30px;
+  font-size: 14px;
+}
+
+@media (max-width: 640px) {
+  .policy-page main {
+    padding-block: 40px;
+  }
+  .policy-page h2 {
+    font-size: 30px;
+  }
+}
+@media (prefers-color-scheme: dark) {
+  :root:has(.policy-page) {
+    color-scheme: dark;
+    background: #182e28;
+  }
+  .policy-page {
+    --paper: #182e28;
+    --ink: #f7f8f2;
+    --muted: #bfcdbb;
+    --line: #4a6051;
+    --green: #d9f879;
+    color: var(--ink);
+    background: var(--paper);
+  }
+  .policy-page main > p:not(.date),
+  .policy-page li {
+    color: #c6d2c5;
+  }
+  .policy-page .brand-symbol {
+    background: #d9f879;
+    color: #182e28;
+  }
+}
