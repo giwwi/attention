@@ -3,22 +3,19 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Attention — Your context. Your call.</title>
     <meta
       name="description"
-      content="Your profile, a first signal before you open, and relevant passages with context. Attention is a local-first reading companion for Chrome."
+      content="Your AI knows you. Now use that knowledge on your terms. Bring your profile into Attention and choose for yourself what to read."
     />
-    <meta name="theme-color" content="#f7f8f2" />
-    <meta
-      property="og:title"
-      content="Attention — Interesting. But worth your time?"
-    />
+    <meta name="theme-color" content="#f4f1e8" />
+    <meta property="og:title" content="Attention — Your context. Your call." />
     <meta
       property="og:description"
-      content="Less noise. More insight. Bring your profile, preview article links, and find relevant passages with context. A local-first Chrome extension."
+      content="Take your profile out of the chat. Put your interests in charge of what you read."
     />
     <meta property="og:type" content="website" />
     <meta property="og:url" content="https://giwwi.github.io/attention/" />
-    <title>Attention — Interesting. But worth your time?</title>
     <link rel="icon" href="./mark.svg" type="image/svg+xml" />
     <link
       rel="preload"
@@ -27,221 +24,177 @@
       type="font/ttf"
       crossorigin
     />
-    <link rel="stylesheet" href="./site.css?v=20260908-actions" />
+    <link rel="stylesheet" href="./site.css?v=20260921-context" />
   </head>
   <body>
     <a class="skip-link" href="#main">Skip to content</a>
-    <header class="nav shell" id="top">
+    <header class="shell nav" id="top">
       <a class="brand" href="#top" aria-label="Attention home"
         ><span class="brand-symbol" aria-hidden="true">a.</span>Attention</a
       >
       <span class="nav-note">Less noise. More insight.</span>
       <nav aria-label="Main navigation">
-        <a href="#how-it-works">The idea</a>
-        <a href="#demo">The demo</a>
-        <a
-          class="nav-try"
-          href="https://chromewebstore.google.com/detail/attention/fcclhejgaklnkfgalglcmhmledgefhhp"
-          >Try Attention <span aria-hidden="true">↗</span></a
+        <a href="#how-it-works">The transfer</a><a href="#demo">Watch it</a
+        ><a class="nav-try" href="#install"
+          >Get Attention <span aria-hidden="true">↗</span></a
         >
       </nav>
     </header>
-
     <main id="main">
       <section class="hero shell" aria-labelledby="hero-title">
         <div class="hero-copy">
           <p class="eyebrow">
-            <span class="status-dot" aria-hidden="true"></span>A reading
-            companion for Chrome
+            <span class="red-square" aria-hidden="true"></span> Your context.
+            Your call.
           </p>
-          <h1 id="hero-title">
-            Interesting.<br />But <em>worth</em><br />your time<span
-              class="question"
-              >?</span
-            >
-          </h1>
+          <h1 id="hero-title">Your AI<br /><em>knows you.</em></h1>
+          <p class="hero-statement">
+            Now use that knowledge<br />on <strong>your terms.</strong>
+          </p>
           <p class="lede">
-            Bring a profile from an AI assistant you already use. Attention uses
-            your goals and familiar topics to help you decide what to open and
-            which passages deserve a closer look.
+            Bring your profile into Attention — and
+            <b>choose for yourself what to read.</b> Based on your interests,
+            not someone else’s algorithms.
           </p>
           <div class="actions">
-            <a
-              class="button primary"
-              href="https://chromewebstore.google.com/detail/attention/fcclhejgaklnkfgalglcmhmledgefhhp"
-              >Get Attention for Chrome <span aria-hidden="true">↗</span></a
-            >
-            <a class="quiet-link" href="#demo"
-              ><span aria-hidden="true">▷</span> Watch in 44 seconds</a
-            >
+            <a class="button primary" href="#install"
+              >Take my profile with me <span aria-hidden="true">↗</span></a
+            ><a class="quiet-link" href="#demo">▷ See it happen</a>
           </div>
           <p class="microcopy">
-            Free prototype. Local evaluation.<br />
-            Store: v0.29.1 · Latest build: v0.30.1.
-            <a href="#install">Get the latest version manually.</a>
+            A free reading companion for Chrome. No Attention account.
           </p>
         </div>
-        <figure class="reading-proof">
-          <div class="proof-meta">
-            <span>ON YOUR NEXT ARTICLE</span><span aria-hidden="true">↙</span>
+        <figure
+          class="ownership-proof"
+          aria-label="Illustration of personal context becoming an editable Attention profile"
+        >
+          <div class="chat-slip">
+            <span class="eyebrow">Somewhere in your chats</span>
+            <p>“I’m working on faster LLM inference.”</p>
+            <p>“I already know the software basics.”</p>
+            <p>“Help me understand GPU optimisation.”</p>
           </div>
-          <p class="article-source">martinfowler.com</p>
-          <h2>Is High Quality Software<br />Worth the Cost?</h2>
-          <div
-            class="proof-card"
-            role="img"
-            aria-label="Example Attention card: Learning, Understand software quality. Worth reading. Full article: about 12 minutes. Local evaluation, with an optional Evaluate with AI button. Go to 2 relevant passages with context, or save for later."
-          >
-            <div class="proof-card-content" aria-hidden="true">
-              <div class="proof-card-header">
-                <span>ATTENTION</span><span>×</span>
+          <div class="transfer-mark" aria-hidden="true">↓</div>
+          <div class="profile-paper">
+            <div class="paper-top">
+              <span class="eyebrow">Attention / Your profile</span
+              ><span class="paper-index">001</span>
+            </div>
+            <h2>There you are.</h2>
+            <dl>
+              <div>
+                <dt>Your goal</dt>
+                <dd>Make LLM inference faster</dd>
               </div>
-              <p class="proof-context">
-                ▸ Learning · Understand software quality
-              </p>
-              <p class="proof-verdict">Worth reading</p>
-              <p class="proof-reason">
-                Looks like a useful next step for learning this topic
-              </p>
-              <p class="proof-readtime">Full article · ~12 min</p>
-              <div class="proof-analysis">
-                <span>Local evaluation</span
-                ><span class="proof-ai">Evaluate with AI</span>
+              <div>
+                <dt>Your interests</dt>
+                <dd>GPUs · Speculative decoding</dd>
               </div>
-              <div class="proof-decisions">
-                <span class="proof-passages">Go to 2 passages</span>
-                <small>With context · ~1 min</small>
-                <span>Save for later</span>
+              <div>
+                <dt>You already know</dt>
+                <dd>Software development</dd>
               </div>
-              <p class="proof-why">▸ Why this assessment</p>
+            </dl>
+            <div class="paper-bottom">
+              <span>Check it. Change it. Use it.</span
+              ><span class="stamp">In your hands</span>
             </div>
           </div>
           <figcaption>
-            <span class="proof-tick" aria-hidden="true">↳</span
-            ><span
-              >A real article. An example assessment.<br /><a
-                href="https://martinfowler.com/articles/is-quality-worth-cost.html"
-                >Article by Martin Fowler</a
-              >
-              · Local evaluation</span
-            >
+            Illustrative profile. You review and edit the real one.
           </figcaption>
         </figure>
       </section>
-
+      <div class="ownership-line shell" aria-hidden="true">
+        <span>Your conversations.</span><span>Your knowledge.</span
+        ><span class="ownership-last">Your profile.</span>
+      </div>
       <section
-        class="decision-section"
+        class="transfer-section shell"
         id="how-it-works"
-        aria-labelledby="decision-title"
+        aria-labelledby="transfer-title"
       >
-        <div class="shell">
-          <div class="section-line">
-            <span class="eyebrow">01 / The decision</span>
-            <h2 id="decision-title">Good reading starts with a choice.</h2>
-          </div>
-          <div
-            class="decision-picker"
-            role="group"
-            aria-label="Explore how Attention helps you read"
-          >
-            <button type="button" data-decision="preview" aria-pressed="true">
-              <span>Preview</span><sup>01</sup>
-            </button>
-            <button type="button" data-decision="focus" aria-pressed="false">
-              <span>Focus</span><sup>02</sup>
-            </button>
-            <button type="button" data-decision="save" aria-pressed="false">
-              <span>Save</span><sup>03</sup>
-            </button>
-          </div>
-          <div class="decision-detail">
-            <p class="decision-hint">
-              A signal. A shortcut.<br />You have the last word.
-            </p>
-            <div aria-live="polite" aria-atomic="true">
-              <h3 id="decision-heading">A first signal before you open.</h3>
-              <p id="decision-copy">
-                Hover over an article link in your feed for a first indication
-                of whether it fits your interests. Open the article for a fuller
-                assessment.
-              </p>
-            </div>
-            <span class="decision-arrow" aria-hidden="true">↗</span>
-          </div>
-          <noscript
-            ><p class="no-script-note">
-              Preview a link before opening. Jump to relevant passages with
-              context. Save a worthwhile article for later.
-            </p></noscript
-          >
-        </div>
-      </section>
-
-      <section class="context-section shell" aria-labelledby="context-title">
-        <div class="margin-note">
-          <span class="eyebrow">02 / The context</span>
-          <p>“Useful” is<br />personal.</p>
-        </div>
-        <div class="context-main">
-          <h2 id="context-title">
-            The same article.<br /><em>A different moment.</em>
+        <div class="section-line">
+          <p class="eyebrow">01 / Out of the chat</p>
+          <h2 id="transfer-title">
+            You supplied the context.<br /><em>Take it with you.</em>
           </h2>
+        </div>
+        <div class="transfer-layout">
           <p class="section-intro">
-            Learning something new? Solving a problem? Just exploring? What
-            deserves your attention depends on what you need today.
+            Your work, interests and plans shouldn’t be useful only inside a
+            conversation. Ask your assistant to turn what it knows into a
+            profile you can use.
           </p>
-          <ol class="context-steps">
+          <ol class="transfer-steps">
             <li>
               <span class="step-number">01</span>
               <div>
-                <h3>Make it yours.</h3>
+                <h3>Ask the assistant that knows you.</h3>
                 <p>
-                  Import your profile from your AI assistant, then tell
-                  Attention what matters now. You can change your goal right on
-                  the card.
+                  Attention prepares a prompt. Paste it into ChatGPT, Claude,
+                  Gemini, Copilot or Perplexity.
                 </p>
               </div>
             </li>
             <li>
               <span class="step-number">02</span>
               <div>
-                <h3>Read enough to understand.</h3>
+                <h3>Bring the answer back.</h3>
                 <p>
-                  Move between relevant passages, with examples, explanations
-                  and limitations kept together. If no useful match is found,
-                  Attention says so. A partial AI assessment is clearly marked.
+                  See your goals, interests and familiar topics together. Keep
+                  what fits. Change what doesn’t.
                 </p>
               </div>
             </li>
             <li>
               <span class="step-number">03</span>
               <div>
-                <h3>Was that new to you?</h3>
+                <h3>Now protect your data.</h3>
                 <p>
-                  Mark a passage “Already knew” or “New to me”. Your voluntary
-                  feedback stays local and helps improve later estimates.
+                  Choose a password. Your profile is saved in an encrypted vault
+                  in this browser.
                 </p>
               </div>
             </li>
           </ol>
         </div>
+        <p class="honest-note">
+          Your assistant builds this from the context available to it. Attention
+          doesn’t access your chat history or a hidden platform profile.
+        </p>
       </section>
-
       <section class="film-section" id="demo" aria-labelledby="film-title">
-        <div class="shell film-layout">
-          <div class="film-copy">
-            <p class="eyebrow">03 / A moment in practice</p>
-            <h2 id="film-title">
-              From <br /><em>maybe</em> <br />to a decision.
-            </h2>
-            <p>
-              Your profile. A first signal in the feed. Relevant passages, with
-              enough context to make sense.
-            </p>
-            <span class="film-duration"
-              >00:44 <span aria-hidden="true">/</span> EN audio · EN / RU
-              subtitles</span
+        <div class="shell">
+          <div class="film-heading">
+            <div>
+              <p class="eyebrow">02 / Watch the context change hands</p>
+              <h2 id="film-title">
+                From “it knows me”<br /><em>to “this works for me”.</em>
+              </h2>
+            </div>
+            <div
+              class="audio-choice"
+              role="group"
+              aria-label="Video narration language"
             >
+              <span>Voiceover</span
+              ><button
+                type="button"
+                data-video-language="en"
+                aria-pressed="true"
+              >
+                English</button
+              ><button
+                type="button"
+                data-video-language="ru"
+                aria-pressed="false"
+                lang="ru"
+              >
+                Русский
+              </button>
+            </div>
           </div>
           <figure class="demo-frame">
             <div class="demo-player">
@@ -252,88 +205,123 @@
                 preload="none"
                 width="1920"
                 height="1080"
-                poster="./media/attention-promo-20260914-029-poster.jpg"
-                aria-label="Attention 0.29: profile setup, hover previews, contextual passages, and saving for later"
+                poster="./media/attention-your-context-poster.jpg"
+                aria-label="Attention: bring your profile, review it, and use it to choose what to read"
                 aria-describedby="demo-caption"
               >
                 <source
-                  src="./media/attention-promo-20260914-0291.mp4"
+                  src="./media/attention-your-context-en.mp4"
                   type="video/mp4"
                 />
                 <track
                   kind="captions"
-                  src="./media/attention-promo-20260914-029.en.vtt"
+                  src="./media/attention-your-context-en.vtt"
                   srclang="en"
                   label="English"
                 />
-                <track
-                  kind="subtitles"
-                  src="./media/attention-promo-20260914-029.ru.vtt"
-                  srclang="ru"
-                  label="Русский"
-                />
                 Your browser cannot play this video.
-                <a href="./media/attention-promo-20260914-0291.mp4"
-                  >Download the MP4</a
-                >.
-              </video>
-              <button
+                <a href="./media/attention-your-context-en.mp4">Open the MP4</a
+                >.</video
+              ><button
                 class="demo-play"
                 type="button"
                 hidden
                 aria-controls="attention-demo"
               >
                 <span aria-hidden="true">▶</span
-                ><span data-play-label>Watch the demo</span>
+                ><span data-play-label>Watch the transfer</span>
               </button>
             </div>
             <figcaption id="demo-caption">
-              <p class="demo-explanation">
-                Recorded with Attention 0.29 on Hacker News and vLLM. Example
-                profile · local evaluation.
+              <p>
+                Example profile · Real websites · Local evaluation · Steps
+                shortened for this demo.
               </p>
               <a
                 class="demo-download"
-                href="./media/attention-promo-20260914-0291.mp4"
-                >Open video <span aria-hidden="true">↗</span></a
+                href="./media/attention-your-context-en.mp4"
+                >Open video ↗</a
               >
             </figcaption>
           </figure>
         </div>
       </section>
-
+      <section class="reading-section shell" aria-labelledby="reading-title">
+        <div class="section-line">
+          <p class="eyebrow">03 / Back to the web. On your terms.</p>
+          <h2 id="reading-title">
+            Your interests.<br /><em>In the driver’s seat.</em>
+          </h2>
+        </div>
+        <div class="reading-grid">
+          <article>
+            <span class="reading-number">01</span>
+            <h3>Before the click.</h3>
+            <p>
+              Hover over an article link for an early signal: does it look worth
+              opening for you?
+            </p>
+            <div class="verdict-pair" aria-label="Example preview signals">
+              <span class="verdict skip">Probably skip</span
+              ><span class="verdict read">Probably read</span>
+            </div>
+          </article>
+          <article>
+            <span class="reading-number">02</span>
+            <h3>Inside the article.</h3>
+            <p>
+              Hover over its title for an assessment tied to your profile. Your
+              current goal can change the picture.
+            </p>
+            <p class="reading-quote">“Is this useful <em>to me, now?</em>”</p>
+          </article>
+          <article>
+            <span class="reading-number">03</span>
+            <h3>At the useful part.</h3>
+            <p>
+              Jump to selected passages with surrounding context. Tell Attention
+              what you knew and what was new.
+            </p>
+            <p class="passage-sample">
+              <mark>The point worth reading.</mark><br /><span
+                >The explanation that makes it make sense.</span
+              >
+            </p>
+          </article>
+        </div>
+        <p class="honest-note">
+          A reading aid, not a verdict. Local matching can miss meaning.
+          Optional AI analysis uses your own API key; you choose when to request
+          it.
+        </p>
+      </section>
       <section
         class="privacy-section shell"
         id="privacy"
         aria-labelledby="privacy-title"
       >
-        <div class="margin-note">
-          <span class="eyebrow">04 / Your space</span
-          ><span class="privacy-mark" aria-hidden="true">[ a. ]</span>
+        <div>
+          <p class="eyebrow">04 / In your hands means under your control</p>
+          <h2 id="privacy-title">
+            Your profile.<br /><em>Your boundaries.</em>
+          </h2>
         </div>
         <div class="privacy-main">
-          <h2 id="privacy-title">
-            Your reading life.<br /><em>Kept close.</em>
-          </h2>
-          <div class="privacy-columns">
-            <p>
-              Ordinary evaluation happens in your browser. Your saved profile,
-              reading memory and feedback stay in a local vault, encrypted with
-              a password you choose. No Attention account. No built-in
-              analytics.
-            </p>
-            <p>
-              External AI is optional and needs your own API key. When you
-              request AI analysis or use a connected service, relevant data goes
-              to that provider. You can lock or erase your local vault.
-            </p>
-          </div>
+          <p>
+            Keep, edit or delete your profile. Ordinary analysis runs in your
+            browser. Your saved profile and reading data are encrypted locally
+            with your password.
+          </p>
+          <p>
+            Readwise, Obsidian and browser history are optional. So is external
+            AI. Syncing Readwise or requesting AI analysis sends the data needed
+            for that action to the chosen service.
+          </p>
           <a class="text-link" href="privacy.html"
-            >How your data is handled <span aria-hidden="true">↗</span></a
+            >How your data is handled ↗</a
           >
         </div>
       </section>
-
       <section
         class="maker-section shell"
         id="maker"
@@ -359,139 +347,89 @@
             >. It brings that work on the value of information into everyday
             reading: what is this information worth to you, right now?
           </p>
-          <p class="maker-note">
-            This is an early version, shaped by real reading and honest
-            feedback. If a recommendation misses the mark, I’d like to hear
-            about it.
-          </p>
           <div class="maker-actions" id="support">
-            <a
-              class="button support"
-              href="https://ko-fi.com/alekseyvoloschuk"
-              target="_blank"
-              rel="noopener noreferrer"
-              aria-label="Support Attention on Ko-fi (opens in a new tab)"
-            >
-              <span aria-hidden="true">♡</span> Support Attention
-              <span aria-hidden="true">↗</span>
-            </a>
-            <a
-              class="text-link"
-              href="https://github.com/giwwi/attention/issues"
-              >Tell me what worked. Or didn’t.
-              <span aria-hidden="true">↗</span></a
+            <a href="https://github.com/giwwi/attention/issues"
+              >Tell me what worked. Or didn’t. ↗</a
+            ><a href="https://ko-fi.com/alekseyvoloschuk"
+              >Support Attention on Ko-fi ↗</a
             >
           </div>
-          <p class="support-note">
-            Optional donations via Ko-fi help me keep building Attention.
+          <p class="microcopy">
+            An early product, shaped by real reading and feedback. Donations are
+            optional.
           </p>
         </div>
       </section>
-
       <section
         class="install-section"
         id="install"
         aria-labelledby="install-title"
       >
         <div class="shell install-layout">
-          <div class="install-copy">
-            <p class="eyebrow">A little less noise. A little more room.</p>
+          <div>
+            <p class="eyebrow">The next move is yours.</p>
             <h2 id="install-title">
-              Make your<br />next read<br /><em>count.</em>
+              Take your context.<br /><em>Make your choice.</em>
             </h2>
             <a
               class="button primary"
               href="https://chromewebstore.google.com/detail/attention/fcclhejgaklnkfgalglcmhmledgefhhp"
-              >Add to Chrome <span aria-hidden="true">↗</span></a
+              >Add Attention to Chrome <span aria-hidden="true">↗</span></a
             >
             <p class="microcopy">
-              Free · Install from the Chrome Web Store.<br />
-              The store currently offers v0.29.1. The demo shows v0.29.1; store
-              updates become available after Google’s review.
-              <a href="#manual-install">Try v0.30.1 manually below.</a>
+              Free · No Attention account · Bring a profile to get started.
             </p>
           </div>
           <div class="install-guide">
-            <p class="guide-heading">Your context comes first.</p>
-            <ol>
-              <li>
-                <span>01</span>
-                <div>
-                  <strong>Add Attention to Chrome.</strong>
-                  <p>
-                    Open the store page, choose <b>Add to Chrome</b> and pin
-                    Attention beside your address bar.
-                  </p>
-                </div>
-              </li>
-              <li>
-                <span>02</span>
-                <div>
-                  <strong>Let your AI introduce you.</strong>
-                  <p>
-                    Choose ChatGPT, Claude, Gemini, Copilot or Perplexity. Paste
-                    the prepared prompt into a chat that knows you, bring its
-                    answer back and review your interests, goals and knowledge.
-                    Then choose a password to save your profile securely.
-                  </p>
-                </div>
-              </li>
-              <li>
-                <span>03</span>
-                <div>
-                  <strong>Now bring an article.</strong>
-                  <p>
-                    With your profile saved, hover over a link in a feed or the
-                    title of an open article for your recommendation.
-                  </p>
-                </div>
-              </li>
-            </ol>
-            <details class="keyboard-note" id="manual-install">
-              <summary>Latest version: v0.30.1 · Manual installation</summary>
+            <h3>Start with an assistant you already use.</h3>
+            <p>
+              Install Attention, open it, and choose your assistant. Follow the
+              prompt, bring the reply back and review your profile before saving
+              it.
+            </p>
+            <p>
+              You don’t need an API key to import a profile or use local
+              evaluation.
+            </p>
+            <details id="manual-install">
+              <summary>Latest build: 0.30.2 · Manual installation</summary>
+              <p>
+                The film shows 0.30.2. Store updates follow a separate review
+                schedule.
+              </p>
               <p>
                 <a
-                  href="https://github.com/giwwi/attention/releases/download/v0.30.1/attention-0.30.1.zip"
-                  download
-                  >Download v0.30.1 (ZIP)</a
+                  href="https://github.com/giwwi/attention/releases/download/v0.30.2/attention-0.30.2.zip"
+                  >Download v0.30.2 (ZIP)</a
                 >, unzip it, then open <code>chrome://extensions</code>. Switch
                 on Developer mode, choose <b>Load unpacked</b> and select the
-                extracted <code>attention-extension</code> folder.
+                <code>attention-extension</code> folder.
               </p>
               <p>
-                Updating a manual installation? Replace the files in your
-                existing extension folder and click <b>Reload</b>. Installing
-                from the store separately does not transfer your local profile.
+                Updating a manual installation? Replace files in your existing
+                extension folder and click <b>Reload</b>. A separate store
+                installation does not transfer your local profile.
               </p>
               <p>
                 <a
-                  href="https://github.com/giwwi/attention/releases/tag/v0.30.1"
-                  >Release notes on GitHub</a
+                  href="https://github.com/giwwi/attention/releases/tag/v0.30.2"
+                  >Release notes ↗</a
                 >
               </p>
             </details>
-            <p class="keyboard-note">
-              At your keyboard: Tab to the Attention button beside an article
-              title, then Enter to open. Escape to close.
-            </p>
           </div>
         </div>
       </section>
     </main>
     <footer class="shell site-footer">
-      <a class="brand" href="#top"
-        >Attention<span class="footer-period" aria-hidden="true">.</span></a
-      >
+      <a class="brand" href="#top">Attention.</a>
       <p>Made for the reader.</p>
       <nav aria-label="Footer navigation">
         <a href="privacy.html">Privacy</a
         ><a href="https://github.com/giwwi/attention">GitHub · Source code</a
-        ><a href="https://ko-fi.com/alekseyvoloschuk"
-          >Donate via Ko-fi <span aria-hidden="true">↗</span></a
-        >
+        ><a href="https://ko-fi.com/alekseyvoloschuk">Donate ↗</a>
       </nav>
     </footer>
-    <script src="./demo.js?v=20260908-context" defer></script>
-    <script src="./site.js?v=20260908-context" defer></script>
+    <script src="./demo.js?v=20260921-context" defer></script>
   </body>
 </html>

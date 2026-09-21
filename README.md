@@ -4,7 +4,9 @@
 
 [Website](https://giwwi.github.io/attention/) · [Chrome Web Store](https://chromewebstore.google.com/detail/attention/fcclhejgaklnkfgalglcmhmledgefhhp) · [Latest release](https://github.com/giwwi/attention/releases/tag/v0.30.2)
 
-![Attention demo](docs/attention-demo.gif)
+[![Attention — bring your profile into your own hands](docs/media/attention-your-context-poster.jpg)](https://giwwi.github.io/attention/#demo)
+
+**Your AI knows you. Now use that context on your terms.** Watch the profile transfer and reading demo: [English · 1:01](https://giwwi.github.io/attention/media/attention-your-context-en.mp4) · [Русский · 1:17](https://giwwi.github.io/attention/media/attention-your-context-ru.mp4). The film uses an authored example profile and the real 0.30.2 interface; sequences are shortened.
 
 Attention combines the article, your personal profile, and your current goal to suggest **Read, Skim, or Skip**. **Save for later** is a separate choice, not a lower score on that scale. The decision lives in a card on the article page. The extension popup is a short launcher with access to **Saved** and **Settings**; it does not show or calculate a second assessment.
 

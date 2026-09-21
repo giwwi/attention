@@ -2,16 +2,18 @@
 const video = document.querySelector('#attention-demo');
 const playButton = document.querySelector('.demo-play');
 const playLabel = document.querySelector('[data-play-label]');
-
+const download = document.querySelector('.demo-download');
+const languageButtons = document.querySelectorAll('[data-video-language]');
 if (video && playButton && playLabel) {
+  let language = 'en';
   playButton.hidden = false;
   playButton.addEventListener('click', async () => {
     if (video.ended) video.currentTime = 0;
     try {
       await video.play();
     } catch {
-      // Native controls and a direct MP4 link remain available if playback fails.
-      playLabel.textContent = 'Try playing again';
+      playLabel.textContent =
+        language === 'ru' ? 'Попробовать ещё раз' : 'Try playing again';
       playButton.hidden = false;
     }
   });
@@ -19,12 +21,40 @@ if (video && playButton && playLabel) {
     playButton.hidden = true;
   });
   video.addEventListener('pause', () => {
-    // Native controls resume playback without covering the frame or captions.
-    playButton.hidden = true;
+    if (video.currentTime > 0 && !video.ended) playButton.hidden = true;
   });
   video.addEventListener('ended', () => {
-    playLabel.textContent = 'Watch again';
+    playLabel.textContent =
+      language === 'ru' ? 'Посмотреть снова' : 'Watch again';
     playButton.hidden = false;
   });
-  // No autoplay, even without reduced-motion. Motion always follows a play action.
+  languageButtons.forEach((button) =>
+    button.addEventListener('click', () => {
+      const next = button.dataset.videoLanguage;
+      if (next === language || !['en', 'ru'].includes(next)) return;
+      language = next;
+      video.pause();
+      video.src = `./media/attention-your-context-${language}.mp4`;
+      video.setAttribute(
+        'aria-label',
+        language === 'ru'
+          ? 'Attention: перенеси профиль и сам выбирай, что читать'
+          : 'Attention: bring your profile and choose what to read',
+      );
+      const track = video.querySelector('track');
+      track.src = `./media/attention-your-context-${language}.vtt`;
+      track.srclang = language;
+      track.label = language === 'ru' ? 'Русский' : 'English';
+      video.load();
+      download.href = video.src;
+      languageButtons.forEach((choice) =>
+        choice.setAttribute('aria-pressed', String(choice === button)),
+      );
+      playLabel.textContent =
+        language === 'ru'
+          ? 'Смотреть с русской озвучкой'
+          : 'Watch the transfer';
+      playButton.hidden = false;
+    }),
+  );
 }
