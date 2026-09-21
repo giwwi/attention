@@ -6,12 +6,16 @@ const download = document.querySelector('.demo-download');
 const languageButtons = document.querySelectorAll('[data-video-language]');
 if (video && playButton && playLabel) {
   let language = 'en';
+  let sourceRevision = 0;
   playButton.hidden = false;
   playButton.addEventListener('click', async () => {
+    const requestedRevision = sourceRevision;
     if (video.ended) video.currentTime = 0;
     try {
       await video.play();
     } catch {
+      // Changing language cancels any play request for the previous source.
+      if (requestedRevision !== sourceRevision) return;
       playLabel.textContent =
         language === 'ru' ? 'Попробовать ещё раз' : 'Try playing again';
       playButton.hidden = false;
@@ -32,6 +36,7 @@ if (video && playButton && playLabel) {
     button.addEventListener('click', () => {
       const next = button.dataset.videoLanguage;
       if (next === language || !['en', 'ru'].includes(next)) return;
+      sourceRevision += 1;
       language = next;
       video.pause();
       video.src = `./media/attention-your-context-${language}.mp4`;
