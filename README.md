@@ -2,7 +2,7 @@
 
 **A local-first Chrome extension that helps you find passages relevant to your task, with their context.**
 
-[Website](https://giwwi.github.io/attention/) · [Chrome Web Store](https://chromewebstore.google.com/detail/attention/fcclhejgaklnkfgalglcmhmledgefhhp) · [Latest release](https://github.com/giwwi/attention/releases/tag/v0.30.1)
+[Website](https://giwwi.github.io/attention/) · [Chrome Web Store](https://chromewebstore.google.com/detail/attention/fcclhejgaklnkfgalglcmhmledgefhhp) · [Latest release](https://github.com/giwwi/attention/releases/tag/v0.30.2)
 
 ![Attention demo](docs/attention-demo.gif)
 
@@ -14,14 +14,14 @@ Before a profile is saved, cards invite you to create one. Personal reading reco
 
 ## Try it in Chrome
 
-Install the published extension from the [Chrome Web Store](https://chromewebstore.google.com/detail/attention/fcclhejgaklnkfgalglcmhmledgefhhp). The 0.30.1 release is available on GitHub. The Chrome Web Store currently serves **0.29.1**; the 0.30.1 update has been submitted for review. Store updates become available after Google review. The instructions below install the latest GitHub build manually.
+Install the published extension from the [Chrome Web Store](https://chromewebstore.google.com/detail/attention/fcclhejgaklnkfgalglcmhmledgefhhp). The latest GitHub release is **0.30.2**. This update has not been submitted to the Chrome Web Store. The earlier 0.30.1 store submission is unchanged. Store updates become available after Google review. The instructions below install the latest GitHub build manually.
 
-1. Download and unzip the [version 0.30.1](https://github.com/giwwi/attention/releases/download/v0.30.1/attention-0.30.1.zip).
+1. Download and unzip the [version 0.30.2](https://github.com/giwwi/attention/releases/download/v0.30.2/attention-0.30.2.zip).
 2. Open `chrome://extensions`.
 3. Enable **Developer mode**.
 4. Click **Load unpacked** and select the unzipped `attention-extension` folder.
 5. Pin **Attention**, open an article, and click the extension icon.
-6. The welcome screen explains how your interests, goals and existing knowledge guide recommendations. Choose **Create my profile**, then **Let ChatGPT introduce me**, **Let Claude introduce me**, **Let Gemini introduce me**, **Let Copilot introduce me** or **Let Perplexity introduce me**. First setup opens in a separate extension tab so switching to your AI does not close the draft. Paste the whole returned answer and review the three editable groups—interests, goals and what you know. Only then choose a password of at least 12 characters and save the profile encrypted. Until that final save, the draft stays in the open tab’s memory only; returning from the password step preserves it, while closing or reloading the tab discards it. You can return directly to the article where you started. Attention does not access your chats. You can add another profile later, or use the guided manual questions if you do not use these services. Until a meaningful profile is saved, feed and article cards invite you to create one; they do not extract articles, evaluate them or track reading. Existing profiles continue to work. Keep your vault password: Attention cannot recover it.
+6. The welcome screen invites you to bring the context your AI assistant knows into Attention and choose reading on your own terms. Choose **Take my profile with me →**, then **Let ChatGPT introduce me**, **Let Claude introduce me**, **Let Gemini introduce me**, **Let Copilot introduce me** or **Let Perplexity introduce me**. First setup opens in a separate extension tab so switching to your AI does not close the draft. Paste the whole returned answer and review the three editable groups—interests, goals and what you know. “Now let’s protect your data” then asks you to choose a password of at least 12 characters and save the profile encrypted. Until that final save, the draft stays in the open tab’s memory only; returning from the password step preserves it, while closing or reloading the tab discards it. You can return directly to the article where you started. Attention does not access your chats. You can add another profile later, or use the guided manual questions if you do not use these services. Until a meaningful profile is saved, feed and article cards invite you to create one; they do not extract articles, evaluate them or track reading. Existing profiles continue to work. Keep your vault password: Attention cannot recover it.
 
 In the current source build, saving the encrypted profile is followed by two optional steps: add Readwise, Obsidian or browser history, then connect AI with your own Vercel AI Gateway key. Both can be skipped and revisited in Settings. The AI step links to key creation and explains usage charges and data sharing before connection. Merely opening or skipping it does not send AI requests. Unfinished optional setup resumes after reopening Attention; no key is saved until you choose to connect.
 
@@ -108,7 +108,7 @@ pnpm build
 
 Load `dist/` through `chrome://extensions` → **Load unpacked**.
 
-For an existing unpacked installation, rebuild and click **Reload** in `chrome://extensions`, then refresh open article tabs. The current source build is 0.30.1. It adds optional sources and AI-key steps after profile protection, simpler privacy settings, more reliable article-title detection and passages available directly from the card without a separate highlight switch. See [release notes](RELEASE_NOTES.md). Earlier raw-score versions are excluded from the new calibration fit. A saved profile is still required for evaluation.
+For an existing unpacked installation, rebuild and click **Reload** in `chrome://extensions`, then refresh open article tabs. The current source build is 0.30.2. It introduces a shorter welcome focused on bringing your personal context from an AI assistant, followed by a clearer transition to protecting your data. This is the first packaged release under PolyForm Shield 1.0.0. See [release notes](RELEASE_NOTES.md). Earlier raw-score versions are excluded from the new calibration fit. A saved profile is still required for evaluation.
 
 Useful commands:
 

@@ -39,6 +39,12 @@
   line-height: 1.2;
   letter-spacing: -0.5px;
 }
+#vault-gate h1 > span {
+  display: block;
+}
+#vault-gate h1 > span + span {
+  margin-top: 6px;
+}
 #vault-gate p {
   margin: 0 0 14px;
 }

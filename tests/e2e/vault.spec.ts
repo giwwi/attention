@@ -60,7 +60,7 @@ test('the real password gate encrypts data, rejects a wrong password without cha
   const popup = await popupPage();
   const inspector = await openVaultInspector(context);
   await expect(
-    popup.locator('#profile-welcome-step .profile-welcome-needs'),
+    popup.locator('#profile-welcome-step .profile-intro'),
   ).toBeVisible();
   await preparePasswordStep(popup);
   await expect(popup.locator('#vault-confirm-password')).toBeVisible();

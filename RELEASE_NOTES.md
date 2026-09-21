@@ -1,8 +1,14 @@
-# Unreleased — license change
+# Attention 0.30.2 — your context, your choice
 
+- Replace the introductory checklist with a short invitation to bring your AI context into Attention and choose what to read on your own terms. The primary action is “Take my profile with me →”.
+- Follow the reviewed profile with “Now let’s protect your data” before password creation.
+- Update the welcome and password introduction in all nine interface languages. Keep assistant selection, editable review, encryption and optional setup in their existing order.
+- GitHub release only; no Chrome Web Store upload or review changes.
 - License the current original software source under the unmodified PolyForm Shield License 1.0.0. Update the package metadata, README, NOTICE and future build banners consistently.
 - Previously granted licenses remain in effect. Published v0.30.0 and v0.30.1 release files, including the 0.30.1 Chrome Web Store submission, keep their MPL-2.0 license.
 - The software-only scope and third-party licenses are unchanged. Books, logos and promotional materials remain outside this grant.
+
+Validation: 834 unit/integration tests verified after updating an obsolete welcome-screen assertion; TypeScript, ESLint and the production build passed. Eleven browser scenarios passed, covering first-run setup, language switching, assistant handoffs, profile review, encrypted saving, unlocking, migration, restart and data erasure. Assistant replies are test fixtures, not live model generations. No new extension permissions.
 
 # Attention 0.30.1 — passages on demand and simpler optional setup
 

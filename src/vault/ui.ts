@@ -144,11 +144,11 @@ export function ensureVaultUnlocked(options: VaultGateOptions = {}): Promise<voi
     content.replaceChildren();
     const creating = state === 'unconfigured';
     heading.textContent = creating
-      ? p('Защитим ваш профиль')
+      ? p('А теперь защитим твои данные')
       : t('unlockTitle');
     description.textContent = creating
       ? p(
-          'Профиль будет храниться в этом браузере в зашифрованном виде. Придумайте пароль, чтобы открывать его после перезапуска браузера.',
+          'Придумай пароль. Attention зашифрует твой профиль и другие данные в этом браузере.',
         )
       : t('description');
     description.hidden = false;
@@ -320,44 +320,26 @@ export function ensureVaultUnlocked(options: VaultGateOptions = {}): Promise<voi
     showingWelcome = true;
     languageChoice.root.hidden = false;
     content.replaceChildren();
-    heading.textContent = p('Читайте то, что полезно именно вам');
-    description.textContent = p(
-      'Attention помогает решить, стоит ли открывать статью, и найти в ней фрагменты, которые могут дать вам что-то новое.',
+    heading.replaceChildren(
+      element('span', p('Твой ИИ тебя знает.')),
+      element('span', p('Теперь используй эти знания на своих условиях.')),
+    );
+    description.replaceChildren(
+      p('Перенеси свой профиль в Attention — и'),
+      ' ',
+      element('strong', p('сам выбирай, что читать.')),
+      ' ',
+      p('По своим интересам, а не по указке чужих алгоритмов.'),
     );
     description.hidden = false;
-    const needs = element('ul', undefined, 'profile-welcome-needs');
-    needs.append(
-      element('li', p('Что вам интересно и над чем вы работаете.')),
-      element('li', p('В чём вы уже разбираетесь.')),
-    );
-    const start = element('button', p('Создать мой профиль'), 'vault-primary');
+    const start = element('button', p('Забрать свой профиль →'), 'vault-primary');
     start.type = 'button';
     start.id = 'profile-start';
     start.addEventListener('click', () => {
       document.documentElement.dataset.profileWelcomeSeen = 'true';
       renderForm();
     });
-    content.append(
-      element(
-        'p',
-        p('Для этого ему нужно немного узнать о вас:'),
-      ),
-      needs,
-      element(
-        'p',
-        p(
-          'Без этого одна и та же рекомендация достанется и новичку, и специалисту.',
-        ),
-      ),
-      start,
-      element(
-        'p',
-        p(
-          'Начните с ChatGPT или Claude: они помогут собрать ваши интересы, знания и цели в профиль для Attention.',
-        ),
-        'profile-welcome-guide',
-      ),
-    );
+    content.append(start);
   }
 
   void getVaultStatus()

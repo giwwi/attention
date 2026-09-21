@@ -59,7 +59,7 @@ test('erasure from another extension page invalidates a displayed popup without 
     await erasingPopup.locator('#delete-all-data').click();
     // Reset returns to profile-first onboarding, before password creation.
     await expect(
-      oldPopup.getByRole('button', { name: 'Create my profile', exact: true }),
+      oldPopup.getByRole('button', { name: 'Take my profile with me →', exact: true }),
     ).toBeVisible();
     // Fresh static markup can exist behind the onboarding gate, but no
     // previously unlocked controls or their JS context may remain usable.

@@ -90,12 +90,9 @@ test('cold cards guide setup; profile save activates existing tabs; deletion res
     const popup = await opened;
     await expect(popup).toHaveURL(/popup.html\?sourceTab=\d+$/);
     await popup.setViewportSize({ width: 380, height: 850 });
-    await expect(popup.locator('#profile-welcome-step h2')).toHaveText(
-      'Read what matters to you',
-    );
-    await expect(popup.locator('.profile-welcome-needs li')).toHaveText([
-      'What interests you and what you’re working on.',
-      'What you already know.',
+    await expect(popup.locator('#profile-welcome-step h2 > span')).toHaveText([
+      'Your AI knows you.',
+      'Now use that knowledge on your terms.',
     ]);
     await expect(popup.locator('[data-profile-demo]')).toHaveCount(0);
     await popup.screenshot({
@@ -109,7 +106,7 @@ test('cold cards guide setup; profile save activates existing tabs; deletion res
     await languageChoice.selectOption('de');
     await expect(popup.locator('html')).toHaveAttribute('lang', 'de');
     await expect(popup.locator('#profile-start')).toHaveText(
-      'Mein Profil erstellen',
+      'Mein Profil mitnehmen →',
     );
     await popup.screenshot({
       path: 'output/playwright/onboarding-language-de.png',
@@ -117,12 +114,18 @@ test('cold cards guide setup; profile save activates existing tabs; deletion res
     });
     await languageChoice.selectOption('ru');
     await expect(popup.locator('#profile-start')).toHaveText(
-      'Создать мой профиль',
+      'Забрать свой профиль →',
     );
     await popup.screenshot({
       path: 'output/playwright/onboarding-language-ru.png',
       fullPage: true,
     });
+    await popup.setViewportSize({ width: 352, height: 600 });
+    await popup.emulateMedia({ colorScheme: 'dark' });
+    await expect(popup.locator('#profile-start')).toBeInViewport();
+    await popup.screenshot({ path: 'output/playwright/profile-welcome-ru-compact-dark.png' });
+    await popup.setViewportSize({ width: 380, height: 850 });
+    await popup.emulateMedia({ colorScheme: 'light' });
     await languageChoice.selectOption('de');
     await expect(popup.locator('#vault-password')).toHaveCount(0);
     expect(await worker.evaluate(() => attentionVault.getVaultStatus())).toBe(
@@ -186,6 +189,8 @@ test('cold cards guide setup; profile save activates existing tabs; deletion res
     );
     await popup.locator('#save-profile').click();
     await expect(popup.locator('#vault-password')).toBeVisible();
+    await expect(popup.locator('#vault-title')).toHaveText('А теперь защитим твои данные');
+    await popup.screenshot({ path: 'output/playwright/profile-protect-data-ru.png', fullPage: true });
     await popup.locator('#vault-back-to-profile').click();
     await expect(popup.locator('#profile-review-step')).toBeVisible();
     await popup.locator('#save-profile').click();

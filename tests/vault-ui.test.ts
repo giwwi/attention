@@ -116,7 +116,7 @@ describe('vault entry gate', () => {
     choice.dispatchEvent(new Event('change'));
     expect(document.getElementById('vault-gate')?.lang).toBe('de');
     expect(document.getElementById('profile-start')?.textContent).toBe(
-      'Mein Profil erstellen',
+      'Mein Profil mitnehmen →',
     );
     expect(document.documentElement.dataset.onboardingLanguage).toBe('de');
     expect(vault.createVault).not.toHaveBeenCalled();
@@ -124,13 +124,13 @@ describe('vault entry gate', () => {
     choice.value = 'ru';
     choice.dispatchEvent(new Event('change'));
     expect(document.getElementById('profile-start')?.textContent).toBe(
-      'Создать мой профиль',
+      'Забрать свой профиль →',
     );
     expect(choice.value).toBe('ru');
     choice.value = 'en';
     choice.dispatchEvent(new Event('change'));
     expect(document.getElementById('profile-start')?.textContent).toBe(
-      'Create my profile',
+      'Take my profile with me →',
     );
   });
   it('loads a packaged stylesheet that the extension security policy permits', async () => {
@@ -268,8 +268,8 @@ describe('vault entry gate', () => {
     await flush();
     expect(document.querySelector('form')).toBeNull();
     expect(document.querySelector('[data-profile-demo]')).toBeNull();
-    expect(document.querySelectorAll('.profile-welcome-needs li')).toHaveLength(
-      2,
+    expect(document.getElementById('vault-title')?.textContent).toContain(
+      'Your AI knows you.',
     );
     button('profile-start').click();
     input('vault-password').value = 'correct-horse-battery';

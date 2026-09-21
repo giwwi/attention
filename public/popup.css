@@ -868,19 +868,14 @@ summary {
   padding: 12px 0 0;
 }
 
-.profile-welcome-needs {
-  margin: 0 0 16px;
-  padding-inline-start: 20px;
-  line-height: 1.5;
+#profile-welcome-step h2 {
+  margin-top: 18px;
 }
-.profile-welcome-needs li {
-  margin-bottom: 8px;
+#profile-welcome-step h2 > span {
+  display: block;
 }
-#profile-welcome-step .profile-welcome-guide {
-  margin: 12px 0 0;
-  font-size: 13px;
-  line-height: 1.5;
-  color: var(--muted, #69766e);
+#profile-welcome-step h2 > span + span {
+  margin-top: 6px;
 }
 
 .profile-onboarding .profile-primary {
