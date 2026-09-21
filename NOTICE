@@ -1,16 +1,19 @@
 Attention — software license notice
 
-Attention's original software source code is licensed under the Mozilla
-Public License, v. 2.0 (MPL-2.0). This notice applies to software code only;
+Licensor: Aleksey Voloschuk (https://github.com/giwwi)
+
+Attention's original software source code is licensed under the PolyForm
+Shield License 1.0.0. This notice applies to software code only;
 books, logos, and promotional materials are outside its scope.
 
-This Source Code Form is subject to the terms of the Mozilla Public
-License, v. 2.0. If a copy of the MPL was not distributed with this
-file, You can obtain one at https://mozilla.org/MPL/2.0/.
-
-The full license text is included in LICENSE.
+The full, unmodified license text is included in LICENSE.
+Official license: https://polyformproject.org/licenses/shield/1.0.0
 Source code: https://github.com/giwwi/attention
 Build instructions are in the source repository's README.md.
+
+This license change does not revoke licenses already granted for earlier
+copies. Releases v0.30.0 and v0.30.1 retain their MPL-2.0 license; see the
+LICENSE and NOTICE included with those releases.
 
 Third-party components retain their own license terms. Notices for
 components bundled with the extension are in THIRD_PARTY_NOTICES.txt

@@ -7,7 +7,7 @@ const define = {
   __ATTENTION_NOTION_OAUTH_BROKER_URL__: JSON.stringify(notionOAuthBrokerUrl),
 };
 const banner = {
-  js: '/*! Attention original code: MPL-2.0. See LICENSE, NOTICE and THIRD_PARTY_NOTICES.txt. Source: https://github.com/giwwi/attention */',
+  js: '/*! Attention original code: PolyForm Shield License 1.0.0. See LICENSE, NOTICE and THIRD_PARTY_NOTICES.txt. Source: https://github.com/giwwi/attention */',
 };
 
 await rm('dist', { recursive: true, force: true });

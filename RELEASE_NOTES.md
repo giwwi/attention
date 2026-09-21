@@ -1,3 +1,9 @@
+# Unreleased — license change
+
+- License the current original software source under the unmodified PolyForm Shield License 1.0.0. Update the package metadata, README, NOTICE and future build banners consistently.
+- Previously granted licenses remain in effect. Published v0.30.0 and v0.30.1 release files, including the 0.30.1 Chrome Web Store submission, keep their MPL-2.0 license.
+- The software-only scope and third-party licenses are unchanged. Books, logos and promotional materials remain outside this grant.
+
 # Attention 0.30.1 — passages on demand and simpler optional setup
 
 - Always offer matched passages in the article card, including when the old highlight preference is absent or off. Remove that switch from Settings; highlights and the passage panel still appear only after the reader clicks the passage button. AI display diagnostics now record the actual matching result.

@@ -148,6 +148,8 @@ Attention is an early functional prototype. A published version is available in 
 
 ## License
 
-Attention's original software source code is licensed under the [Mozilla Public License 2.0 (MPL-2.0)](LICENSE). See [NOTICE](NOTICE) for the software-only scope and source information. Books, logos, and promotional materials are outside this license grant.
+Attention's original software source code is licensed under the [PolyForm Shield License 1.0.0](LICENSE). This is a source-available license with a noncompete restriction; see the full [official terms](https://polyformproject.org/licenses/shield/1.0.0). See [NOTICE](NOTICE) for the software-only scope and source information. Books, logos, and promotional materials are outside this license grant.
+
+The license change does not revoke licenses already granted for earlier copies. Releases v0.30.0 and v0.30.1 retain their MPL-2.0 license; use the license included with the version you download.
 
 Third-party components retain their own licenses; see [THIRD_PARTY_NOTICES.txt](public/THIRD_PARTY_NOTICES.txt). The extension build includes the license, source information, and third-party notices.
