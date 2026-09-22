@@ -14,6 +14,12 @@ The **Utility Score** is an estimate on a 0–100 scale, shown as **/100** in th
 
 Before a profile is saved, cards invite you to create one. Personal reading recommendations require a saved profile. Start with a profile prepared in ChatGPT, Claude, Gemini, Copilot or Perplexity using context you have already shared, review it, and save it locally. Attention does not access your chat history or connect to those accounts. Local article evaluation needs no API key or analytics. An optional Vercel AI Gateway connection can provide a deeper analysis with a model selected by the user; `google/gemini-2.5-flash-lite` is the default suggestion.
 
+## Portable Context
+
+Work on Attention's profile workflow led to [Portable Context](https://github.com/giwwi/portable-context), a separate open proposal for personal context that people can inspect, correct, and reuse across applications. Read its [manifesto](https://github.com/giwwi/portable-context/blob/main/MANIFESTO.md) for the principles and [product hypotheses](https://github.com/giwwi/portable-context/blob/main/docs/product-hypotheses.md) for the first experiments.
+
+Portable Context is at the manifesto and early design stage. Attention currently uses its own profile format; an adapter to a future shared format is proposed, not implemented. The projects have separate licenses: Portable Context's Apache-2.0 license does not change Attention's license.
+
 ## Try it in Chrome
 
 Version 0.30.3 includes an opt-in experiment: **Settings → Find passages by meaning** downloads a local multilingual model for passage selection. It needs no API key and keeps profile/article text on the device. When it finds a connection missed by word matching, the card recommends starting with those passages without claiming verified novelty or raising the quality score. See [local semantic search](docs/LOCAL_SEMANTIC_SEARCH.md) for limitations and privacy details.
