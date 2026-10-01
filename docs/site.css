@@ -658,6 +658,10 @@ h3 {
 }
 .site-footer nav {
   gap: 20px;
+  flex-wrap: wrap;
+}
+.site-footer .launchkiwi-badge img {
+  display: block;
 }
 .site-footer nav a {
   font-size: 11px;
