@@ -7,7 +7,7 @@
   const source = params.get('utm_source');
   const content = params.get('utm_content') || '';
   const campaign = params.get('utm_campaign');
-  if (!['x', 'bluesky', 'devto'].includes(source) || params.get('utm_medium') !== 'social') return;
+  if (!['x', 'bluesky', 'devto', 'reddit'].includes(source) || params.get('utm_medium') !== 'social') return;
   if (campaign && campaign !== 'attention_growth') return;
   if (!/^[a-z0-9][a-z0-9_-]{0,69}$/.test(content)) return;
   if (navigator.globalPrivacyControl === true || navigator.doNotTrack === '1' || window.doNotTrack === '1') return;
